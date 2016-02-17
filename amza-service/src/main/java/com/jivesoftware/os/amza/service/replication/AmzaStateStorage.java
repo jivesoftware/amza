@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALKey;
@@ -19,15 +20,18 @@ import com.jivesoftware.os.aquarium.interfaces.StateStorage.StateUpdates;
  */
 class AmzaStateStorage implements StateStorage<Long> {
 
+    private final BAInterner interner;
     private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
     private final PartitionName partitionName;
     private final byte context;
 
-    public AmzaStateStorage(SystemWALStorage systemWALStorage,
+    public AmzaStateStorage(BAInterner interner,
+        SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
         PartitionName partitionName,
         byte context) {
+        this.interner = interner;
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
         this.partitionName = partitionName;
@@ -44,7 +48,7 @@ class AmzaStateStorage implements StateStorage<Long> {
                         (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                             State state = State.fromSerializedForm(value[0]);
                             return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, valueTimestamp, valueVersion);
-                        });
+                        }, interner);
                 }
                 return true;
             });

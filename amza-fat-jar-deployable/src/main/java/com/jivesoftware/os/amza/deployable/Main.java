@@ -23,6 +23,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -121,7 +122,8 @@ public class Main {
             .split(",");
         amzaServiceConfig.workingDirectories = workingDirs;
 
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);
+        BAInterner interner = new BAInterner();
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats, interner);
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
@@ -148,6 +150,7 @@ public class Main {
         LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
+            interner,
             amzaStats,
             sickThreads,
             sickPartitions,
@@ -168,7 +171,7 @@ public class Main {
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            () -> new HttpRowsTaker(amzaStats),
+            () -> new HttpRowsTaker(amzaStats, interner),
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });
@@ -196,8 +199,8 @@ public class Main {
             10_000); //TODO expose to conf
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
-            new HttpPartitionClientFactory(),
-            new HttpPartitionHostsProvider(httpClient, mapper),
+            new HttpPartitionClientFactory(interner),
+            new HttpPartitionHostsProvider(interner, httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
             Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
             10_000); //TODO expose to conf
@@ -209,6 +212,7 @@ public class Main {
             .addInjectable(AmzaInstance.class, amzaService)
             .addInjectable(AmzaStats.class, amzaStats)
             .addEndpoint(AmzaClientRestEndpoints.class)
+            .addInjectable(BAInterner.class, interner)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,

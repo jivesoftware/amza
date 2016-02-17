@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -16,7 +17,6 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -34,6 +34,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final BAInterner interner;
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
@@ -47,7 +48,8 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final ConcurrentHashMap<PartitionName, StorageVersion> localVersionCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = new ConcurrentHashMap<>();
 
-    public StorageVersionProvider(OrderIdProvider orderIdProvider,
+    public StorageVersionProvider(BAInterner interner,
+        OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
         VersionedPartitionProvider versionedPartitionProvider,
@@ -56,6 +58,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         long[] stripeVersions,
         WALUpdated walUpdated,
         AwaitNotify<PartitionName> awaitNotify) {
+        this.interner = interner;
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemWALStorage = systemWALStorage;
@@ -156,13 +159,17 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         byte[] intBuffer = new byte[4];
 
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
-
             (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
-                    HeapFiler filer = HeapFiler.fromBytes(key, key.length);
-                    UIO.readByte(filer, "serializationVersion");
-                    RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
-                    PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
+
+                    int o = 0;
+                    o++; //serializationVersion
+                    int ringMemberLength = UIO.bytesInt(key, o);
+                    o += 4;
+                    RingMember ringMember = RingMember.fromBytes(key, o, ringMemberLength, interner);
+                    o += ringMemberLength;
+                    o += 4;// partitionNameLength
+                    PartitionName partitionName = PartitionName.fromBytes(key, o, interner);
                     StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
                     if (storageVersion.stripeVersion == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
@@ -256,13 +263,15 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     }
 
     void clearCache(byte[] walKey, byte[] walValue) throws Exception {
-        byte[] intBuffer = new byte[4];
-
-        HeapFiler filer = HeapFiler.fromBytes(walKey, walKey.length);
-        UIO.readByte(filer, "serializationVersion");
-        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
+        int o = 0;
+        o++;// serializationVersion
+        int ringMemberLength = UIO.bytesInt(walKey, o);
+        o += 4;
+        RingMember ringMember = RingMember.fromBytes(walKey, o, ringMemberLength, interner);
+        o += ringMemberLength;
         if (ringMember != null) {
-            PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
+            o += 4; // partitionNameLength
+            PartitionName partitionName = PartitionName.fromBytes(walKey, o, interner);
             if (ringMember.equals(rootRingMember)) {
                 StorageVersion storageVersion = StorageVersion.fromBytes(walValue);
                 invalidateLocalVersionCache(new VersionedPartitionName(partitionName, storageVersion.partitionVersion));

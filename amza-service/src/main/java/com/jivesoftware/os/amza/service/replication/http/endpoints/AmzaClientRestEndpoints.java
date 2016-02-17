@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
@@ -54,10 +55,13 @@ public class AmzaClientRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRestClient client;
+    private final BAInterner interner;
     private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("stream-chunks-%d").build());
 
-    public AmzaClientRestEndpoints(@Context AmzaRestClient client) {
+    public AmzaClientRestEndpoints(@Context AmzaRestClient client,
+        @Context BAInterner interner) {
         this.client = client;
+        this.interner = interner;
     }
 
     @POST
@@ -67,7 +71,7 @@ public class AmzaClientRestEndpoints {
         @PathParam("ringSize") int ringSize,
         PartitionProperties partitionProperties) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
             RingTopology ringTopology = client.configPartition(partitionName, partitionProperties, ringSize);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
@@ -96,7 +100,7 @@ public class AmzaClientRestEndpoints {
     public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
             client.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
@@ -114,7 +118,7 @@ public class AmzaClientRestEndpoints {
     @Path("/ring/{base64PartitionName}")
     public Object ring(@PathParam("base64PartitionName") String base64PartitionName) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
             RingLeader ringLeader = client.ring(partitionName);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
@@ -143,7 +147,7 @@ public class AmzaClientRestEndpoints {
     public Object ringLeader(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
             RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
@@ -178,7 +182,7 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         FilerInputStream in = null;
         try {
             in = new FilerInputStream(inputStream);
@@ -214,7 +218,7 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
@@ -250,7 +254,7 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
@@ -292,7 +296,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
-                client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
+                client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takeFromTransactionId", x);
@@ -318,7 +322,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
-                client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
+                client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takePrefixFromTransactionId", x);

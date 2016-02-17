@@ -19,6 +19,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.SignedBytes;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.aquarium.Member;
 import java.nio.charset.StandardCharsets;
@@ -28,18 +29,26 @@ public class RingMember implements Comparable<RingMember> {
 
     public byte[] toBytes() { // TODO convert to lex byte ordering?
         byte[] bytes = new byte[1 + memberAsBytes.length];
-        bytes[0] = 0; // version;
-        UIO.writeBytes(memberAsBytes, bytes, 1);
+        toBytes(bytes, 0);
         return bytes;
+    }
+
+    public int toBytes(byte[] bytes, int offset) {
+        bytes[offset] = 0; // version;
+        offset++;
+        UIO.writeBytes(memberAsBytes, bytes, offset);
+        return sizeInBytes();
     }
 
     public int sizeInBytes() {
         return 1 + memberAsBytes.length;
     }
 
-    public static RingMember fromBytes(byte[] bytes) {
-        if (bytes != null && bytes[0] == 0) {
-            String member = new String(bytes, 1, bytes.length - 1, StandardCharsets.UTF_8);
+    public static RingMember fromBytes(byte[] bytes, int offset, int length, BAInterner interner) {
+        if (bytes != null && bytes[offset] == 0) {
+            byte[] interned = interner.intern(bytes, offset + 1, length - 1);
+            String member = new String(interned, StandardCharsets.UTF_8);
+
             return new RingMember(member);
         }
         return null;
@@ -49,8 +58,9 @@ public class RingMember implements Comparable<RingMember> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static RingMember fromBase64(String base64) {
-        return fromBytes(BaseEncoding.base64Url().decode(base64));
+    public static RingMember fromBase64(String base64, BAInterner interner) {
+        byte[] bytes = BaseEncoding.base64Url().decode(base64);
+        return fromBytes(bytes, 0, bytes.length, interner);
     }
 
     private final byte[] memberAsBytes;

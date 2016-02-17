@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -168,7 +169,8 @@ public class AmzaMain {
             deployable.addHealthCheck(new SickThreadsHealthCheck(deployable.config(AmzaSickThreadsHealthConfig.class), sickThreads));
             deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
 
-            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);
+            BAInterner interner = new BAInterner();
+            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats, interner);
 
             final ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -206,6 +208,7 @@ public class AmzaMain {
             LABPointerIndexConfig labConfig = deployable.config(LABPointerIndexConfig.class);
 
             AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
+                interner,
                 amzaStats,
                 sickThreads,
                 sickPartitions,
@@ -227,7 +230,7 @@ public class AmzaMain {
 
                 },
                 availableRowsTaker,
-                () -> new HttpRowsTaker(amzaStats),
+                () -> new HttpRowsTaker(amzaStats, interner),
                 Optional.<TakeFailureListener>absent(),
                 (RowsChanged changes) -> {
                 });
@@ -244,8 +247,8 @@ public class AmzaMain {
                 10_000); // TODO expose to conf
 
             AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
-                new HttpPartitionClientFactory(),
-                new HttpPartitionHostsProvider(httpClient, mapper),
+                new HttpPartitionClientFactory(interner),
+                new HttpPartitionHostsProvider(interner, httpClient, mapper),
                 new RingHostHttpClientProvider(httpClient),
                 Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
                 10_000); //TODO expose to conf
@@ -259,6 +262,7 @@ public class AmzaMain {
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
             deployable.addEndpoints(AmzaClientRestEndpoints.class);
+            deployable.addInjectables(BAInterner.class, interner);
             deployable.addInjectables(AmzaRestClient.class, new AmzaRestClientHealthCheckDelegate(
                 new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService)));
 

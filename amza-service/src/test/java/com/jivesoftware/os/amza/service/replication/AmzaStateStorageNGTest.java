@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
@@ -35,11 +36,11 @@ import org.testng.annotations.Test;
 public class AmzaStateStorageNGTest {
 
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
-    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(new BAInterner());
 
     @Test
     public void testUpdate() throws Exception {
-
+        BAInterner interner = new BAInterner();
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         ObjectMapper mapper = new ObjectMapper();
         JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
@@ -67,7 +68,8 @@ public class AmzaStateStorageNGTest {
         TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
         AmzaStats amzaStats = new AmzaStats();
-        PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
+        PartitionIndex partitionIndex = new PartitionIndex(interner,
+            amzaStats,
             orderIdProvider,
             indexedWALStorageProvider,
             partitionPropertyMarshaller);
@@ -89,7 +91,7 @@ public class AmzaStateStorageNGTest {
 
         PartitionName partitionName = new PartitionName(false, new byte[]{20}, new byte[]{30});
         byte context = 1;
-        AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, partitionName, context);
+        AmzaStateStorage stateStorage = new AmzaStateStorage(interner, systemWALStorage, updated, partitionName, context);
 
         Long lifecycle1 = 1L;
         Long lifecycle2 = 2L;

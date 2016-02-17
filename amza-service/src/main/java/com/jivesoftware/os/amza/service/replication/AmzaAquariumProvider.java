@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.AquariumTransactor;
@@ -72,6 +73,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
 
+    private final BAInterner interner;
     private final RingMember rootRingMember;
     private final Member rootAquariumMember;
     private final OrderIdProvider orderIdProvider;
@@ -97,7 +99,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = Maps.newConcurrentMap();
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileBootstrap = Maps.newConcurrentMap();
 
-    public AmzaAquariumProvider(RingMember rootRingMember,
+    public AmzaAquariumProvider(BAInterner interner,
+        RingMember rootRingMember,
         OrderIdProvider orderIdProvider,
         AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
@@ -109,6 +112,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         long feedEveryMillis,
         AwaitNotify<PartitionName> awaitLivelyEndState,
         SickThreads sickThreads) {
+
+        this.interner = interner;
         this.rootRingMember = rootRingMember;
         this.rootAquariumMember = rootRingMember.asAquariumMember();
         this.orderIdProvider = orderIdProvider;
@@ -415,21 +420,21 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             atQuorum,
             rootRingMember.asAquariumMember(),
             new AwaitLivelyEndState() {
-                @Override
-                public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
-                    return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
-                        () -> {
-                            LivelyEndState state = awaiter.call();
-                            return state != null ? Optional.of(state) : null;
-                        },
-                        timeoutMillis);
-                }
+            @Override
+            public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
+                return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
+                    () -> {
+                        LivelyEndState state = awaiter.call();
+                        return state != null ? Optional.of(state) : null;
+                    },
+                    timeoutMillis);
+            }
 
-                @Override
-                public void notifyChange(Callable<Boolean> change) throws Exception {
-                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
-                }
-            });
+            @Override
+            public void notifyChange(Callable<Boolean> change) throws Exception {
+                awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
+            }
+        });
     }
 
     @Override
@@ -548,11 +553,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(systemWALStorage, walUpdated, partitionName, CURRENT);
+        return new AmzaStateStorage(interner, systemWALStorage, walUpdated, partitionName, CURRENT);
     }
 
     private AmzaStateStorage desiredStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(systemWALStorage, walUpdated, partitionName, DESIRED);
+        return new AmzaStateStorage(interner, systemWALStorage, walUpdated, partitionName, DESIRED);
     }
 
     static byte[] stateKey(PartitionName partitionName,
@@ -567,41 +572,54 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8 + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
             UIO.writeLong(filer, partitionVersion, "partitionVersion");
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
+            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[]{(byte) 1} : new byte[]{(byte) 0}, "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
             return filer.getBytes();
         } else if (rootRingMember != null) {
             int rootSizeInBytes = 4 + rootRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
             UIO.writeLong(filer, partitionVersion, "partitionVersion");
             return filer.getBytes();
         } else {
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             return filer.getBytes();
         }
     }
 
-    static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream) throws Exception {
-        byte[] intLongBuffer = new byte[8];
+    static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream, BAInterner interner) throws Exception {
+        int o = 0;
+        int partitionNameBytesLength = UIO.bytesInt(keyBytes, o);
+        o += 4;
+        PartitionName partitionName = PartitionName.fromBytes(keyBytes, o, interner);
+        o += partitionNameBytesLength;
+        byte context = keyBytes[o];
+        o++;
+        int rootRingMemberBytesLength = UIO.bytesInt(keyBytes, o);
+        o += 4;
+        byte[] rootRingMemberBytes = interner.intern(keyBytes, o, rootRingMemberBytesLength);
+        o += rootRingMemberBytesLength;
+        long partitionVersion = UIO.bytesLong(keyBytes, o);
+        o += 8;
+        boolean isOther = keyBytes[o] != 0;
+        boolean isSelf = !isOther;
+        o++;
+        int ackRingMemberBytesLength = UIO.bytesInt(keyBytes, o);
+        o += 4;
+        byte[] ackRingMemberBytes = interner.intern(keyBytes, o, ackRingMemberBytesLength);
+        o+= ackRingMemberBytesLength;
 
-        HeapFiler filer = HeapFiler.fromBytes(keyBytes, keyBytes.length);
-        byte[] partitionNameBytes = UIO.readByteArray(filer, "partitionName", intLongBuffer);
-        byte context = UIO.readByte(filer, "context");
-        byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember", intLongBuffer);
-        long partitionVersion = UIO.readLong(filer, "partitionVersion", intLongBuffer);
-        boolean isSelf = !UIO.readBoolean(filer, "isOther");
-        byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember", intLongBuffer);
-        return stream.stream(PartitionName.fromBytes(partitionNameBytes),
+        return stream.stream(partitionName,
             context,
-            new Member(rootRingMemberBytes), partitionVersion,
+            new Member(rootRingMemberBytes), 
+            partitionVersion,
             isSelf,
             new Member(ackRingMemberBytes));
     }
@@ -624,7 +642,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(rootSizeInBytes + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
+            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[]{(byte) 1} : new byte[]{(byte) 0}, "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
             return filer.getBytes();
         } else {
@@ -724,7 +742,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 streamStateKey(change.getKey().key, (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                     smellsFishy.add(partitionName);
                     return true;
-                });
+                }, interner);
             }
             synchronized (smellsFishy) {
                 smellOVersion.incrementAndGet();

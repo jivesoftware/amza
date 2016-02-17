@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -25,6 +26,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte[]> {
+
+    private final BAInterner interner;
+
+    public BinaryHighwaterRowMarshaller(BAInterner interner) {
+        this.interner = interner;
+    }
 
     @Override
     public byte[] toBytes(WALHighwater highwater) throws Exception {
@@ -55,12 +62,17 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
 
     @Override
     public WALHighwater fromBytes(byte[] row) throws Exception {
-        HeapFiler filer = HeapFiler.fromBytes(row, row.length);
         List<RingMemberHighwater> rmh = new ArrayList<>();
-        byte[] intLongBuffer = new byte[8];
-        while (UIO.readBoolean(filer, "hasMore")) {
-            rmh.add(new RingMemberHighwater(RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intLongBuffer)),
-                UIO.readLong(filer, "txId", intLongBuffer)));
+        int o = 0;
+        while (row[o] != 0) { // hasMore
+            o++;
+            int ringMemberLength = UIO.bytesInt(row, o);
+            o += 4;
+            RingMember ringMember = RingMember.fromBytes(row, o, ringMemberLength, interner);
+            o += ringMemberLength;
+            long transactionId = UIO.bytesLong(row, o);
+            o += 8;
+            rmh.add(new RingMemberHighwater(ringMember, transactionId));
         }
         return new WALHighwater(rmh);
     }

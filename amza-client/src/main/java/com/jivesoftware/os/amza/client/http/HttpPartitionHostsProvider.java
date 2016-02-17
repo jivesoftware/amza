@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -29,12 +30,14 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final BAInterner interner;
     private final TenantAwareHttpClient<String> tenantAwareHttpClient;
     private final ObjectMapper mapper;
 
     private final RoundRobinStrategy roundRobinStrategy = new RoundRobinStrategy();
 
-    public HttpPartitionHostsProvider(TenantAwareHttpClient<String> tenantAwareHttpClient, ObjectMapper mapper) {
+    public HttpPartitionHostsProvider(BAInterner interner, TenantAwareHttpClient<String> tenantAwareHttpClient, ObjectMapper mapper) {
+        this.interner = interner;
         this.tenantAwareHttpClient = tenantAwareHttpClient;
         this.mapper = mapper;
     }
@@ -56,7 +59,8 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
                         int leaderIndex = -1;
                         RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
                         for (int i = 0; i < ringSize; i++) {
-                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intBuffer));
+                            byte[] ringMemberBytes = UIO.readByteArray(fis, "ringMember", intBuffer);
+                            RingMember ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);
                             RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost", intBuffer));
                             ring[i] = new RingMemberAndHost(ringMember, ringHost);
                             if (UIO.readBoolean(fis, "leader")) {
@@ -144,7 +148,8 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
                     int leaderIndex = -1;
                     RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
                     for (int i = 0; i < ringSize; i++) {
-                        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intBuffer));
+                        byte[] ringMemberBytes = UIO.readByteArray(fis, "ringMember", intBuffer);
+                        RingMember ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);
                         RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost", intBuffer));
                         ring[i] = new RingMemberAndHost(ringMember, ringHost);
                         if (UIO.readBoolean(fis, "leader")) {

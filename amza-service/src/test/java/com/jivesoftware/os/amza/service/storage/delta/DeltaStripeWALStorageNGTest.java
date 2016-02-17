@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -72,8 +73,10 @@ public class DeltaStripeWALStorageNGTest {
     private final VersionedPartitionName versionedPartitionName2 = new VersionedPartitionName(
         new PartitionName(false, "ring2".getBytes(), "partitionName2".getBytes()),
         VersionedPartitionName.STATIC_VERSION);
+
+    private final BAInterner interner = new BAInterner();
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
-    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
 
     private JacksonPartitionPropertyMarshaller partitionPropertyMarshaller;
     private IndexedWALStorageProvider indexedWALStorageProvider;
@@ -99,7 +102,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = { partitionTmpDir };
+        File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
@@ -121,7 +124,7 @@ public class DeltaStripeWALStorageNGTest {
         orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
         amzaStats = new AmzaStats();
-        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider,
+        partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider,
             partitionPropertyMarshaller);
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
@@ -183,17 +186,18 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNotNull(partitionStore1);
         Assert.assertNotNull(partitionStore2);
 
-        highwaterStorage = new PartitionBackedHighwaterStorage(ids, member, partitionIndex, systemWALStorage, updated, 100);
+        highwaterStorage = new PartitionBackedHighwaterStorage(interner, ids, member, partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        workingDirectories = new File[] { tmp };
+        workingDirectories = new File[]{tmp};
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
-        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, walIndexProviderRegistry, 20_000, 8);
+        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner, 1, new AmzaStats(), new SickThreads(), deltaWALFactory, walIndexProviderRegistry,
+            20_000, 8);
         delta.load(txPartitionState, partitionIndex, currentVersionProvider, primaryRowMarshaller);
         return delta;
     }
@@ -280,7 +284,7 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.hackTruncation(4);
 
-        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, partitionPropertyMarshaller);
+        partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider, partitionPropertyMarshaller);
         partitionIndex.open();
         deltaStripeWALStorage = loadDeltaStripe();
 

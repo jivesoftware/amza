@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.api.partition;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.IOException;
 import java.util.Objects;
@@ -34,13 +35,16 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         return 1 + 4 + partitionName.sizeInBytes() + 8;
     }
 
-    public static VersionedPartitionName fromBytes(byte[] bytes) throws IOException {
-        if (bytes[0] == 0) { // version
-            int partitionNameBytesLength = UIO.bytesInt(bytes, 1);
-            byte[] partitionNameBytes = new byte[partitionNameBytesLength];
-            System.arraycopy(bytes, 1 + 4, partitionNameBytes, 0, partitionNameBytesLength);
-            long version = UIO.bytesLong(bytes, 1 + 4 + partitionNameBytesLength);
-            return new VersionedPartitionName(PartitionName.fromBytes(partitionNameBytes), version);
+    public static VersionedPartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) throws IOException {
+        int o = offset;
+        if (bytes[o] == 0) { // version
+            o++;
+            int partitionNameBytesLength = UIO.bytesInt(bytes, o);
+            o += 4;
+            PartitionName partitionName = PartitionName.fromBytes(bytes, o, interner);
+            o += partitionNameBytesLength;
+            long version = UIO.bytesLong(bytes, o);
+            return new VersionedPartitionName(partitionName, version);
         }
         throw new IOException("Invalid version:" + bytes[0]);
     }
@@ -56,8 +60,8 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static VersionedPartitionName fromBase64(String base64) throws IOException {
-        return fromBytes(BaseEncoding.base64Url().decode(base64));
+    public static VersionedPartitionName fromBase64(String base64, BAInterner interner) throws IOException {
+        return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
     }
 
     public PartitionName getPartitionName() {

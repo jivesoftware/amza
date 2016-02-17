@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -235,12 +236,14 @@ public class AmzaTestCluster {
             }
         };
 
+        BAInterner interner = new BAInterner();
         AmzaStats amzaStats = new AmzaStats();
         SickThreads sickThreads = new SickThreads();
         SickPartitions sickPartitions = new SickPartitions();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
+            interner,
             amzaStats,
             sickThreads,
             sickPartitions,
@@ -293,7 +296,7 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
+        service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
 
         cluster.put(localRingMember, service);
 
@@ -314,14 +317,17 @@ public class AmzaTestCluster {
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
         private final EmbeddedClientProvider clientProvider;
+        private final BAInterner interner;
 
-        public AmzaNode(RingMember ringMember,
+        public AmzaNode(BAInterner interner,
+            RingMember ringMember,
             RingHost ringHost,
             AmzaService amzaService,
             TimestampedOrderIdProvider orderIdProvider,
             SickThreads sickThreads,
             SickPartitions sickPartitions) {
 
+            this.interner = interner;
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
@@ -447,7 +453,7 @@ public class AmzaTestCluster {
                     return null;
                 });
                 submit.get();
-                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
+                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner);
                 return streamingTakesConsumer.consume(new DataInputStream(new SnappyInputStream(new ByteArrayInputStream(bytesOut.toByteArray()))), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);

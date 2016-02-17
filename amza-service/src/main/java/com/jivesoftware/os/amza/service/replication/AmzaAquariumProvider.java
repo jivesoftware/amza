@@ -608,7 +608,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         o += rootRingMemberBytesLength;
         long partitionVersion = UIO.bytesLong(keyBytes, o);
         o += 8;
-        boolean isSelf = keyBytes[o] != 0;
+        boolean isOther = keyBytes[o] != 0;
+        boolean isSelf = !isOther;
         o++;
         int ackRingMemberBytesLength = UIO.bytesInt(keyBytes, o);
         o += 4;

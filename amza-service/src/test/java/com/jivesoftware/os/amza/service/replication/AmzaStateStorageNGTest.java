@@ -72,7 +72,8 @@ public class AmzaStateStorageNGTest {
             amzaStats,
             orderIdProvider,
             indexedWALStorageProvider,
-            partitionPropertyMarshaller);
+            partitionPropertyMarshaller,
+            4);
 
         partitionIndex.open();
 

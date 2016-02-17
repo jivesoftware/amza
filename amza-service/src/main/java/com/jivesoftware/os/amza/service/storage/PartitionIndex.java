@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.BAInterner;
@@ -22,12 +21,13 @@ import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
+import com.jivesoftware.os.jive.utils.collections.lh.ConcurrentLHash;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -74,7 +74,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         null);
 
     // TODO consider replacing ConcurrentHashMap<Long, PartitionStore> LHash
-    private final ConcurrentMap<PartitionName, ConcurrentHashMap<Long, PartitionStore>> partitionStores = Maps.newConcurrentMap();
+    private final ConcurrentMap<PartitionName, ConcurrentLHash<PartitionStore>> partitionStores = Maps.newConcurrentMap();
     private final ConcurrentMap<PartitionName, PartitionProperties> partitionProperties = Maps.newConcurrentMap();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
@@ -83,19 +83,23 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private final TimestampedOrderIdProvider orderIdProvider;
     private final IndexedWALStorageProvider walStorageProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
+    private final int concurrency;
+
     private final AtomicLong partitionPropertiesVersion = new AtomicLong();
 
     public PartitionIndex(BAInterner interner,
         AmzaStats amzaStats,
         TimestampedOrderIdProvider orderIdProvider,
         IndexedWALStorageProvider walStorageProvider,
-        PartitionPropertyMarshaller partitionPropertyMarshaller) {
+        PartitionPropertyMarshaller partitionPropertyMarshaller,
+        int concurrency) {
 
         this.interner = interner;
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.walStorageProvider = walStorageProvider;
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
+        this.concurrency = concurrency;
     }
 
     private static final Map<VersionedPartitionName, PartitionProperties> SYSTEM_PARTITIONS = ImmutableMap
@@ -147,7 +151,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     public PartitionStore getIfPresent(VersionedPartitionName versionedPartitionName) {
-        ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
+        ConcurrentLHash<PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
         if (versionedStores != null) {
             return versionedStores.get(versionedPartitionName.getPartitionVersion());
         }
@@ -163,7 +167,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (deltaWALId > -1 && partitionName.isSystemPartition()) {
             throw new IllegalStateException("Hooray you have a bug! Should never call get with something other than -1 for system parititions." + deltaWALId);
         }
-        ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.get(partitionName);
+        ConcurrentLHash<PartitionStore> versionedStores = partitionStores.get(partitionName);
         if (versionedStores != null) {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
@@ -187,7 +191,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
 
     private PartitionStore getSystemPartition(VersionedPartitionName versionedPartitionName) {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Should only be called by system partitions.");
-        ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(versionedPartitionName.getPartitionName());
+        ConcurrentLHash<PartitionStore> versionedPartitionStores = partitionStores.get(versionedPartitionName.getPartitionName());
         PartitionStore store = versionedPartitionStores == null ? null : versionedPartitionStores.get(0L);
         if (store == null) {
             throw new IllegalStateException("There is no system partition for " + versionedPartitionName);
@@ -196,7 +200,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
-        ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
+        ConcurrentLHash<PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
         if (versionedStores != null) {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
@@ -211,8 +215,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         VersionedPartitionName versionedPartitionName,
         PartitionProperties properties) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
-            ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
-                (key) -> new ConcurrentHashMap<>());
+            ConcurrentLHash<PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
+                (key) -> new ConcurrentLHash<>(3, -1, -2, concurrency));
 
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
@@ -258,10 +262,16 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         return partitionNames;
     }
 
-    public Iterable<VersionedPartitionName> getActivePartitions() {
-        return Iterables.concat(Iterables.transform(partitionStores.entrySet(),
-            (partitionVersions) -> Iterables.transform(partitionVersions.getValue().keySet(),
-                (partitionVersion) -> new VersionedPartitionName(partitionVersions.getKey(), partitionVersion))));
+    public interface PartitionStream {
+        boolean stream(VersionedPartitionName versionedPartitionName) throws Exception;
+    }
+
+    public void streamActivePartitions(PartitionStream stream) throws Exception {
+        for (Entry<PartitionName, ConcurrentLHash<PartitionStore>> entry : partitionStores.entrySet()) {
+            if (!entry.getValue().stream((key, partitionStore) -> stream.stream(new VersionedPartitionName(entry.getKey(), key)))) {
+                break;
+            }
+        }
     }
 
     public Iterable<VersionedPartitionName> getSystemPartitions() {
@@ -277,12 +287,13 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                     PartitionName partitionName = PartitionName.fromBytes(entry.getKey().key, 0, interner);
                     removeProperties(partitionName);
 
-                    ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);
+                    ConcurrentLHash<PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);
                     if (versionedPartitionStores != null) {
-                        for (PartitionStore store : versionedPartitionStores.values()) {
+                        versionedPartitionStores.stream((long key, PartitionStore store) -> {
                             PartitionProperties properties = getProperties(partitionName);
                             store.updateProperties(properties);
-                        }
+                            return true;
+                        });
                     }
                 }
                 partitionPropertiesVersion.incrementAndGet();

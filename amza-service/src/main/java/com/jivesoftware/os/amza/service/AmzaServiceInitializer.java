@@ -195,7 +195,9 @@ public class AmzaServiceInitializer {
             sickPartitions,
             tombstoneCompactionFactor);
 
-        PartitionIndex partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, walStorageProvider, partitionPropertyMarshaller);
+        int numProc = Runtime.getRuntime().availableProcessors();
+
+        PartitionIndex partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, walStorageProvider, partitionPropertyMarshaller, numProc);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(ringMember,
             amzaStats,
@@ -206,8 +208,6 @@ public class AmzaServiceInitializer {
             config.takeSlowThresholdInMillis,
             config.takeSystemReofferDeltaMillis,
             config.takeReofferDeltaMillis);
-
-        int numProc = Runtime.getRuntime().availableProcessors();
 
         PartitionStore ringIndex = partitionIndex.get(PartitionCreator.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionCreator.NODE_INDEX);

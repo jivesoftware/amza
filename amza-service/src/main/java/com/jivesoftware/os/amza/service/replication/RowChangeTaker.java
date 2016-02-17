@@ -87,6 +87,7 @@ public class RowChangeTaker implements RowChanges {
 
     private final ExecutorService systemRowTakerThreadPool;
     private final ExecutorService availableRowsReceiverThreadPool;
+    private final ExecutorService consumerThreadPool;
 
     private final Object[] stripedConsumerLocks;
     private final Object systemConsumerLock = new Object();
@@ -134,6 +135,7 @@ public class RowChangeTaker implements RowChanges {
 
         this.systemRowTakerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("systemRowTaker-%d").build());
         this.availableRowsReceiverThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsReceiver-%d").build());
+        this.consumerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsConsumer-%d").build());
 
         int numberOfStripes = partitionStripeFunction.getNumberOfStripes();
         this.stripedConsumerLocks = new Object[numberOfStripes];
@@ -145,11 +147,10 @@ public class RowChangeTaker implements RowChanges {
     public void start() throws Exception {
 
         int numberOfStripes = partitionStripeFunction.getNumberOfStripes();
-        ExecutorService consumerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsConsumer-%d").build());
         scheduleConsumer(systemConsumerLock, consumerThreadPool, systemAvailableRowsReceivers, versionedPartitionName -> true);
         for (int i = 0; i < numberOfStripes; i++) {
             int stripe = i;
-            scheduleConsumer(stripedConsumerLocks[i], 
+            scheduleConsumer(stripedConsumerLocks[i],
                 consumerThreadPool,
                 stripedAvailableRowsReceivers,
                 versionedPartitionName -> partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripe
@@ -266,7 +267,9 @@ public class RowChangeTaker implements RowChanges {
     }
 
     synchronized public void stop() throws Exception {
-        this.availableRowsReceiverThreadPool.shutdownNow();
+        availableRowsReceiverThreadPool.shutdownNow();
+        systemRowTakerThreadPool.shutdownNow();
+        consumerThreadPool.shutdownNow();
     }
 
     private static class SessionedTxId {
@@ -354,7 +357,7 @@ public class RowChangeTaker implements RowChanges {
                     if (x.getCause() instanceof InterruptedException) {
                         return;
                     }
-                    LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
+                    LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     try {
                         Thread.sleep(1_000);
                     } catch (InterruptedException ie) {
@@ -653,7 +656,7 @@ public class RowChangeTaker implements RowChanges {
                                     if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.warn("Error while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Error while taking from member:{} host:{} partition:{}",
-                                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, rowsResult.error);
+                                            new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, rowsResult.error);
                                     }
                                     amzaStats.takeErrors.add(remoteRingMember);
                                 } else if (rowsResult.unreachable != null) {
@@ -664,7 +667,7 @@ public class RowChangeTaker implements RowChanges {
                                     if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.debug("Unreachable while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Unreachable while taking from member:{} host:{} partition:{}",
-                                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName},
+                                            new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName },
                                             rowsResult.unreachable);
                                     }
                                     amzaStats.takeErrors.add(remoteRingMember);
@@ -743,7 +746,7 @@ public class RowChangeTaker implements RowChanges {
                                     leadershipToken);
                             } catch (Exception x) {
                                 LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                             }
                         } finally {
                             LOG.stopTimer("take>all");
@@ -751,14 +754,14 @@ public class RowChangeTaker implements RowChanges {
 
                     } catch (Exception x) {
                         LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                            new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
+                            new Object[] { remoteRingMember, remoteRingHost, localVersionedPartitionName }, x);
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                 onError.error(this, x);
             }
         }

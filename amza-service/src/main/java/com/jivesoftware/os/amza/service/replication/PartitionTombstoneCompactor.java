@@ -66,12 +66,12 @@ public class PartitionTombstoneCompactor {
     }
 
     public void compactTombstone(int stripe, boolean force) throws Exception {
-
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getActivePartitions()) {
+        partitionIndex.streamActivePartitions(versionedPartitionName -> {
             if (stripe == -1 || partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripe) {
                 partitionIndex.get(versionedPartitionName).compactTombstone(force);
             }
-        }
+            return true;
+        });
     }
 
 }

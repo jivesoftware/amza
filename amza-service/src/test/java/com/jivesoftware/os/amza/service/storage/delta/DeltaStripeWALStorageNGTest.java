@@ -125,7 +125,7 @@ public class DeltaStripeWALStorageNGTest {
             new JiveEpochTimestampProvider());
         amzaStats = new AmzaStats();
         partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider,
-            partitionPropertyMarshaller);
+            partitionPropertyMarshaller, 4);
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
         LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
@@ -284,7 +284,7 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.hackTruncation(4);
 
-        partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider, partitionPropertyMarshaller);
+        partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider, partitionPropertyMarshaller, 4);
         partitionIndex.open();
         deltaStripeWALStorage = loadDeltaStripe();
 

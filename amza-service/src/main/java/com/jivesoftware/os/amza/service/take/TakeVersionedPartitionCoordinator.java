@@ -40,8 +40,8 @@ public class TakeVersionedPartitionCoordinator {
     final AtomicInteger currentCategory;
     volatile VersionedPartitionProvider.VersionedPartitionProperties versionedPartitionProperties;
     volatile boolean expunged = false;
+    volatile long callCount;
 
-    private final AtomicLong callCount = new AtomicLong();
     private final ConcurrentMap<RingMember, Session> sessions = Maps.newConcurrentMap();
 
     private long lastOfferedMillis = -1; // approximate is good enough
@@ -66,7 +66,7 @@ public class TakeVersionedPartitionCoordinator {
         this.currentCategory = new AtomicInteger(1);
     }
 
-    Long availableRowsStream(PartitionStateStorage partitionStateStorage,
+    long availableRowsStream(PartitionStateStorage partitionStateStorage,
         TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
         VersionedRing versionedRing,
@@ -78,7 +78,7 @@ public class TakeVersionedPartitionCoordinator {
         }
 
         lastOfferedMillis = System.currentTimeMillis();
-        callCount.incrementAndGet();
+        callCount++;
 
         try {
             return partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
@@ -351,7 +351,7 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     public long getCallCount() {
-        return callCount.get();
+        return callCount;
     }
 
     static class Session {

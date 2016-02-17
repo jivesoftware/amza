@@ -82,7 +82,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final WALIndexProvider<I> walIndexProvider;
     private final SickPartitions sickPartitions;
     private final boolean hardFsyncBeforeLeapBoundary;
-    private final long[] stripedKeyHighwaterTimestamps;
+    private volatile long[] stripedKeyHighwaterTimestamps;
 
     private final AtomicReference<I> walIndex = new AtomicReference<>(null);
     private final Object oneIndexerAtATimeLock = new Object();
@@ -128,7 +128,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         this.sickPartitions = sickPartitions;
         this.hardFsyncBeforeLeapBoundary = hardFsyncBeforeLeapBoundary;
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
-        this.stripedKeyHighwaterTimestamps = new long[numKeyHighwaterStripes];
+        this.stripedKeyHighwaterTimestamps = null;
     }
 
     public boolean isSick() {
@@ -214,6 +214,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             ttlVersion,
             walIndex.get());
 
+        long[] compactKeyHighwaterTimestamps = findKeyHighwaterTimestamps();
+
         acquireAll();
         try {
             WALTx.CommittedCompacted<I> compacted;
@@ -235,7 +237,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         0,
                         fpOfLastLeap,
                         updatesSinceLeap,
-                        stripedKeyHighwaterTimestamps,
+                        compactKeyHighwaterTimestamps,
                         0);
 
                     return UIO.longsBytes(marker);
@@ -291,7 +293,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 long[] loadOldestTombstonedVersion = { -1 };
                 long[] loadKeyCount = { 0 };
                 long[] loadClobberCount = { 0 };
-                long[][] markerStripedTimestamps = new long[1][];
+                //long[][] markerStripedTimestamps = new long[1][];
 
                 long[] truncate = { 0 };
                 primaryRowMarshaller.fromRows(fpRowStream -> {
@@ -313,7 +315,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                 loadOldestTombstonedVersion[0] = marker[EOM_OLDEST_TOMBSTONED_VERSION_INDEX];
                                 loadKeyCount[0] = marker[EOM_KEY_COUNT_INDEX];
                                 loadClobberCount[0] = marker[EOM_CLOBBER_COUNT_INDEX];
-                                markerStripedTimestamps[0] = marker;
+                                //markerStripedTimestamps[0] = marker;
 
                                 fpOfLastLeap[0] = marker[EOM_FP_OF_LAST_LEAP_INDEX];
                                 updatesSinceLastLeap[0] = marker[EOM_UPDATES_SINCE_LAST_LEAP_INDEX];
@@ -352,7 +354,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                 loadOldestTombstonedVersion[0] = Math.min(loadOldestTombstonedVersion[0], marker[EOM_OLDEST_TOMBSTONED_VERSION_INDEX]);
                                 loadKeyCount[0] = marker[EOM_KEY_COUNT_INDEX];
                                 loadClobberCount[0] = marker[EOM_CLOBBER_COUNT_INDEX];
-                                markerStripedTimestamps[0] = marker;
+                                //markerStripedTimestamps[0] = marker;
 
                                 if (truncateToEndOfMergeMarker) {
                                     truncate[0] = rowFP;
@@ -404,11 +406,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
                 io.initLeaps(fpOfLastLeap[0], updatesSinceLastLeap[0]);
 
-                if (markerStripedTimestamps[0] != null) {
+                /*if (markerStripedTimestamps[0] != null) {
                     for (int i = 0, offset = EOM_HIGHWATER_STRIPES_OFFSET; i < numKeyHighwaterStripes; i++, offset++) {
                         stripedKeyHighwaterTimestamps[i] = Math.max(stripedKeyHighwaterTimestamps[i], markerStripedTimestamps[0][offset]);
                     }
-                }
+                }*/
 
                 return null;
             });
@@ -424,11 +426,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    private void mergeStripedKeyHighwaters(byte[] prefix, byte[] key, long valueTimestamp) {
-        int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
-        stripedKeyHighwaterTimestamps[highwaterTimestampIndex] = Math.max(stripedKeyHighwaterTimestamps[highwaterTimestampIndex], valueTimestamp);
-    }
-
     public void flush(boolean fsync) throws Exception {
         walTx.flush(fsync);
     }
@@ -436,6 +433,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public WALIndex commitIndex(boolean fsync) throws Exception {
         WALIndex wali = walIndex.get();
         if (wali != null) {
+            clearKeyHighwaterTimestamp();
             wali.commit(fsync);
         } else {
             LOG.warn("Trying to commit a nonexistent index:{}.", versionedPartitionName);
@@ -444,6 +442,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     public void endOfMergeMarker(long deltaWALId, long highestTxId) throws Exception {
+        long[] keyHighwaterTimestamps = findKeyHighwaterTimestamps();
         walTx.tx((io) -> {
             long[] marker = buildEndOfMergeMarker(deltaWALId,
                 highestTxId,
@@ -455,7 +454,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 clobberCount.get(),
                 io.getFpOfLastLeap(),
                 io.getUpdatesSinceLeap(),
-                stripedKeyHighwaterTimestamps,
+                keyHighwaterTimestamps,
                 0);
             byte[] endOfMergeMarker = UIO.longsBytes(marker);
 
@@ -466,6 +465,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 stream -> stream.stream(endOfMergeMarker),
                 stream -> true,
                 (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                false,
                 hardFsyncBeforeLeapBoundary);
             updateCount.set(0);
             return null;
@@ -585,7 +585,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
             if (!forceApply) {
                 MutableInt i = new MutableInt(0);
-                wali.getPointers(
+                streamPointers(
                     stream -> {
                         for (int k = 0; k < keys.size(); k++) {
                             WALValue value = values.get(k);
@@ -743,7 +743,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (NullPointerException e) {
                 throw new IllegalStateException("Illogical NPE: " + (indexCommitedUpToTxId == null), e);
             }
-            rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, hardFsyncBeforeLeapBoundary);
+            rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, false, hardFsyncBeforeLeapBoundary);
             if (highwater != null) {
                 writeHighwaterMarker(rowWriter, highwater);
             }
@@ -868,10 +868,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
+            long[] keyHighwaterTimestamps = findKeyHighwaterTimestamps();
             return wali == null || wali.getPointers(
                 indexStream -> keyValues.consume(
                     (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                        if (valueTimestamp > getLargestTimestampForKeyStripe(prefix, key)) {
+                        long largestTimestamp = getLargestTimestampForKeyStripe(prefix, key, keyHighwaterTimestamps);
+                        if (valueTimestamp > largestTimestamp) {
                             return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
                         } else {
                             return indexStream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
@@ -893,10 +895,54 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    // TODO fix instantiation to hashcode
-    private long getLargestTimestampForKeyStripe(byte[] prefix, byte[] key) {
-        int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
-        return stripedKeyHighwaterTimestamps[highwaterTimestampIndex];
+    private long[] findKeyHighwaterTimestamps() throws Exception {
+        if (stripedKeyHighwaterTimestamps == null) {
+            synchronized (this) {
+                if (stripedKeyHighwaterTimestamps == null) {
+                    if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+                        stripedKeyHighwaterTimestamps = new long[numKeyHighwaterStripes];
+                    } else {
+                        long[] compactKeyHighwaterTimestamps = new long[numKeyHighwaterStripes];
+                        walTx.tx(io -> {
+                            io.reverseScan((rowFP, rowTxId, rowType1, row) -> {
+                                if (rowType1 == RowType.end_of_merge) {
+                                    long[] marker = loadEndOfMergeMarker(-1, row);
+                                    if (marker == null) {
+                                        throw new IllegalStateException("Invalid end of merge marker");
+                                    }
+                                    System.arraycopy(marker, EOM_HIGHWATER_STRIPES_OFFSET, compactKeyHighwaterTimestamps, 0, numKeyHighwaterStripes);
+                                } else {
+                                    //System.out.println("Expected EOM but found " + rowType1);
+                                    throw new IllegalStateException("Missing end of merge marker");
+                                }
+                                return false;
+                            });
+                            return null;
+                        });
+                        stripedKeyHighwaterTimestamps = compactKeyHighwaterTimestamps;
+                    }
+                }
+            }
+        }
+        return stripedKeyHighwaterTimestamps;
+    }
+
+    private void clearKeyHighwaterTimestamp() {
+        if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
+            stripedKeyHighwaterTimestamps = null;
+        }
+    }
+
+    private void mergeStripedKeyHighwaters(byte[] prefix, byte[] key, long valueTimestamp) {
+        if (stripedKeyHighwaterTimestamps != null) {
+            int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
+            stripedKeyHighwaterTimestamps[highwaterTimestampIndex] = Math.max(stripedKeyHighwaterTimestamps[highwaterTimestampIndex], valueTimestamp);
+        }
+    }
+
+    private long getLargestTimestampForKeyStripe(byte[] prefix, byte[] key, long[] keyHighwaterTimestamps) {
+        int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % keyHighwaterTimestamps.length);
+        return keyHighwaterTimestamps[highwaterTimestampIndex];
     }
 
     //TODO replace with stream!

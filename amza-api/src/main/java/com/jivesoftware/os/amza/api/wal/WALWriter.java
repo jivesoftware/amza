@@ -26,6 +26,7 @@ public interface WALWriter {
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream,
+        boolean addToLeapCount,
         boolean hardFsyncBeforeLeapBoundary) throws Exception;
 
     long writeSystem(byte[] row) throws Exception;

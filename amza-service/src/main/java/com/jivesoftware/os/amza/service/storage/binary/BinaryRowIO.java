@@ -166,9 +166,18 @@ public class BinaryRowIO implements RowIO {
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream,
+        boolean addToLeapCount,
         boolean hardFsyncBeforeLeapBoundary) throws Exception {
-        int count = rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, false);
-        if (updatesBetweenLeaps > 0 && updatesSinceLeap.addAndGet(count) >= updatesBetweenLeaps) {
+        int count = rowWriter.write(txId,
+            rowType,
+            estimatedNumberOfRows,
+            estimatedSizeInBytes,
+            rows,
+            indexableKeys,
+            stream,
+            addToLeapCount,
+            hardFsyncBeforeLeapBoundary);
+        if (addToLeapCount && updatesBetweenLeaps > 0 && updatesSinceLeap.addAndGet(count) >= updatesBetweenLeaps) {
             rowWriter.flush(hardFsyncBeforeLeapBoundary);
             LeapFrog latest = latestLeapFrog.get();
             Leaps leaps = computeNextLeaps(txId, latest, maxLeaps);

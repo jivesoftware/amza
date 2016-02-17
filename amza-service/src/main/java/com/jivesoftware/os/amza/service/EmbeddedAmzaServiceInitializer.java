@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -22,6 +23,7 @@ import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 public class EmbeddedAmzaServiceInitializer {
 
     public AmzaService initialize(final AmzaServiceConfig config,
+        BAInterner interner,
         AmzaStats amzaStats,
         SickThreads sickThreads,
         SickPartitions sickPartitions,
@@ -37,9 +39,10 @@ public class EmbeddedAmzaServiceInitializer {
         RowChanges allRowChanges) throws Exception {
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
-        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
 
         AmzaService service = new AmzaServiceInitializer().initialize(config,
+            interner,
             amzaStats,
             sickThreads,
             sickPartitions,

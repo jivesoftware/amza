@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -27,11 +28,12 @@ public class DeltaWALNGTest {
 
     @Test
     public void testLoad() throws Exception {
+        BAInterner interner = new BAInterner();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(true, "test".getBytes(), "test".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
         File tmp = Files.createTempDir();
         final PrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
-        final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+        final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
         String[] workingDirs = new String[]{tmp.getAbsolutePath()};
 
         BinaryRowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(new IoStats(), 4_096, 64, false);

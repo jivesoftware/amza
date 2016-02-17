@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.collect.Lists;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
@@ -33,16 +34,19 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final BAInterner interner;
     private final PartitionName partitionName;
     private final AmzaClientCallRouter<C, E> partitionCallRouter;
     private final RemotePartitionCaller<C, E> remotePartitionCaller;
     private final long awaitLeaderElectionForNMillis;
 
-    public AmzaPartitionClient(PartitionName partitionName,
+    public AmzaPartitionClient(BAInterner interner,
+        PartitionName partitionName,
         AmzaClientCallRouter<C, E> partitionCallRouter,
         RemotePartitionCaller<C, E> remotePartitionCaller,
         long awaitLeaderElectionForNMillis) throws IOException {
 
+        this.interner = interner;
         this.partitionName = partitionName;
         this.partitionCallRouter = partitionCallRouter;
         this.remotePartitionCaller = remotePartitionCaller;
@@ -262,7 +266,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
 
     private TakeResult take(FilerInputStream fis, Highwaters highwaters, TxKeyValueStream stream, byte[] intLongBuffer) throws Exception {
         long maxTxId = -1;
-        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intLongBuffer));
+        byte[] ringMemberBytes = UIO.readByteArray(fis, "ringMember", intLongBuffer);
+        RingMember ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);
         boolean done = false;
 
         while (!UIO.readBoolean(fis, "eos")) {
@@ -285,7 +290,9 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
             }
         }
 
-        return new TakeResult(RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intLongBuffer)),
+        ringMemberBytes = UIO.readByteArray(fis, "ringMember", intLongBuffer);
+        ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);
+        return new TakeResult(ringMember,
             UIO.readLong(fis, "lastTxId", intLongBuffer),
             readHighwaters(fis, intLongBuffer));
     }
@@ -294,7 +301,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         List<RingMemberHighwater> walHighwaters = new ArrayList<>();
         int length = UIO.readInt(inputStream, "length", intLongBuffer);
         for (int i = 0; i < length; i++) {
-            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(inputStream, "ringMember", intLongBuffer));
+            byte[] ringMemberBytes = UIO.readByteArray(inputStream, "ringMember", intLongBuffer);
+            RingMember ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);
             long txId = UIO.readLong(inputStream, "txId", intLongBuffer);
             walHighwaters.add(new RingMemberHighwater(ringMember, txId));
         }

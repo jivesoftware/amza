@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
@@ -43,10 +44,11 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
-    private final StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
+    private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpAvailableRowsTaker(AmzaStats amzaStats) {
+    public HttpAvailableRowsTaker(AmzaStats amzaStats, BAInterner interner) {
         this.amzaStats = amzaStats;
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
     }
 
     @Override

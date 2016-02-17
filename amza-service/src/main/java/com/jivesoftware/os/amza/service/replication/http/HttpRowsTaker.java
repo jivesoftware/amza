@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -48,10 +49,11 @@ public class HttpRowsTaker implements RowsTaker {
 
     private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
-    private final StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
+    private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpRowsTaker(AmzaStats amzaStats) {
+    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner) {
         this.amzaStats = amzaStats;
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
     }
 
     /**
@@ -77,9 +79,9 @@ public class HttpRowsTaker implements RowsTaker {
         try {
             httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
                 "/amza/rows/stream/" + localRingMember.getMember()
-                    + "/" + remoteVersionedPartitionName.toBase64()
-                    + "/" + remoteTxId
-                    + "/" + localLeadershipToken);
+                + "/" + remoteVersionedPartitionName.toBase64()
+                + "/" + remoteTxId
+                + "/" + localLeadershipToken);
         } catch (IOException | HttpClientException e) {
             return new StreamingRowsResult(e, null, -1, -1, null);
         }
@@ -108,14 +110,14 @@ public class HttpRowsTaker implements RowsTaker {
         try {
             return getRequestHelper(remoteRingHost).executeRequest(null,
                 "/amza/rows/taken/" + localRingMember.getMember()
-                    + "/" + takeSessionId
-                    + "/" + versionedPartitionName.toBase64()
-                    + "/" + txId
-                    + "/" + localLeadershipToken,
+                + "/" + takeSessionId
+                + "/" + versionedPartitionName.toBase64()
+                + "/" + txId
+                + "/" + localLeadershipToken,
                 Boolean.class, false);
         } catch (Exception x) {
             LOG.warn("Failed to deliver acks for local:{} remote:{} partition:{} tx:{}",
-                new Object[] { localRingMember, remoteRingHost, versionedPartitionName, txId }, x);
+                new Object[]{localRingMember, remoteRingHost, versionedPartitionName, txId}, x);
             return false;
         }
     }

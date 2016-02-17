@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -50,11 +51,14 @@ public class AmzaReplicationRestEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaStats amzaStats;
     private final AmzaInstance amzaInstance;
+    private final BAInterner interner;
 
     public AmzaReplicationRestEndpoints(@Context AmzaStats amzaStats,
-        @Context AmzaInstance amzaInstance) {
+        @Context AmzaInstance amzaInstance,
+        @Context BAInterner interner) {
         this.amzaStats = amzaStats;
         this.amzaInstance = amzaInstance;
+        this.interner = interner;
     }
 
     @POST
@@ -76,7 +80,7 @@ public class AmzaReplicationRestEndpoints {
                 try {
                     amzaInstance.rowsStream(dos,
                         new RingMember(ringMemberString),
-                        VersionedPartitionName.fromBase64(versionedPartitionName),
+                        VersionedPartitionName.fromBase64(versionedPartitionName, interner),
                         txId,
                         leadershipToken);
                 } catch (IOException x) {
@@ -156,7 +160,7 @@ public class AmzaReplicationRestEndpoints {
             amzaStats.rowsTaken.incrementAndGet();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
                 takeSessionId,
-                VersionedPartitionName.fromBase64(versionedPartitionName),
+                VersionedPartitionName.fromBase64(versionedPartitionName, interner),
                 txId,
                 leadershipToken);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);

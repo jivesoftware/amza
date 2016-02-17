@@ -82,6 +82,8 @@ public class RowChangeTaker implements RowChanges {
     private final OrderIdProvider sessionIdProvider;
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long longPollTimeoutMillis;
+    private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+    private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
 
     private final ExecutorService systemRowTakerThreadPool;
     private final ExecutorService availableRowsReceiverThreadPool;
@@ -106,7 +108,9 @@ public class RowChangeTaker implements RowChanges {
         StripedPartitionCommitChanges stripedPartitionCommitChanges,
         OrderIdProvider sessionIdProvider,
         Optional<TakeFailureListener> takeFailureListener,
-        long longPollTimeoutMillis) {
+        long longPollTimeoutMillis,
+        BinaryPrimaryRowMarshaller primaryRowMarshaller,
+        BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller) {
 
         this.amzaStats = amzaStats;
         this.amzaRingReader = amzaRingReader;
@@ -124,6 +128,8 @@ public class RowChangeTaker implements RowChanges {
         this.sessionIdProvider = sessionIdProvider;
         this.takeFailureListener = takeFailureListener;
         this.longPollTimeoutMillis = longPollTimeoutMillis;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
 
         this.systemRowTakerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("systemRowTaker-%d").build());
         this.availableRowsReceiverThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsReceiver-%d").build());
@@ -156,7 +162,7 @@ public class RowChangeTaker implements RowChanges {
                     for (RingMember ringMember : Sets.difference(desireRingMembers, availableRowsReceivers.keySet())) {
                         availableRowsReceivers.compute(ringMember, (RingMember key, AvailableRowsReceiver taker) -> {
                             if (taker == null) {
-                                taker = new AvailableRowsReceiver(ringMember);
+                                taker = new AvailableRowsReceiver(primaryRowMarshaller, binaryHighwaterRowMarshaller, ringMember);
                                 //LOG.info("ADDED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
                                 availableRowsReceiverThreadPool.submit(taker);
                             }
@@ -262,13 +268,19 @@ public class RowChangeTaker implements RowChanges {
 
     private class AvailableRowsReceiver implements Runnable {
 
+        private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+        private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
         private final RingMember remoteRingMember;
 
         private final ConcurrentHashMap<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = new ConcurrentHashMap<>();
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
-        public AvailableRowsReceiver(RingMember remoteRingMember) {
+        public AvailableRowsReceiver(BinaryPrimaryRowMarshaller primaryRowMarshaller,
+            BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller,
+            RingMember remoteRingMember) {
+            this.primaryRowMarshaller = primaryRowMarshaller;
+            this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
             this.remoteRingMember = remoteRingMember;
         }
 
@@ -445,7 +457,9 @@ public class RowChangeTaker implements RowChanges {
                 if (rowTaker == null
                     || rowTaker.localVersionedPartitionName.getPartitionVersion() < currentLocalVersionedPartitionName.getPartitionVersion()) {
 
-                    rowTaker = new RowTaker(disposed,
+                    rowTaker = new RowTaker(primaryRowMarshaller,
+                        binaryHighwaterRowMarshaller,
+                        disposed,
                         currentLocalVersionedPartitionName,
                         remoteRingMember,
                         remoteRingHost,
@@ -502,6 +516,8 @@ public class RowChangeTaker implements RowChanges {
 
     private class RowTaker implements Runnable {
 
+        private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+        private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
         private final AtomicBoolean disposed;
         private final VersionedPartitionName localVersionedPartitionName;
         private final RingMember remoteRingMember;
@@ -515,7 +531,9 @@ public class RowChangeTaker implements RowChanges {
 
         private final AtomicLong version = new AtomicLong(0);
 
-        public RowTaker(AtomicBoolean disposed,
+        public RowTaker(BinaryPrimaryRowMarshaller primaryRowMarshaller,
+            BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller,
+            AtomicBoolean disposed,
             VersionedPartitionName localVersionedPartitionName,
             RingMember remoteRingMember,
             RingHost remoteRingHost,
@@ -525,6 +543,9 @@ public class RowChangeTaker implements RowChanges {
             RowsTaker rowsTaker,
             OnCompletion onCompletion,
             OnError onError) {
+
+            this.primaryRowMarshaller = primaryRowMarshaller;
+            this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
             this.disposed = disposed;
             this.localVersionedPartitionName = localVersionedPartitionName;
             this.remoteRingMember = remoteRingMember;
@@ -550,7 +571,7 @@ public class RowChangeTaker implements RowChanges {
             }
             long currentVersion = version.get();
             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
-            
+
             try {
                 //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition())
                 //LOG.info("TAKE: local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
@@ -576,7 +597,9 @@ public class RowChangeTaker implements RowChanges {
                                 remoteVersionedPartitionName,
                                 commitTo,
                                 remoteRingMember,
-                                highwaterMark);
+                                highwaterMark,
+                                primaryRowMarshaller,
+                                binaryHighwaterRowMarshaller);
 
                             if (highwaterMark >= takeToTxId.get()) {
                                 LOG.inc("take>fully>all");
@@ -738,21 +761,25 @@ public class RowChangeTaker implements RowChanges {
         private final AtomicInteger streamed = new AtomicInteger(0);
         private final AtomicInteger flushed = new AtomicInteger(0);
         private final AtomicReference<WALHighwater> highwater = new AtomicReference<>();
-        private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // TODO ah pass this in??
-        private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller = new BinaryHighwaterRowMarshaller(); // TODO ah pass this in??
+        private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+        private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
         private final Map<RingMember, Long> flushedHighwatermarks = new HashMap<>();
 
         public TakeRowStream(AmzaStats amzaStats,
             VersionedPartitionName versionedPartitionName,
             CommitTo commitTo,
             RingMember ringMember,
-            long lastHighwaterMark) {
+            long lastHighwaterMark,
+            BinaryPrimaryRowMarshaller primaryRowMarshaller,
+            BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller) {
             this.amzaStats = amzaStats;
             this.versionedPartitionName = versionedPartitionName;
             this.commitTo = commitTo;
             this.ringMember = ringMember;
             this.highWaterMark = new MutableLong(lastHighwaterMark);
             this.lastTxId = new MutableLong(Long.MIN_VALUE);
+            this.primaryRowMarshaller = primaryRowMarshaller;
+            this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
             this.flushedTxId = new MutableLong(-1);
         }
 

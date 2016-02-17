@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -76,15 +77,19 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private final ConcurrentMap<PartitionName, PartitionProperties> partitionProperties = Maps.newConcurrentMap();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
+    private final BAInterner interner;
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final IndexedWALStorageProvider walStorageProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
 
-    public PartitionIndex(AmzaStats amzaStats,
+    public PartitionIndex(BAInterner interner,
+        AmzaStats amzaStats,
         TimestampedOrderIdProvider orderIdProvider,
         IndexedWALStorageProvider walStorageProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller) {
+
+        this.interner = interner;
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.walStorageProvider = walStorageProvider;
@@ -232,7 +237,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         List<PartitionName> partitionNames = Lists.newArrayList();
         propertiesStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned && valueTimestamp != -1) {
-                PartitionName partitionName = PartitionName.fromBytes(key);
+                PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                 if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName())) {
                     partitionNames.add(partitionName);
                 }
@@ -258,7 +263,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (changes.getVersionedPartitionName().getPartitionName().equals(REGION_PROPERTIES.getPartitionName())) {
             try {
                 for (Map.Entry<WALKey, WALValue> entry : changes.getApply().entrySet()) {
-                    PartitionName partitionName = PartitionName.fromBytes(entry.getKey().key);
+                    PartitionName partitionName = PartitionName.fromBytes(entry.getKey().key, 0, interner);
                     removeProperties(partitionName);
 
                     ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);

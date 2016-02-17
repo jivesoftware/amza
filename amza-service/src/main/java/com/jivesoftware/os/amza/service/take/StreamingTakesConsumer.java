@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -18,6 +19,11 @@ import java.util.Map;
 public class StreamingTakesConsumer {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private final BAInterner interner;
+
+    public StreamingTakesConsumer(BAInterner interner) {
+        this.interner = interner;
+    }
 
     public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream) throws Exception {
         while (dis.read() == 1) {
@@ -30,7 +36,7 @@ public class StreamingTakesConsumer {
             dis.readFully(versionedPartitionNameBytes);
             long txId = dis.readLong();
             try {
-                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), txId);
+                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes, 0, interner), txId);
             } catch (PropertiesNotPresentException e) {
                 LOG.warn(e.getMessage());
             } catch (Throwable t) {
@@ -53,7 +59,7 @@ public class StreamingTakesConsumer {
                 byte[] ringMemberBytes = new byte[dis.readInt()];
                 dis.readFully(ringMemberBytes);
                 long highwaterMark = dis.readLong();
-                neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes), highwaterMark);
+                neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner), highwaterMark);
                 bytes += 1 + 4 + ringMemberBytes.length + 8;
             }
             while (dis.readByte() == 1) {

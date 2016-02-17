@@ -19,6 +19,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.util.Arrays;
 
@@ -44,15 +45,19 @@ public class PartitionName implements Comparable<PartitionName> {
         return 1 + 1 + 4 + ringName.length + 4 + name.length;
     }
 
-    public static PartitionName fromBytes(byte[] bytes) {
-        if (bytes[0] == 0) { // version
-            boolean systemPartition = (bytes[1] == 1);
-            int ringNameLength = UIO.bytesInt(bytes, 1 + 1);
-            byte[] ringName = new byte[ringNameLength];
-            System.arraycopy(bytes, 1 + 1 + 4, ringName, 0, ringNameLength);
-            int nameLength = UIO.bytesInt(bytes, 1 + 1 + 4 + ringNameLength);
-            byte[] name = new byte[nameLength];
-            System.arraycopy(bytes, 1 + 1 + 4 + ringNameLength + 4, name, 0, nameLength);
+    public static PartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) {
+        int o = offset;
+        if (bytes[o] == 0) { // version
+            o++;
+            boolean systemPartition = (bytes[o] == 1);
+            o++;
+            int ringNameLength = UIO.bytesInt(bytes, o);
+            o += 4;
+            byte[] ringName = interner.intern(bytes, o, ringNameLength);
+            o += ringNameLength;
+            int nameLength = UIO.bytesInt(bytes, o);
+            o += 4;
+            byte[] name = interner.intern(bytes, o, nameLength);
             return new PartitionName(systemPartition, ringName, name);
         }
         throw new RuntimeException("Invalid version:" + bytes[0]);
@@ -71,8 +76,8 @@ public class PartitionName implements Comparable<PartitionName> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static PartitionName fromBase64(String base64) {
-        return fromBytes(BaseEncoding.base64Url().decode(base64));
+    public static PartitionName fromBase64(String base64, BAInterner interner) {
+        return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
     }
 
     public boolean isSystemPartition() {

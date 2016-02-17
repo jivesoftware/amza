@@ -141,7 +141,7 @@ public class AmzaTestCluster {
             new JiveEpochTimestampProvider());
 
         AvailableRowsTaker availableRowsTaker =
-            (localRingMember1, localTimestampedRingHost, remoteRingMember, remoteRingHost, takeSessionId, timeoutMillis, updatedPartitionsStream) -> {
+            (localRingMember1, localTimestampedRingHost, remoteRingMember, remoteRingHost, system, takeSessionId, timeoutMillis, updatedPartitionsStream) -> {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
@@ -149,6 +149,7 @@ public class AmzaTestCluster {
                 } else {
                     amzaNode.takePartitionUpdates(localRingMember1,
                         localTimestampedRingHost,
+                        system,
                         takeSessionId,
                         timeoutMillis,
                         (versionedPartitionName, txId) -> {
@@ -553,6 +554,7 @@ public class AmzaTestCluster {
 
         private void takePartitionUpdates(RingMember ringMember,
             TimestampedRingHost timestampedRingHost,
+            boolean system,
             long sessionId,
             long timeoutMillis,
             AvailableRowsTaker.AvailableStream updatedPartitionsStream,
@@ -567,7 +569,8 @@ public class AmzaTestCluster {
             }
 
             try {
-                amzaService.availableRowsStream(ringMember,
+                amzaService.availableRowsStream(system,
+                    ringMember,
                     timestampedRingHost,
                     sessionId,
                     timeoutMillis,

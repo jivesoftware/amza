@@ -170,7 +170,7 @@ public class AmzaMain {
             deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
 
             BAInterner interner = new BAInterner();
-            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats, interner);
+            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner);
 
             final ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);

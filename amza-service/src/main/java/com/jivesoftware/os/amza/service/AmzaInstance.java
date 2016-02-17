@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import java.io.DataOutputStream;
-import java.util.Set;
 
 public interface AmzaInstance {
 
@@ -34,7 +33,8 @@ public interface AmzaInstance {
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
-    void availableRowsStream(ChunkWriteable writeable,
+    void availableRowsStream(boolean system,
+        ChunkWriteable writeable,
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,

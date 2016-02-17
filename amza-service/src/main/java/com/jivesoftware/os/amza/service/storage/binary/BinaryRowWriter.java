@@ -44,6 +44,7 @@ public class BinaryRowWriter implements WALWriter {
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream,
+        boolean addToLeapCount,
         boolean hardFsyncBeforeLeapBoundary) throws Exception {
 
         byte[] lengthBuffer = new byte[4];
@@ -97,6 +98,7 @@ public class BinaryRowWriter implements WALWriter {
                 fps[0] = fp;
                 return true;
             },
+            true,
             false);
         return fps[0];
     }

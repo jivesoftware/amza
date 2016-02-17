@@ -501,6 +501,7 @@ public class BinaryWALTx implements WALTx {
                         indexableKeys,
                         (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(lastTxId, prefix, key,
                             valueTimestamp, valueTombstoned, valueVersion, fp),
+                        true,
                         false);
                     return true;
                 });
@@ -512,6 +513,7 @@ public class BinaryWALTx implements WALTx {
                     rows,
                     indexableKeys,
                     (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                    true,
                     false);
             }
         }
@@ -534,6 +536,7 @@ public class BinaryWALTx implements WALTx {
                 stream -> stream.stream(finallyAnEndOfMerge),
                 stream -> true,
                 (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                true,
                 false);
         }
     }

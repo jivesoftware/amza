@@ -74,6 +74,7 @@ public class BinaryRowIONGTest {
                 stream -> stream.stream(row),
                 stream -> true,
                 (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                true,
                 false);
         }
 
@@ -137,6 +138,7 @@ public class BinaryRowIONGTest {
                 stream -> stream.stream(row),
                 stream -> true,
                 (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                true,
                 false);
             /*if (i % 10_000 == 0) {
              System.out.println("Wrote " + i);

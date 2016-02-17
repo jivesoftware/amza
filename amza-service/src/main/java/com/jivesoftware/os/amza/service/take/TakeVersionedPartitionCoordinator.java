@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
+import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
@@ -37,6 +38,7 @@ public class TakeVersionedPartitionCoordinator {
     final long systemReofferDeltaMillis;
     final long reofferDeltaMillis;
     final AtomicInteger currentCategory;
+    volatile VersionedPartitionProvider.VersionedPartitionProperties versionedPartitionProperties;
     volatile boolean expunged = false;
 
     private final AtomicLong callCount = new AtomicLong();

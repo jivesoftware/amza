@@ -310,6 +310,7 @@ public class AmzaServiceInitializer {
 
         amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
         amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
+        amzaPartitionWatcher.watch(PartitionCreator.REGION_PROPERTIES.getPartitionName(), partitionIndex);
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 

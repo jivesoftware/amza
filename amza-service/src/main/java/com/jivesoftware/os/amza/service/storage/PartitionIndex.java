@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.jivesoftware.os.amza.service.storage.PartitionCreator.REGION_PROPERTIES;
 
@@ -82,6 +83,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private final TimestampedOrderIdProvider orderIdProvider;
     private final IndexedWALStorageProvider walStorageProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
+    private final AtomicLong partitionPropertiesVersion = new AtomicLong();
 
     public PartitionIndex(BAInterner interner,
         AmzaStats amzaStats,
@@ -96,8 +98,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
     }
 
-    private static final Map<VersionedPartitionName, PartitionProperties> SYSTEM_PARTITIONS = ImmutableMap.<VersionedPartitionName,
-        PartitionProperties>builder()
+    private static final Map<VersionedPartitionName, PartitionProperties> SYSTEM_PARTITIONS = ImmutableMap
+        .<VersionedPartitionName, PartitionProperties>builder()
         .put(PartitionCreator.REGION_INDEX, REPLICATED_PROPERTIES)
         .put(PartitionCreator.RING_INDEX, REPLICATED_PROPERTIES)
         .put(PartitionCreator.NODE_INDEX, REPLICATED_PROPERTIES)
@@ -133,6 +135,15 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    @Override
+    public VersionedPartitionProperties getVersionedProperties(PartitionName partitionName, VersionedPartitionProperties versionedPartitionProperties) {
+        long version = partitionPropertiesVersion.get();
+        if (versionedPartitionProperties != null && versionedPartitionProperties.vesion >= version) {
+            return versionedPartitionProperties;
+        }
+        return new VersionedPartitionProperties(version, getProperties(partitionName));
     }
 
     public PartitionStore getIfPresent(VersionedPartitionName versionedPartitionName) {
@@ -274,6 +285,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                         }
                     }
                 }
+                partitionPropertiesVersion.incrementAndGet();
             } catch (Throwable ex) {
                 throw new RuntimeException("Error while streaming entry set.", ex);
             }

@@ -107,7 +107,9 @@ public class TakeRingCoordinator {
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
-            PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
+            coordinator.versionedPartitionProperties = versionedPartitionProvider.getVersionedProperties(coordinator.versionedPartitionName.getPartitionName(),
+                coordinator.versionedPartitionProperties);
+            PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
             if (properties.takeFromFactor > 0) {
                 long timeout = coordinator.availableRowsStream(partitionStateStorage,
                     txHighestPartitionTx,

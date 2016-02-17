@@ -89,6 +89,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final SickThreads sickThreads;
 
     private final ConcurrentMap<VersionedPartitionName, Aquarium> aquariums = Maps.newConcurrentMap();
+    private final ExecutorService livelynessExecutorService = Executors.newSingleThreadExecutor(
+        new ThreadFactoryBuilder().setNameFormat("aquarium-livelyness-%d").build());
     private final ExecutorService executorService = Executors.newSingleThreadExecutor(
         new ThreadFactoryBuilder().setNameFormat("aquarium-scheduled-%d").build());
     private final Set<PartitionName> smellsFishy = Collections.newSetFromMap(Maps.newConcurrentMap());
@@ -131,11 +133,26 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
     public void start() {
         running.set(true);
+        livelynessExecutorService.submit(() -> {
+            while (running.get()) {
+                try {
+                    liveliness.feedTheFish();
+                    Thread.sleep(feedEveryMillis);
+                } catch (InterruptedException e) {
+                    break;
+                } catch (Throwable t) {
+                    sickThreads.sick(t);
+                    LOG.error("Failed to feed the fish", t);
+                    Thread.sleep(1000L);
+                }
+            }
+            return null;
+        });
+
         executorService.submit(() -> {
             while (running.get()) {
                 try {
                     long startVersion = smellOVersion.get();
-                    liveliness.feedTheFish();
                     Iterator<PartitionName> iter = smellsFishy.iterator();
                     while (iter.hasNext()) {
                         PartitionName partitionName = iter.next();
@@ -159,7 +176,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                     }
                     synchronized (smellsFishy) {
                         if (startVersion == smellOVersion.get()) {
-                            smellsFishy.wait(feedEveryMillis);
+                            smellsFishy.wait(smellsFishy.isEmpty() ? 0 : feedEveryMillis);
                         }
                     }
                     sickThreads.recovered();
@@ -178,6 +195,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
     public void stop() {
         running.set(false);
+        livelynessExecutorService.shutdownNow();
         executorService.shutdownNow();
     }
 
@@ -614,11 +632,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         int ackRingMemberBytesLength = UIO.bytesInt(keyBytes, o);
         o += 4;
         byte[] ackRingMemberBytes = interner.intern(keyBytes, o, ackRingMemberBytesLength);
-        o+= ackRingMemberBytesLength;
+        o += ackRingMemberBytesLength;
 
         return stream.stream(partitionName,
             context,
-            new Member(rootRingMemberBytes), 
+            new Member(rootRingMemberBytes),
             partitionVersion,
             isSelf,
             new Member(ackRingMemberBytes));

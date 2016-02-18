@@ -432,7 +432,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public WALIndex commitIndex(boolean fsync) throws Exception {
         WALIndex wali = walIndex.get();
         if (wali != null) {
-            clearKeyHighwaterTimestamp();
+            clearKeyHighwaterTimestamps();
             wali.commit(fsync);
         } else {
             LOG.warn("Trying to commit a nonexistent index:{}.", versionedPartitionName);
@@ -930,17 +930,16 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         return stripedKeyHighwaterTimestamps;
     }
 
-    private void clearKeyHighwaterTimestamp() {
+    private void clearKeyHighwaterTimestamps() {
         if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
             stripedKeyHighwaterTimestamps = null;
         }
     }
 
-    private void mergeStripedKeyHighwaters(byte[] prefix, byte[] key, long valueTimestamp) {
-        if (stripedKeyHighwaterTimestamps != null) {
-            int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
-            stripedKeyHighwaterTimestamps[highwaterTimestampIndex] = Math.max(stripedKeyHighwaterTimestamps[highwaterTimestampIndex], valueTimestamp);
-        }
+    private void mergeStripedKeyHighwaters(byte[] prefix, byte[] key, long valueTimestamp) throws Exception {
+        long[] keyHighwaterTimestamps = findKeyHighwaterTimestamps();
+        int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % keyHighwaterTimestamps.length);
+        keyHighwaterTimestamps[highwaterTimestampIndex] = Math.max(keyHighwaterTimestamps[highwaterTimestampIndex], valueTimestamp);
     }
 
     private long getLargestTimestampForKeyStripe(byte[] prefix, byte[] key, long[] keyHighwaterTimestamps) {

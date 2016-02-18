@@ -310,6 +310,10 @@ public class AmzaServiceTest {
                                 Thread.sleep(delayBetweenUpdates);
                                 node.get(readConsistency, partitionName, indexPrefix, indexKey);
                                 break;
+                            } catch (IllegalStateException x) {
+                                System.out.println("Illegal state, waiting...");
+                                x.printStackTrace();
+                                Thread.sleep(100);
                             } catch (DeltaOverCapacityException x) {
                                 System.out.println("Delta over capacity, waiting...");
                                 Thread.sleep(100);

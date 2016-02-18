@@ -198,6 +198,7 @@ public class AmzaServiceInitializer {
         int numProc = Runtime.getRuntime().availableProcessors();
 
         PartitionIndex partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, walStorageProvider, partitionPropertyMarshaller, numProc);
+        amzaPartitionWatcher.watch(PartitionCreator.REGION_PROPERTIES.getPartitionName(), partitionIndex);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(ringMember,
             amzaStats,
@@ -276,6 +277,7 @@ public class AmzaServiceInitializer {
             stripeVersions,
             walUpdated,
             awaitOnline);
+        amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
 
         long startupVersion = orderIdProvider.nextId();
         Member rootAquariumMember = ringMember.asAquariumMember();
@@ -300,6 +302,7 @@ public class AmzaServiceInitializer {
             liveliness,
             config.aquariumLivelinessFeedEveryMillis,
             awaitOnline, sickThreads);
+        amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
         PartitionStateStorage partitionStateStorage = new PartitionStateStorage(ringMember,
             ringStoreReader,
@@ -307,10 +310,6 @@ public class AmzaServiceInitializer {
             storageVersionProvider,
             takeCoordinator,
             awaitOnline);
-
-        amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
-        amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
-        amzaPartitionWatcher.watch(PartitionCreator.REGION_PROPERTIES.getPartitionName(), partitionIndex);
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
@@ -375,7 +374,10 @@ public class AmzaServiceInitializer {
             config.deltaStripeCompactionIntervalInMillis);
 
         PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader, partitionStateStorage,
-            partitionStripeProvider, storageVersionProvider);
+            partitionStripeProvider, storageVersionProvider, interner, numProc);
+        amzaPartitionWatcher.watch(PartitionCreator.REGION_INDEX.getPartitionName(), partitionComposter);
+        amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), partitionComposter);
+        amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), partitionComposter);
 
         AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(ringStoreReader,
             systemWALStorage,

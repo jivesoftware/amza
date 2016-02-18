@@ -168,7 +168,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     o += 4;
                     RingMember ringMember = RingMember.fromBytes(key, o, ringMemberLength, interner);
                     o += ringMemberLength;
-                    o += 4;// partitionNameLength
+                    o += 4; // partitionNameLength
                     PartitionName partitionName = PartitionName.fromBytes(key, o, interner);
                     StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
@@ -178,6 +178,16 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 }
                 return true;
             });
+    }
+
+    public static PartitionName fromKey(byte[] key, BAInterner interner) throws Exception {
+        int o = 0;
+        o++; //serializationVersion
+        int ringMemberLength = UIO.bytesInt(key, o);
+        o += 4;
+        o += ringMemberLength;
+        o += 4; // partitionNameLength
+        return PartitionName.fromBytes(key, o, interner);
     }
 
     public StorageVersion getRemote(RingMember ringMember, PartitionName partitionName) throws Exception {

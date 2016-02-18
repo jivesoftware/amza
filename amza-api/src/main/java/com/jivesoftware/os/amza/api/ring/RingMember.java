@@ -66,6 +66,7 @@ public class RingMember implements Comparable<RingMember> {
     private final byte[] memberAsBytes;
 
     private transient String member;
+    private transient int hash = 0;
 
     @JsonCreator
     public RingMember(@JsonProperty("member") String member) {
@@ -98,8 +99,11 @@ public class RingMember implements Comparable<RingMember> {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 73 * hash + Arrays.hashCode(this.memberAsBytes);
+        if (hash == 0) {
+            int hashCode = 7;
+            hashCode = 73 * hashCode + Arrays.hashCode(this.memberAsBytes);
+            hash = hashCode;
+        }
         return hash;
     }
 

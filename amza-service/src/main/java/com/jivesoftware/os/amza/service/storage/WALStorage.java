@@ -88,7 +88,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final Object oneIndexerAtATimeLock = new Object();
     private final Object oneTransactionAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
-    private final AtomicLong updateCount = new AtomicLong(0);
     private final AtomicLong oldestTimestamp = new AtomicLong(-1);
     private final AtomicLong oldestVersion = new AtomicLong(-1);
     private final AtomicLong oldestTombstonedTimestamp = new AtomicLong(-1);
@@ -467,7 +466,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
                 false,
                 hardFsyncBeforeLeapBoundary);
-            updateCount.set(0);
             return null;
         });
     }
@@ -904,6 +902,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     } else {
                         long[] compactKeyHighwaterTimestamps = new long[numKeyHighwaterStripes];
                         walTx.tx(io -> {
+                            int[] total = { 0 };
                             io.reverseScan((rowFP, rowTxId, rowType1, row) -> {
                                 if (rowType1 == RowType.end_of_merge) {
                                     long[] marker = loadEndOfMergeMarker(-1, row);
@@ -911,11 +910,15 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                         throw new IllegalStateException("Invalid end of merge marker");
                                     }
                                     System.arraycopy(marker, EOM_HIGHWATER_STRIPES_OFFSET, compactKeyHighwaterTimestamps, 0, numKeyHighwaterStripes);
+                                    return false;
+                                } else if (!rowType1.isPrimary()) {
+                                    total[0]++;
+                                    LOG.warn("Expected end of merge marker but found type {} (total:{})", rowType1, total[0]);
+                                    return true;
                                 } else {
                                     //System.out.println("Expected EOM but found " + rowType1);
-                                    throw new IllegalStateException("Missing end of merge marker");
+                                    throw new IllegalStateException("Expected end of merge marker but found type " + rowType1);
                                 }
-                                return false;
                             });
                             return null;
                         });

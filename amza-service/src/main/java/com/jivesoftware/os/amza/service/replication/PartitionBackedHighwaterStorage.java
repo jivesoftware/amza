@@ -132,20 +132,9 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         bigBird.acquire();
         updatesSinceLastFlush.addAndGet(updates);
         try {
-            ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
-            if (partitionHighwaterUpdates == null) {
-                partitionHighwaterUpdates = new ConcurrentHashMap<>();
-                ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> had = hostToPartitionToHighwaterUpdates.putIfAbsent(member,
-                    partitionHighwaterUpdates);
-                if (had != null) {
-                    partitionHighwaterUpdates = had;
-                }
-            }
-            HighwaterUpdates highwaterUpdates = new HighwaterUpdates();
-            HighwaterUpdates had = partitionHighwaterUpdates.putIfAbsent(versionedPartitionName, highwaterUpdates);
-            if (had != null) {
-                highwaterUpdates = had;
-            }
+            ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
+                (t) -> new ConcurrentHashMap<>());
+            HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.computeIfAbsent(versionedPartitionName, (t) -> new HighwaterUpdates());
             highwaterUpdates.update(highwaterTxId, updates);
         } finally {
             bigBird.release();
@@ -171,15 +160,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public long get(RingMember member, VersionedPartitionName versionedPartitionName) throws Exception {
-        ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
-        if (partitionHighwaterUpdates == null) {
-            partitionHighwaterUpdates = new ConcurrentHashMap<>();
-            ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> had = hostToPartitionToHighwaterUpdates.putIfAbsent(member,
-                partitionHighwaterUpdates);
-            if (had != null) {
-                partitionHighwaterUpdates = had;
-            }
-        }
+        ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member
+            , (t) -> new ConcurrentHashMap<>());
         HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);
         if (highwaterUpdates == null) {
             PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
@@ -191,11 +173,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                     txtId = UIO.bytesLong(got.getValue());
                 }
             }
-            highwaterUpdates = new HighwaterUpdates();
-            HighwaterUpdates hadHighwaterUpdates = partitionHighwaterUpdates.putIfAbsent(versionedPartitionName, highwaterUpdates);
-            if (hadHighwaterUpdates != null) {
-                highwaterUpdates = hadHighwaterUpdates;
-            }
+            highwaterUpdates = partitionHighwaterUpdates.computeIfAbsent(versionedPartitionName, (t) -> new HighwaterUpdates());
             highwaterUpdates.update(txtId, 0);
         }
         return highwaterUpdates.getTxId();

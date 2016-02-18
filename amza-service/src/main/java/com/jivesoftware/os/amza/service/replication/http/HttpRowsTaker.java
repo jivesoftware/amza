@@ -123,15 +123,7 @@ public class HttpRowsTaker implements RowsTaker {
     }
 
     HttpRequestHelper getRequestHelper(RingHost ringHost) {
-        HttpRequestHelper requestHelper = requestHelpers.get(ringHost);
-        if (requestHelper == null) {
-            requestHelper = buildRequestHelper(ringHost.getHost(), ringHost.getPort());
-            HttpRequestHelper had = requestHelpers.putIfAbsent(ringHost, requestHelper);
-            if (had != null) {
-                requestHelper = had;
-            }
-        }
-        return requestHelper;
+        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort()));
     }
 
     HttpRequestHelper buildRequestHelper(String host, int port) {

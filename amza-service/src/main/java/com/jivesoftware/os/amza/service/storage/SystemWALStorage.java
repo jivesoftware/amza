@@ -55,7 +55,7 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(partitionStore.getProperties().rowType, -1, false, prefix, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }

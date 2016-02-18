@@ -330,10 +330,10 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     throw x;
                 } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
-                    LOG.warn("Delta over capacity for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                    LOG.warn("Delta over capacity for region:{} batch:{} thread:{} reason:{}", regionName, batch, threadIndex, de.getMessage());
                 } catch (NotSolveableException e) {
                     Thread.sleep(100);
-                    LOG.warn("Not solveable for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                    LOG.warn("Not solveable for region:{} batch:{} thread:{} message:{}", regionName, batch, threadIndex, e.getMessage());
                 } catch (Exception x) {
                     LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex }, x);
                 }

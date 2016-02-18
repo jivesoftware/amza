@@ -314,6 +314,8 @@ public class AmzaServiceInitializer {
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
+        AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
+
         ExecutorService[] rowTakerThreadPools = new ExecutorService[deltaStorageStripes];
         RowsTaker[] rowsTakers = new RowsTaker[deltaStorageStripes];
         PartitionStripe[] partitionStripes = new PartitionStripe[deltaStorageStripes];
@@ -336,6 +338,7 @@ public class AmzaServiceInitializer {
                 interner,
                 i,
                 amzaStats,
+                ackWaters,
                 sickThreads,
                 deltaWALFactory,
                 indexProviderRegistry,
@@ -441,8 +444,6 @@ public class AmzaServiceInitializer {
             partitionStripeFunction,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.numberOfCompactorThreads);
-
-        AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
 
         return new AmzaService(orderIdProvider,
             amzaStats,

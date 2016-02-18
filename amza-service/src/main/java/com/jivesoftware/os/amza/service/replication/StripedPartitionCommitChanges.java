@@ -30,6 +30,7 @@ public class StripedPartitionCommitChanges implements CommitChanges {
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             return commitTx.tx(highwaterStorage, (prefix, commitable) -> stripe.commit(highwaterStorage,
                 partitionName,
+                false,
                 Optional.of(versionedPartitionName.getPartitionVersion()),
                 false,
                 prefix,

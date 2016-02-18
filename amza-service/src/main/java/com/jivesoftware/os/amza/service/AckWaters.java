@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Collection;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -93,5 +94,23 @@ public class AckWaters {
             return null;
         }, toMillis);
 
+    }
+
+    public interface MemberTxIdStream {
+        boolean stream(RingMember member, long txId) throws Exception;
+    }
+
+    public boolean streamPartitionTxIds(VersionedPartitionName versionedPartitionName, MemberTxIdStream stream) throws Exception {
+        for (Entry<RingMember, ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId>> entry : ackWaters.entrySet()) {
+            RingMember member = entry.getKey();
+            ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = entry.getValue();
+            LeadershipTokenAndTxId leadershipTokenAndTxId = partitionTxIds.get(versionedPartitionName);
+            if (leadershipTokenAndTxId != null) {
+                if (!stream.stream(member, leadershipTokenAndTxId.txId)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }

@@ -246,7 +246,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             walUpdated);
 
         LOG.info("Storage version: {} {} was removed: {}", rootRingMember, versionedPartitionName, rowsChanged);
-        invalidateLocalVersionCache(versionedPartitionName);
+        invalidateLocalVersionCache(versionedPartitionName.getPartitionName(), versionedPartitionName.getPartitionVersion());
         return !rowsChanged.isEmpty();
     }
 
@@ -259,14 +259,18 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         }
     }
 
-    private void invalidateLocalVersionCache(VersionedPartitionName versionedPartitionName) {
-        localVersionCache.computeIfPresent(versionedPartitionName.getPartitionName(), (partitionName, versionedState) -> {
-            if (versionedState.partitionVersion == versionedPartitionName.getPartitionVersion()) {
-                return null;
-            } else {
-                return versionedState;
-            }
-        });
+    private void invalidateLocalVersionCache(PartitionName partitionName, long partitionVersion) {
+        if (partitionVersion == -1) {
+            localVersionCache.remove(partitionName);
+        } else {
+            localVersionCache.computeIfPresent(partitionName, (partitionName1, versionedState) -> {
+                if (versionedState.partitionVersion == partitionVersion) {
+                    return null;
+                } else {
+                    return versionedState;
+                }
+            });
+        }
     }
 
     private void invalidateRemoteVersionCache(RingMember ringMember, PartitionName partitionName) {
@@ -284,8 +288,12 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             o += 4; // partitionNameLength
             PartitionName partitionName = PartitionName.fromBytes(walKey, o, interner);
             if (ringMember.equals(rootRingMember)) {
-                StorageVersion storageVersion = StorageVersion.fromBytes(walValue);
-                invalidateLocalVersionCache(new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
+                if (walValue != null) {
+                    StorageVersion storageVersion = StorageVersion.fromBytes(walValue);
+                    invalidateLocalVersionCache(partitionName, storageVersion.partitionVersion);
+                } else {
+                    invalidateLocalVersionCache(partitionName, -1);
+                }
             } else {
                 invalidateRemoteVersionCache(ringMember, partitionName);
             }

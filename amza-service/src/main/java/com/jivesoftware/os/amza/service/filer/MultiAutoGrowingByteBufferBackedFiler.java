@@ -132,6 +132,7 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
         }
         filers[f].seek(fseek);
         fpFilerIndex = f;
+        length = Math.max(position, length);
     }
 
     private ByteBuffer allocate(int index, long maxBufferSegmentSize) {

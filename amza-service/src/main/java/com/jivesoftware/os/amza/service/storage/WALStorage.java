@@ -292,7 +292,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 long[] loadOldestTombstonedVersion = { -1 };
                 long[] loadKeyCount = { 0 };
                 long[] loadClobberCount = { 0 };
-                long[] loadKeyHighwaterTimestamps = truncateToEndOfMergeMarker ? null : new long[numKeyHighwaterStripes];
+                long[] loadKeyHighwaterTimestamps = versionedPartitionName.getPartitionName().isSystemPartition() ? new long[numKeyHighwaterStripes] : null;
 
                 long[] truncate = { 0 };
                 primaryRowMarshaller.fromRows(fpRowStream -> {

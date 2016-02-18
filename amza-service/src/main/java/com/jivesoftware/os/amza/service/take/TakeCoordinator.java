@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -236,9 +237,9 @@ public class TakeCoordinator {
         Callable<Void> deliverCallback,
         Callable<Void> pingCallback) throws Exception {
 
-        AtomicLong offered = new AtomicLong();
+        MutableLong offered = new MutableLong();
         AvailableStream watchAvailableStream = (versionedPartitionName, txId) -> {
-            offered.incrementAndGet();
+            offered.add(1);
             availableStream.available(versionedPartitionName, txId);
             amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
         };
@@ -277,10 +278,10 @@ public class TakeCoordinator {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }
 
-            if (offered.get() == 0) {
+            if (offered.longValue()== 0) {
                 pingCallback.call(); // Ping aka keep the socket alive
             } else {
-                offered.set(0);
+                offered.setValue(0);
                 deliverCallback.call();
             }
 
@@ -296,10 +297,10 @@ public class TakeCoordinator {
                     long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
                     //LOG.info("PARKED:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());
-                    if (offered.get() == 0) {
+                    if (offered.longValue()== 0) {
                         pingCallback.call(); // Ping aka keep the socket alive
                     } else {
-                        offered.set(0);
+                        offered.setValue(0);
                         deliverCallback.call();
                     }
                     lock.wait(timeToWait);

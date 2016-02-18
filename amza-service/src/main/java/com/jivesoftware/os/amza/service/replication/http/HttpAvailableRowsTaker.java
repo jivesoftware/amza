@@ -59,13 +59,13 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         AvailableStream availableStream) throws Exception {
 
         HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-            "/amza/rows/available" +
-                "/" + localRingMember.getMember() +
-                "/" + localTimestampedRingHost.ringHost.toCanonicalString() +
-                "/" + system +
-                "/" + localTimestampedRingHost.timestampId +
-                "/" + takeSessionId +
-                "/" + timeoutMillis);
+            "/amza/rows/available"
+            + "/" + localRingMember.getMember()
+            + "/" + localTimestampedRingHost.ringHost.toCanonicalString()
+            + "/" + system
+            + "/" + localTimestampedRingHost.timestampId
+            + "/" + takeSessionId
+            + "/" + timeoutMillis);
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
             DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
@@ -76,15 +76,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
     }
 
     HttpRequestHelper getRequestHelper(RingHost ringHost) {
-        HttpRequestHelper requestHelper = requestHelpers.get(ringHost);
-        if (requestHelper == null) {
-            requestHelper = buildRequestHelper(ringHost.getHost(), ringHost.getPort());
-            HttpRequestHelper had = requestHelpers.putIfAbsent(ringHost, requestHelper);
-            if (had != null) {
-                requestHelper = had;
-            }
-        }
-        return requestHelper;
+        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort()));
     }
 
     HttpRequestHelper buildRequestHelper(String host, int port) {

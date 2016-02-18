@@ -88,7 +88,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final Object oneIndexerAtATimeLock = new Object();
     private final Object oneTransactionAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
-    private final AtomicLong updateCount = new AtomicLong(0);
     private final AtomicLong oldestTimestamp = new AtomicLong(-1);
     private final AtomicLong oldestVersion = new AtomicLong(-1);
     private final AtomicLong oldestTombstonedTimestamp = new AtomicLong(-1);
@@ -467,7 +466,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
                 false,
                 hardFsyncBeforeLeapBoundary);
-            updateCount.set(0);
             return null;
         });
     }

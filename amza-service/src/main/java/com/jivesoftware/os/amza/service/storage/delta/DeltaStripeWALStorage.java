@@ -279,11 +279,7 @@ public class DeltaStripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            partitionDelta = new PartitionDelta(versionedPartitionName, wal, null);
-            PartitionDelta had = partitionDeltas.putIfAbsent(versionedPartitionName, partitionDelta);
-            if (had != null) {
-                partitionDelta = had;
-            }
+            partitionDelta = partitionDeltas.computeIfAbsent(versionedPartitionName, (t) -> new PartitionDelta(versionedPartitionName, wal, null));
         }
         return partitionDelta;
     }

@@ -141,7 +141,7 @@ public class AmzaReplicationRestEndpoints {
                         LOG.warn("Failed to close stream for available rows", x);
                     }
                 }
-            }, "available-" + ringMemberString).start();
+            }, "available-" + ringMemberString + "-" + (system ? "system" : "striped")).start();
 
             return chunkedOutput;
         } finally {

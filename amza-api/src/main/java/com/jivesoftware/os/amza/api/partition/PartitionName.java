@@ -103,11 +103,14 @@ public class PartitionName implements Comparable<PartitionName> {
 
     @Override
     public int hashCode() {
-        int hash = 3;
-        hash = 59 * hash + (this.systemPartition ? 1 : 0);
-        hash = 59 * hash + Arrays.hashCode(this.ringName);
-        hash = 59 * hash + Arrays.hashCode(this.name);
-        hash = 59 * hash + this.hash;
+        if (hash == 0) {
+            int hashCode = 3;
+            hashCode = 59 * hashCode + (this.systemPartition ? 1 : 0);
+            hashCode = 59 * hashCode + Arrays.hashCode(this.ringName);
+            hashCode = 59 * hashCode + Arrays.hashCode(this.name);
+            hashCode = 59 * hashCode + 0; // legacy
+            hash = hashCode;
+        }
         return hash;
     }
 
@@ -126,10 +129,7 @@ public class PartitionName implements Comparable<PartitionName> {
         if (!Arrays.equals(this.ringName, other.ringName)) {
             return false;
         }
-        if (!Arrays.equals(this.name, other.name)) {
-            return false;
-        }
-        return this.hash == other.hash;
+        return Arrays.equals(this.name, other.name);
     }
 
     @Override

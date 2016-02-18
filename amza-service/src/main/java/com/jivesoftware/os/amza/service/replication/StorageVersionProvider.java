@@ -24,6 +24,7 @@ import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -293,12 +294,22 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
     private static class RingMemberAndPartitionName {
 
-        private final RingMember ringMember;
-        private final PartitionName partitionName;
+        private final byte[] ringMemberBytes;
+
+        private final boolean systemPartition;
+        private final byte[] ringNameBytes;
+        private final byte[] partitionNameBytes;
+
+        private final int hash;
 
         public RingMemberAndPartitionName(RingMember ringMember, PartitionName partitionName) {
-            this.ringMember = ringMember;
-            this.partitionName = partitionName;
+            this.ringMemberBytes = ringMember.leakBytes();
+
+            this.systemPartition = partitionName.isSystemPartition();
+            this.ringNameBytes = partitionName.getRingName();
+            this.partitionNameBytes = partitionName.getName();
+
+            this.hash = ringMember.hashCode() + 31 * partitionName.hashCode();
         }
 
         @Override
@@ -312,18 +323,22 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
             RingMemberAndPartitionName that = (RingMemberAndPartitionName) o;
 
-            if (ringMember != null ? !ringMember.equals(that.ringMember) : that.ringMember != null) {
+            if (systemPartition != that.systemPartition) {
                 return false;
             }
-            return !(partitionName != null ? !partitionName.equals(that.partitionName) : that.partitionName != null);
+            if (!Arrays.equals(ringMemberBytes, that.ringMemberBytes)) {
+                return false;
+            }
+            if (!Arrays.equals(ringNameBytes, that.ringNameBytes)) {
+                return false;
+            }
+            return Arrays.equals(partitionNameBytes, that.partitionNameBytes);
 
         }
 
         @Override
         public int hashCode() {
-            int result = ringMember != null ? ringMember.hashCode() : 0;
-            result = 31 * result + (partitionName != null ? partitionName.hashCode() : 0);
-            return result;
+            return hash;
         }
     }
 

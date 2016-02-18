@@ -382,7 +382,8 @@ class PartitionDelta {
                 merge.txIdWAL.streamFromTxId(highestTxId, true, txFps -> {
                     long txId = txFps.txId;
 
-                    partitionStore.merge(properties,
+                    partitionStore.merge(false,
+                        properties,
                         txId,
                         txFps.prefix,
                         (highwaters, scan) -> WALKey.decompose(

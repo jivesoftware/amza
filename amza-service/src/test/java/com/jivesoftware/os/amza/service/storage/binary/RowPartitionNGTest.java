@@ -121,7 +121,7 @@ public class RowPartitionNGTest {
             long timestampAndVersion = idProvider.nextId();
             updates.add(new WALRow(RowType.primary, prefix, key, value, timestampAndVersion, false, timestampAndVersion));
         }
-        indexedWAL.update(RowType.primary, -1, false, prefix, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(true, RowType.primary, -1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -232,6 +232,6 @@ public class RowPartitionNGTest {
     private void update(WALStorage indexedWAL, byte[] prefix, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
         updates.add(new WALRow(RowType.primary, prefix, key, value, timestamp, remove, timestamp));
-        indexedWAL.update(RowType.primary, -1, false, prefix, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(true, RowType.primary, -1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 }

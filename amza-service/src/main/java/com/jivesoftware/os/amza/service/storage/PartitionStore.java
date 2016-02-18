@@ -199,8 +199,12 @@ public class PartitionStore implements RangeScannable {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged merge(PartitionProperties partitionProperties, long forceTxId, byte[] prefix, Commitable updates) throws Exception {
-        return walStorage.update(partitionProperties.rowType, forceTxId, true, prefix, updates);
+    public RowsChanged merge(boolean generateRowsChanged, 
+        PartitionProperties partitionProperties,
+        long forceTxId,
+        byte[] prefix,
+        Commitable updates) throws Exception {
+        return walStorage.update(generateRowsChanged, partitionProperties.rowType, forceTxId, true, prefix, updates);
     }
 
     public void updateProperties(PartitionProperties properties) throws Exception {

@@ -5,17 +5,20 @@
  * 
  * @param? header
  * @param? unhealthy
+ * @param? unhealthyCount
  * @param? unhealthyRows
  * @param? active
+ * @param? activeCount
  * @param? activeRows
  * @param? system
+ * @param? systeCount
  * @param? systemRows
  */
 {template .amzaChatterPluginRegion}
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-transfer"></span>{sp}Chatter</div>
             <div class="panel-body">
-                 <form id="chatter" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                 <form id="chatterForm" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
                     data-jive-ui="jive/ui/typeahead/request_typeahead" method="post" name="chatter">
                     <table class="table table-hover table-condensed table-striped float-table-head">
                         <thead>
@@ -59,7 +62,11 @@
                         </thead>
                         <tbody>
 
-                            <tr><td><input class="form-control" type="checkbox" name="unhealthy" value="true" {if $unhealthy}checked="checked"{/if}></input></td><td><h4>Unhealthy</h4></td></tr>
+                            <tr>
+                                <td><h4>({$unhealthyCount})</h4></td>
+                                <td><input class="form-control" type="checkbox" name="unhealthy" value="true" {if $unhealthy}checked="checked"{/if}></input></td>
+                                <td><h4>Unhealthy</h4></td>
+                            </tr>
                             {foreach $r in $unhealthyRows}
                                 <tr>
                                     {foreach $cell in $r}
@@ -100,7 +107,11 @@
                                 </tr>
                             {/foreach}
 
-                            <tr><td><input class="form-control" type="checkbox" name="active" value="true" {if $active}checked="checked"{/if}></input></td><td><h4>Active</h4></td></tr>
+                            <tr>
+                                <td><h4>({$activeCount})</h4></td>
+                                <td><input class="form-control" onchange="$('#chatterForm').submit();" type="checkbox" name="active" value="true" {if $active}checked="checked"{/if}></input></td>
+                                <td><h4>Active</h4></td>
+                            </tr>
                             {foreach $r in $activeRows}
                                 <tr>
                                     {foreach $cell in $r}
@@ -141,7 +152,11 @@
                                 </tr>
                             {/foreach}
 
-                            <tr><td><input class="form-control" type="checkbox" name="system" value="true" {if $system}checked="checked"{/if}></input></td><td><h4>System</h4></td></tr>
+                            <tr>
+                                <td><h4>({$systemCount})</h4></td>
+                                <td><input class="form-control" type="checkbox" name="system" value="true" {if $system}checked="checked"{/if}></input></td>
+                                <td><h4>System</h4></td>
+                            </tr>
                             {foreach $r in $systemRows}
                                 <tr>
                                     {foreach $cell in $r}

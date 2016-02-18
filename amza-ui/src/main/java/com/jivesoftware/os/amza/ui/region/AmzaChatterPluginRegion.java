@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.commons.lang.mutable.MutableLong;
 
 import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
@@ -123,6 +124,10 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             List<Object> unhealthyRows = new ArrayList<>();
             List<Object> activeRows = new ArrayList<>();
             List<Object> systemRows = new ArrayList<>();
+
+            MutableLong unhealthyCount = new MutableLong();
+            MutableLong activeCount = new MutableLong();
+            MutableLong systemCount = new MutableLong();
 
             int totalColumns = columnIndex;
 
@@ -315,10 +320,16 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     }
                 }
                 if (unhealthy.get()) {
+                    unhealthyCount.add(1);
                     if (input.unhealthy) {
                         unhealthyRows.add(row);
                     }
                 } else if (active.get()) {
+                    if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+                        systemCount.add(1);
+                    } else {
+                        activeCount.add(1);
+                    }
                     if (versionedPartitionName.getPartitionName().isSystemPartition()) {
                         if (input.system) {
                             systemRows.add(row);
@@ -395,10 +406,13 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             }
 
             data.put("unhealthy", input.unhealthy);
+            data.put("unhealthyCount", unhealthyCount.toString());
             data.put("unhealthyRows", unhealthyRows);
             data.put("active", input.active);
+            data.put("activeCount", activeCount.toString());
             data.put("activeRows", activeRows);
             data.put("system", input.system);
+            data.put("systemCount", systemCount.toString());
             data.put("systemRows", systemRows);
 
             return renderer.render(template, data);

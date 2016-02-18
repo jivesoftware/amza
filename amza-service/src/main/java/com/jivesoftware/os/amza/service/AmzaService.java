@@ -85,7 +85,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final PartitionCreator partitionCreator;
     private final PartitionStripeProvider partitionStripeProvider;
     private final WALUpdated walUpdated;
-    private final AmzaPartitionWatcher partitionWatcher;
+    private final AmzaPartitionWatcher amzaSystemPartitionWatcher;
+    private final AmzaPartitionWatcher amzaStripedPartitionWatcher;
     private final AmzaAquariumProvider aquariumProvider;
     private final AmzaSystemReady systemReady;
     private final Liveliness liveliness;
@@ -107,7 +108,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         PartitionCreator partitionCreator,
         PartitionStripeProvider partitionStripeProvider,
         WALUpdated walUpdated,
-        AmzaPartitionWatcher partitionWatcher,
+        AmzaPartitionWatcher amzaSystemPartitionWatcher,
+        AmzaPartitionWatcher amzaStripedPartitionWatcher,
         AmzaAquariumProvider aquariumProvider,
         AmzaSystemReady systemReady,
         Liveliness liveliness) {
@@ -128,7 +130,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.partitionCreator = partitionCreator;
         this.partitionStripeProvider = partitionStripeProvider;
         this.walUpdated = walUpdated;
-        this.partitionWatcher = partitionWatcher;
+        this.amzaSystemPartitionWatcher = amzaSystemPartitionWatcher;
+        this.amzaStripedPartitionWatcher = amzaStripedPartitionWatcher;
         this.aquariumProvider = aquariumProvider;
         this.systemReady = systemReady;
         this.liveliness = liveliness;
@@ -420,11 +423,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
-        partitionWatcher.watch(partitionName, rowChanges);
-    }
-
-    public RowChanges unwatch(PartitionName partitionName) throws Exception {
-        return partitionWatcher.unwatch(partitionName);
+        amzaStripedPartitionWatcher.watch(partitionName, rowChanges);
     }
 
     @Override

@@ -24,29 +24,34 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class AmzaPartitionWatcher implements RowChanges {
 
+    private final boolean systemWatcher;
     private final RowChanges rowChanges;
     private final ConcurrentHashMap<PartitionName, List<RowChanges>> watchers = new ConcurrentHashMap<>();
 
-    public AmzaPartitionWatcher(RowChanges rowChanges) {
+    public AmzaPartitionWatcher(boolean systemWatcher, RowChanges rowChanges) {
+        this.systemWatcher = systemWatcher;
         this.rowChanges = rowChanges;
     }
 
     @Override
     public void changes(RowsChanged changes) throws Exception {
         rowChanges.changes(changes);
-        List<RowChanges> changeWatchers = watchers.get(changes.getVersionedPartitionName().getPartitionName());
-        if (changeWatchers != null) {
-            for (RowChanges watcher : changeWatchers) {
-                watcher.changes(changes);
+        if (!watchers.isEmpty()) {
+            List<RowChanges> changeWatchers = watchers.get(changes.getVersionedPartitionName().getPartitionName());
+            if (changeWatchers != null) {
+                for (RowChanges watcher : changeWatchers) {
+                    watcher.changes(changes);
+                }
             }
         }
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
-        watchers.computeIfAbsent(partitionName, (PartitionName t) -> new ArrayList<>()).add(rowChanges);
+        if ((systemWatcher && !partitionName.isSystemPartition()) || (!systemWatcher && partitionName.isSystemPartition())) {
+            throw new IllegalArgumentException("This watch doesn't support this type of partition. Expect:" + systemWatcher + "  Is: " + partitionName
+                .isSystemPartition());
+        }
+        watchers.computeIfAbsent(partitionName, (t) -> new ArrayList<>()).add(rowChanges);
     }
 
-    public RowChanges unwatch(PartitionName partitionName) throws Exception {
-        throw new UnsupportedOperationException("Need to figure out watcher removal");
-    }
 }

@@ -113,6 +113,7 @@ public class PartitionStripe {
 
     public RowsChanged commit(HighwaterStorage highwaterStorage,
         PartitionName partitionName,
+        boolean directApply,
         Optional<Long> specificVersion,
         boolean requiresOnline,
         byte[] prefix,
@@ -135,7 +136,9 @@ public class PartitionStripe {
             if (partitionStore == null) {
                 throw new IllegalStateException("No partition defined for " + partitionName);
             } else {
-                RowsChanged changes = storage.update(partitionStore.getProperties().rowType,
+                RowsChanged changes = storage.update(partitionIndex,
+                    directApply,
+                    partitionStore.getProperties().rowType,
                     highwaterStorage,
                     versionedPartitionName,
                     partitionStore.getWalStorage(),

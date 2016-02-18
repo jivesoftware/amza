@@ -6,4 +6,7 @@ package com.jivesoftware.os.amza.api;
  */
 public class DeltaOverCapacityException extends Exception {
 
+    public DeltaOverCapacityException(String message) {
+        super(message);
+    }
 }

@@ -9,8 +9,10 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
@@ -33,6 +35,7 @@ import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALTimestampId;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
+import com.jivesoftware.os.amza.service.AckWaters;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
@@ -40,6 +43,7 @@ import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.service.storage.delta.PartitionDelta.MergeResult;
@@ -78,6 +82,7 @@ public class DeltaStripeWALStorage {
     private final BAInterner interner;
     private final int index;
     private final AmzaStats amzaStats;
+    private final AckWaters ackWaters;
     private final SickThreads sickThreads;
     private final DeltaWALFactory deltaWALFactory;
     private final WALIndexProviderRegistry walIndexProviderRegistry;
@@ -108,6 +113,7 @@ public class DeltaStripeWALStorage {
     public DeltaStripeWALStorage(BAInterner interner,
         int index,
         AmzaStats amzaStats,
+        AckWaters ackWaters,
         SickThreads sickThreads,
         DeltaWALFactory deltaWALFactory,
         WALIndexProviderRegistry walIndexProviderRegistry,
@@ -115,9 +121,10 @@ public class DeltaStripeWALStorage {
         int mergeDeltaThreads) {
 
         this.interner = interner;
-        this.sickThreads = sickThreads;
         this.index = index;
         this.amzaStats = amzaStats;
+        this.ackWaters = ackWaters;
+        this.sickThreads = sickThreads;
         this.deltaWALFactory = deltaWALFactory;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
@@ -424,7 +431,9 @@ public class DeltaStripeWALStorage {
         return true;
     }
 
-    public RowsChanged update(RowType rowType,
+    public RowsChanged update(PartitionIndex partitionIndex,
+        boolean directApply,
+        RowType rowType,
         HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
         WALStorage storage,
@@ -432,9 +441,28 @@ public class DeltaStripeWALStorage {
         Commitable updates,
         WALUpdated updated) throws Exception {
 
-        if ((merging.get() > 0 && merging.get() + updateSinceLastMerge.get() > (2 * mergeAfterNUpdates))
+        long mergeDebt = merging.get();
+        if ((mergeDebt > 0 && mergeDebt + updateSinceLastMerge.get() > (2 * mergeAfterNUpdates))
             || updateSinceLastMerge.get() > (2 * mergeAfterNUpdates)) {
-            throw new DeltaOverCapacityException();
+            throw new DeltaOverCapacityException("Delta is full");
+        }
+
+        if (directApply && mergeDebt > 0) {
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            long highestTxId = partitionStore.highestTxId();
+            int[] taken = { 0 };
+            ackWaters.streamPartitionTxIds(versionedPartitionName, (member, txId) -> {
+                if (txId >= highestTxId) {
+                    taken[0]++;
+                    if (taken[0] >= partitionStore.getProperties().takeFromFactor) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+            if (taken[0] < partitionStore.getProperties().takeFromFactor) {
+                throw new DeltaOverCapacityException("Delta requires replication");
+            }
         }
 
         final Map<WALKey, WALValue> apply = new LinkedHashMap<>();

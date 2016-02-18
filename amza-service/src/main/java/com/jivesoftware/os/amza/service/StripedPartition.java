@@ -110,7 +110,7 @@ public class StripedPartition implements Partition {
         long currentTime = System.currentTimeMillis();
         long version = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix,
+            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, true, Optional.absent(), true, prefix,
                 versionedAquarium -> {
                     if (takeQuorum > 0) {
                         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();

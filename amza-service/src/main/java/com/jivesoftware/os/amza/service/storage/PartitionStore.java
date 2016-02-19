@@ -199,7 +199,7 @@ public class PartitionStore implements RangeScannable {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged merge(boolean generateRowsChanged, 
+    public RowsChanged merge(boolean generateRowsChanged,
         PartitionProperties partitionProperties,
         long forceTxId,
         byte[] prefix,
@@ -214,6 +214,10 @@ public class PartitionStore implements RangeScannable {
 
     public long highestTxId() {
         return walStorage.highestTxId();
+    }
+
+    public long mergedTxId() {
+        return walStorage.mergedTxId();
     }
 
     public void delete() throws Exception {

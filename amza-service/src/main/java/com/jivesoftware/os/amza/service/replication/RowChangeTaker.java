@@ -133,9 +133,13 @@ public class RowChangeTaker implements RowChanges {
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
 
-        this.systemRowTakerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("systemRowTaker-%d").build());
-        this.availableRowsReceiverThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsReceiver-%d").build());
-        this.consumerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsConsumer-%d").build());
+        int numProc = Runtime.getRuntime().availableProcessors();
+        this.systemRowTakerThreadPool = Executors.newFixedThreadPool(numProc,
+            new ThreadFactoryBuilder().setNameFormat("systemRowTaker-%d").build());
+        this.availableRowsReceiverThreadPool = Executors.newFixedThreadPool(numProc,
+            new ThreadFactoryBuilder().setNameFormat("availableRowsReceiver-%d").build());
+        this.consumerThreadPool = Executors.newFixedThreadPool(numProc,
+            new ThreadFactoryBuilder().setNameFormat("availableRowsConsumer-%d").build());
 
         int numberOfStripes = partitionStripeFunction.getNumberOfStripes();
         this.stripedConsumerLocks = new Object[numberOfStripes];

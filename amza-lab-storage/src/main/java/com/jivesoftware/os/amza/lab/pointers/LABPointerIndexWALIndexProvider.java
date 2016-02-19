@@ -11,6 +11,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
 
 /**
  *
@@ -34,6 +35,9 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         this.name = name;
         this.partitionStripeFunction = partitionStripeFunction;
         this.environments = new LABEnvironment[partitionStripeFunction.getNumberOfStripes()];
+
+        ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
+        ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
         for (int i = 0; i < environments.length; i++) {
             File active = new File(
                 new File(
@@ -43,7 +47,9 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LABEnvironment(active,
+            this.environments[i] = new LABEnvironment(compactorThreadPool,
+                destroyThreadPool,
+                active,
                 new LABValueMerger(),
                 config.getUseMemMap(),
                 config.getMinMergeDebt(),

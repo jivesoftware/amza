@@ -438,7 +438,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         walTx.flush(fsync);
     }
 
-    public WALIndex commitIndex(boolean fsync) throws Exception {
+    public WALIndex commitIndex(boolean fsync, long txId) throws Exception {
         WALIndex wali = walIndex.get();
         if (wali != null) {
             clearKeyHighwaterTimestamps();
@@ -446,12 +446,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         } else {
             LOG.warn("Trying to commit a nonexistent index:{}.", versionedPartitionName);
         }
+        mergedTxId = txId;
         return wali;
     }
 
     public void endOfMergeMarker(long deltaWALId, long highestTxId) throws Exception {
         long[] keyHighwaterTimestamps = findKeyHighwaterTimestamps();
-        mergedTxId = highestTxId;
         walTx.tx((io) -> {
             long[] marker = buildEndOfMergeMarker(deltaWALId,
                 highestTxId,

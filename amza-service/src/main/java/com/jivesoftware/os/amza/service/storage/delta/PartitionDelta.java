@@ -426,7 +426,7 @@ class PartitionDelta {
                     return !eos.booleanValue();
                 });
                 partitionStore.getWalStorage().endOfMergeMarker(merge.getDeltaWALId(), lastTxId);
-                walIndex = partitionStore.getWalStorage().commitIndex(true);
+                walIndex = partitionStore.getWalStorage().commitIndex(true, lastTxId);
                 LOG.info("Merged deltas for {}", merge.versionedPartitionName);
             }
         }

@@ -17,7 +17,7 @@
         <mlogger.version>0.15</mlogger.version>
         <filer.version>0.93</filer.version>
         <routing.bird.version>0.42</routing.bird.version>
-        <aquarium.version>0.8</aquarium.version>
+        <aquarium.version>0.9</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>

@@ -423,7 +423,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
-        amzaStripedPartitionWatcher.watch(partitionName, rowChanges);
+        if (partitionName.isSystemPartition()) {
+            amzaSystemPartitionWatcher.watch(partitionName, rowChanges);
+        } else {
+            amzaStripedPartitionWatcher.watch(partitionName, rowChanges);
+        }
     }
 
     @Override

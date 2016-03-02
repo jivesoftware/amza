@@ -353,7 +353,7 @@ public class BinaryWALTx implements WALTx {
         MutableLong clobberCount,
         MutableLong tombstoneCount,
         MutableLong ttlCount,
-        MutableLong flushTxId,
+        MutableLong highestTxId,
         long tombstoneTimestampId,
         long tombstoneVersion,
         long ttlTimestampId,
@@ -364,6 +364,7 @@ public class BinaryWALTx implements WALTx {
 
         List<CompactionFlushable> flushables = new ArrayList<>();
         MutableInt estimatedSizeInBytes = new MutableInt(0);
+        MutableLong flushTxId = new MutableLong(-1);
         byte[][] keepCarryingOver = { carryOverEndOfMerge };
         primaryRowMarshaller.fromRows(
             txFpRowStream -> io.scan(startAtRow, false,
@@ -375,22 +376,23 @@ public class BinaryWALTx implements WALTx {
                         return true;
                     }
 
-                    long lastTxId = flushTxId.longValue();
-                    if (lastTxId != rowTxId) {
-
-                        flushBatch(compactToRowType,
-                            compactionWALIndex,
-                            compactionIO,
-                            flushables.size(),
-                            estimatedSizeInBytes.intValue(),
-                            flushables,
-                            lastTxId);
-                        flushables.clear();
+                    if (flushTxId.longValue() != rowTxId) {
+                        if (flushTxId.longValue() != -1 && !flushables.isEmpty()) {
+                            flushBatch(compactToRowType,
+                                compactionWALIndex,
+                                compactionIO,
+                                flushables.size(),
+                                estimatedSizeInBytes.intValue(),
+                                flushables,
+                                flushTxId.longValue());
+                            flushables.clear();
+                        }
                         estimatedSizeInBytes.setValue(0);
                         flushTxId.setValue(rowTxId);
                     }
 
                     if (rowType.isPrimary()) {
+                        highestTxId.setValue(Math.max(highestTxId.longValue(), rowTxId));
                         byte[] convertedRow = primaryRowMarshaller.convert(rowType, row, compactToRowType);
                         if (!txFpRowStream.stream(rowTxId, rowFP, compactToRowType, convertedRow)) {
                             return false;
@@ -433,17 +435,19 @@ public class BinaryWALTx implements WALTx {
             throw new IllegalStateException("Failed to encounter an end of merge hint while compacting.");
         }
 
-        flushBatch(compactToRowType,
-            compactionWALIndex,
-            compactionIO,
-            flushables.size(),
-            estimatedSizeInBytes.intValue(),
-            flushables,
-            flushTxId.longValue());
+        if (flushTxId.longValue() != -1 && !flushables.isEmpty()) {
+            flushBatch(compactToRowType,
+                compactionWALIndex,
+                compactionIO,
+                flushables.size(),
+                estimatedSizeInBytes.intValue(),
+                flushables,
+                flushTxId.longValue());
+        }
 
         if (endOfMerge != null && carryOverEndOfMerge != null) {
             byte[] finallyAnEndOfMerge = endOfMerge.endOfMerge(carryOverEndOfMerge,
-                flushTxId.longValue(),
+                highestTxId.longValue(),
                 oldestTimestamp.longValue() == Long.MAX_VALUE ? -1 : oldestTimestamp.longValue(),
                 oldestVersion.longValue() == Long.MAX_VALUE ? -1 : oldestVersion.longValue(),
                 oldestTombstonedTimestamp.longValue() == Long.MAX_VALUE ? -1 : oldestTombstonedTimestamp.longValue(),
@@ -452,7 +456,7 @@ public class BinaryWALTx implements WALTx {
                 compactionIO.getFpOfLastLeap(),
                 compactionIO.getUpdatesSinceLeap());
 
-            compactionIO.write(flushTxId.longValue(),
+            compactionIO.write(highestTxId.longValue(),
                 RowType.end_of_merge,
                 1,
                 finallyAnEndOfMerge.length,
@@ -476,51 +480,49 @@ public class BinaryWALTx implements WALTx {
         List<CompactionFlushable> flushables,
         long flushTxId) throws Exception {
 
-        if (!flushables.isEmpty()) {
-            RawRows rows = stream -> {
-                for (CompactionFlushable flushable : flushables) {
-                    if (!stream.stream(flushable.row)) {
-                        return false;
-                    }
+        RawRows rows = stream -> {
+            for (CompactionFlushable flushable : flushables) {
+                if (!stream.stream(flushable.row)) {
+                    return false;
                 }
-                return true;
-            };
+            }
+            return true;
+        };
 
-            IndexableKeys indexableKeys = stream -> {
-                for (CompactionFlushable flushable : flushables) {
-                    if (!stream.stream(flushable.prefix, flushable.key,
-                        flushable.valueTimestamp, flushable.valueTombstoned, flushable.valueVersion)) {
-                        return false;
-                    }
+        IndexableKeys indexableKeys = stream -> {
+            for (CompactionFlushable flushable : flushables) {
+                if (!stream.stream(flushable.prefix, flushable.key,
+                    flushable.valueTimestamp, flushable.valueTombstoned, flushable.valueVersion)) {
+                    return false;
                 }
-                return true;
-            };
+            }
+            return true;
+        };
 
-            if (compactionWALIndex != null) {
-                compactionWALIndex.merge((stream) -> {
-                    compactionIO.write(flushTxId,
-                        rowType,
-                        estimatedNumberOfRows,
-                        estimatedSizeInBytes,
-                        rows,
-                        indexableKeys,
-                        (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(flushTxId, prefix, key,
-                            valueTimestamp, valueTombstoned, valueVersion, fp),
-                        true,
-                        false);
-                    return true;
-                });
-            } else {
+        if (compactionWALIndex != null) {
+            compactionWALIndex.merge((stream) -> {
                 compactionIO.write(flushTxId,
                     rowType,
                     estimatedNumberOfRows,
                     estimatedSizeInBytes,
                     rows,
                     indexableKeys,
-                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(flushTxId, prefix, key,
+                        valueTimestamp, valueTombstoned, valueVersion, fp),
                     true,
                     false);
-            }
+                return true;
+            });
+        } else {
+            compactionIO.write(flushTxId,
+                rowType,
+                estimatedNumberOfRows,
+                estimatedSizeInBytes,
+                rows,
+                indexableKeys,
+                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                true,
+                false);
         }
     }
 

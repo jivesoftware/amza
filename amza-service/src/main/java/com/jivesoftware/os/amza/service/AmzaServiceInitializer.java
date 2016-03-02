@@ -393,7 +393,7 @@ public class AmzaServiceInitializer {
         amzaSystemPartitionWatcher.watch(PartitionCreator.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaSystemPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
 
-        AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionIndex, sickPartitions);
+        AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionIndex, sickPartitions, sickThreads);
         systemReady.onReady(() -> {
             LOG.info("Loading highest txIds after system ready...");
             int count = 0;

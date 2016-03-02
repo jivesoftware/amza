@@ -10,12 +10,15 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -29,11 +32,16 @@ public class AmzaSystemReady {
     private final PartitionIndex partitionIndex;
     private final SickPartitions sickPartitions;
 
+    private final AtomicBoolean tookFully = new AtomicBoolean();
     private final AtomicBoolean ready = new AtomicBoolean();
     private final Map<VersionedPartitionName, Set<RingMember>> systemTookFully = Maps.newConcurrentMap();
     private final List<Callable<Void>> onReadyCallbacks = Collections.synchronizedList(Lists.newArrayList());
 
-    public AmzaSystemReady(AmzaRingStoreReader ringStoreReader, PartitionIndex partitionIndex, SickPartitions sickPartitions) {
+    public AmzaSystemReady(AmzaRingStoreReader ringStoreReader,
+        PartitionIndex partitionIndex,
+        SickPartitions sickPartitions,
+        SickThreads sickThreads) {
+
         this.ringStoreReader = ringStoreReader;
         this.partitionIndex = partitionIndex;
         this.sickPartitions = sickPartitions;
@@ -45,6 +53,21 @@ public class AmzaSystemReady {
                 systemTookFully.put(versionedPartitionName, Collections.newSetFromMap(Maps.newConcurrentMap()));
             }
         }
+
+        ExecutorService readyExecutor = Executors.newSingleThreadExecutor();
+        readyExecutor.submit(() -> {
+            try {
+                while (!tookFully.get()) {
+                    Thread.sleep(100L);
+                }
+
+                ready();
+                readyExecutor.shutdown();
+            } catch (Exception e) {
+                LOG.error("Encountered a problem while awaiting system ready, service will be parked");
+                sickThreads.sick(e);
+            }
+        });
     }
 
     public void tookFully(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
@@ -73,11 +96,11 @@ public class AmzaSystemReady {
             }
         }
         if (ready) {
-            ready();
+            tookFully.set(true);
         }
     }
 
-    private void ready() throws Exception {
+    private void ready() {
         synchronized (ready) {
             if (ready.compareAndSet(false, true)) {
                 LOG.info("System is ready!");

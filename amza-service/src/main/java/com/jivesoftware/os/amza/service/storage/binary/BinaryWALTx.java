@@ -290,6 +290,8 @@ public class BinaryWALTx implements WALTx {
                 compactionIO.flush(true);
 
                 long sizeAfterCompaction = compactionIO.sizeInBytes();
+                long fpOfLastLeap = compactionIO.getFpOfLastLeap();
+                long updatesSinceLeap = compactionIO.getUpdatesSinceLeap();
                 compactionIO.close();
                 ioProvider.delete(backupKey, name);
                 if (!ioProvider.ensureKey(backupKey)) {
@@ -311,6 +313,7 @@ public class BinaryWALTx implements WALTx {
                         throw new IOException("Failed to reopen " + key);
                     }
                     io.flush(true);
+                    io.initLeaps(fpOfLastLeap, updatesSinceLeap);
                     LOG.info("Compacted partition {}/{} was:{} bytes isNow:{} bytes.", key, name, sizeBeforeCompaction, sizeAfterCompaction);
                     return null;
                 };

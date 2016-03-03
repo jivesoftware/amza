@@ -85,7 +85,52 @@
             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
             <td>{$r.partitionVersion}</td>
-            <td>{$r.category|noAutoescape}</td>
+            <td>
+                <table class="table table-condensed">
+                    <thead>
+                        <tr class="active">
+                            <th>Category</th>
+                            <th>Ring Calls</th>
+                            <th>Partition Calls</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>{$r.category}</td>
+                            <td>{$r.ringCallCount}</td>
+                            <td>{$r.partitionCallCount}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                {foreach $l in $r.tookLatencies}
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr class="active">
+                                <th>Member</th>
+                                <th>Latency</th>
+                                <th>Category</th>
+                                <th>Too Slow</th>
+                                <th>Take Session</th>
+                                <th>Online</th>
+                                <th>Steady</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {foreach $l in $longPolled}
+                                <tr>
+                                    <td>{$l.member?:''}</td>
+                                    <td>{$l.latency?:''}</td>
+                                    <td>{$l.category?:''}</td>
+                                    <td>{$l.tooSlow?:''}</td>
+                                    <td>{$l.takeSessionId?:''}</td>
+                                    <td>{$l.online?:''}</td>
+                                    <td>{$l.steadyState?:''}</td>
+                                </tr>
+                            {/foreach}
+                        </tbody>
+                    </table>
+                {/foreach}
+            </td>
             <td>{$r.highestTxId}</td>
             <td>{$r.highwaters|noAutoescape}</td>
         </tr>

@@ -329,6 +329,8 @@ public class BinaryWALTx implements WALTx {
                     }
                     io.flush(true);
                     io.initLeaps(fpOfLastLeap, updatesSinceLeap);
+
+                    ioProvider.delete(backupKey, name);
                     LOG.info("Compacted partition {}/{} was:{} bytes isNow:{} bytes.", key, name, sizeBeforeCompaction, sizeAfterCompaction);
                     return null;
                 };

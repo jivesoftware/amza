@@ -473,6 +473,8 @@ public class DeltaStripeWALStorage {
         final List<byte[]> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
         updates.commitable(null, (transactionId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+            Preconditions.checkArgument(valueTimestamp > 0, "Timestamp must be greater than zero");
+            Preconditions.checkArgument(valueVersion > 0, "Timestamp must be greater than zero");
             keys.add(key);
             values.add(new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion));
             return true;

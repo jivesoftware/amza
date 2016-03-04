@@ -567,15 +567,15 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             amzaPartitionUpdates.remove(keyBytes, timestamp);
             return true;
         });
-        systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, new AmzaPartitionCommitable(amzaPartitionUpdates), walUpdated);
+        systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, new AmzaPartitionCommitable(amzaPartitionUpdates, orderIdProvider), walUpdated);
     }
 
     private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(interner, systemWALStorage, walUpdated, partitionName, CURRENT);
+        return new AmzaStateStorage(interner, systemWALStorage, orderIdProvider, walUpdated, partitionName, CURRENT);
     }
 
     private AmzaStateStorage desiredStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(interner, systemWALStorage, walUpdated, partitionName, DESIRED);
+        return new AmzaStateStorage(interner, systemWALStorage, orderIdProvider, walUpdated, partitionName, DESIRED);
     }
 
     static byte[] stateKey(PartitionName partitionName,
@@ -689,12 +689,18 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     public static class AmzaLivelinessStorage implements LivelinessStorage {
 
         private final SystemWALStorage systemWALStorage;
+        private final OrderIdProvider orderIdProvider;
         private final WALUpdated walUpdated;
         private final Member member;
         private final long startupVersion;
 
-        public AmzaLivelinessStorage(SystemWALStorage systemWALStorage, WALUpdated walUpdated, Member member, long startupVersion) {
+        public AmzaLivelinessStorage(SystemWALStorage systemWALStorage,
+            OrderIdProvider orderIdProvider,
+            WALUpdated walUpdated,
+            Member member,
+            long startupVersion) {
             this.systemWALStorage = systemWALStorage;
+            this.orderIdProvider = orderIdProvider;
             this.member = member;
             this.walUpdated = walUpdated;
             this.startupVersion = startupVersion;
@@ -737,7 +743,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             if (result && amzaPartitionUpdates.size() > 0) {
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_LIVELINESS_INDEX,
                     null,
-                    new AmzaPartitionCommitable(amzaPartitionUpdates),
+                    new AmzaPartitionCommitable(amzaPartitionUpdates, orderIdProvider),
                     walUpdated);
                 return !rowsChanged.isEmpty();
             } else {

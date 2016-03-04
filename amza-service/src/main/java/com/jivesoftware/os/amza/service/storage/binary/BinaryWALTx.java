@@ -172,18 +172,20 @@ public class BinaryWALTx implements WALTx {
     }
 
     private void initIO() throws Exception {
-        io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
         if (io == null) {
-            if (ioProvider.exists(backupKey, name)) {
-                ioProvider.moveTo(backupKey, name, key, name);
-                io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
-                if (io == null) {
-                    throw new IllegalStateException("Failed to recover backup WAL " + name);
-                }
-            } else {
-                io = ioProvider.open(key, name, true, updatesBetweenLeaps, maxLeaps);
-                if (io == null) {
-                    throw new IllegalStateException("Failed to initialize WAL " + name);
+            io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
+            if (io == null) {
+                if (ioProvider.exists(backupKey, name)) {
+                    ioProvider.moveTo(backupKey, name, key, name);
+                    io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
+                    if (io == null) {
+                        throw new IllegalStateException("Failed to recover backup WAL " + name);
+                    }
+                } else {
+                    io = ioProvider.open(key, name, true, updatesBetweenLeaps, maxLeaps);
+                    if (io == null) {
+                        throw new IllegalStateException("Failed to initialize WAL " + name);
+                    }
                 }
             }
         }

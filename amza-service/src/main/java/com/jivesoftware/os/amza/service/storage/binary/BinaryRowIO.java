@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.api.wal.RowIO;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -26,6 +27,7 @@ public class BinaryRowIO implements RowIO {
 
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
+    private final AtomicBoolean initializedLeaps = new AtomicBoolean(false);
 
     public BinaryRowIO(File key,
         String name,
@@ -74,6 +76,7 @@ public class BinaryRowIO implements RowIO {
                 });
         }
 
+        initializedLeaps.set(true);
         updatesSinceLeap.addAndGet(updates);
     }
 
@@ -178,6 +181,7 @@ public class BinaryRowIO implements RowIO {
             addToLeapCount,
             hardFsyncBeforeLeapBoundary);
         if (addToLeapCount && updatesBetweenLeaps > 0 && updatesSinceLeap.addAndGet(count) >= updatesBetweenLeaps) {
+            Preconditions.checkState(initializedLeaps.get(), "Leaps not yet initialized");
             rowWriter.flush(hardFsyncBeforeLeapBoundary);
             LeapFrog latest = latestLeapFrog.get();
             Leaps leaps = computeNextLeaps(txId, latest, maxLeaps);

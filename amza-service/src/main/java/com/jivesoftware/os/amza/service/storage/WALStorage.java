@@ -1046,7 +1046,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
         acquireOne();
         try {
-            long[] takeMetrics = new long[1];
+            long[] excessRows = new long[1];
             WALIndex wali = walIndex.get();
             boolean readFromTransactionId = wali == null || walTx.tx(
                 io -> io.read(
@@ -1055,11 +1055,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                             return rowStream.row(rowPointer, rowTxId, rowType, row);
                         } else {
-                            takeMetrics[0]++;
+                            excessRows[0]++;
                         }
                         return true;
                     }));
-            LOG.inc("excessTakes", takeMetrics[0]);
+            amzaStats.takes.incrementAndGet();
+            amzaStats.takeExcessRows.addAndGet(excessRows[0]);
             return readFromTransactionId;
         } finally {
             releaseOne();

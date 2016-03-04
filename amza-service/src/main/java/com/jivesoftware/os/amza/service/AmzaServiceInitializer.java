@@ -460,6 +460,7 @@ public class AmzaServiceInitializer {
             partitionIndex,
             partitionCreator,
             partitionStripeProvider,
+            partitionStripeFunction,
             walUpdated,
             amzaSystemPartitionWatcher,
             amzaStripedPartitionWatcher,

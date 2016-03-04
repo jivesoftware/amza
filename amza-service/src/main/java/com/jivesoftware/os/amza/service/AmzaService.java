@@ -16,9 +16,11 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -57,6 +59,9 @@ import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 import org.apache.commons.lang.mutable.MutableLong;
 import org.xerial.snappy.SnappyOutputStream;
@@ -84,6 +89,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final PartitionIndex partitionIndex;
     private final PartitionCreator partitionCreator;
     private final PartitionStripeProvider partitionStripeProvider;
+    private final PartitionStripeFunction partitionStripeFunction;
     private final WALUpdated walUpdated;
     private final AmzaPartitionWatcher amzaSystemPartitionWatcher;
     private final AmzaPartitionWatcher amzaStripedPartitionWatcher;
@@ -107,6 +113,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         PartitionIndex partitionIndex,
         PartitionCreator partitionCreator,
         PartitionStripeProvider partitionStripeProvider,
+        PartitionStripeFunction partitionStripeFunction,
         WALUpdated walUpdated,
         AmzaPartitionWatcher amzaSystemPartitionWatcher,
         AmzaPartitionWatcher amzaStripedPartitionWatcher,
@@ -129,6 +136,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.partitionIndex = partitionIndex;
         this.partitionCreator = partitionCreator;
         this.partitionStripeProvider = partitionStripeProvider;
+        this.partitionStripeFunction = partitionStripeFunction;
         this.walUpdated = walUpdated;
         this.amzaSystemPartitionWatcher = amzaSystemPartitionWatcher;
         this.amzaStripedPartitionWatcher = amzaStripedPartitionWatcher;
@@ -656,7 +664,24 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public void compactAllTombstones() throws Exception {
         LOG.info("Manual compact all tombstones requests.");
-        partitionTombstoneCompactor.compactTombstone(-1, true);
+
+        int numberOfStripes = partitionStripeFunction.getNumberOfStripes();
+        ExecutorService compactorPool = Executors.newFixedThreadPool(numberOfStripes);
+        try {
+            List<Future<?>> runnables = Lists.newArrayList();
+            for (int i = 0; i < numberOfStripes; i++) {
+                int stripe = i;
+                runnables.add(compactorPool.submit(() -> {
+                    partitionTombstoneCompactor.compactTombstone(stripe, true);
+                    return null;
+                }));
+            }
+            for (Future<?> runnable : runnables) {
+                runnable.get();
+            }
+        } finally {
+            compactorPool.shutdown();
+        }
     }
 
     public void mergeAllDeltas(boolean force) {

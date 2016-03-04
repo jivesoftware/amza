@@ -578,6 +578,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             (_highwater) -> highwater[0] = _highwater,
             (transactionId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstoned, valueVersion != -1 ? valueVersion : updateVersion);
+                Preconditions.checkArgument(valueTimestamp > 0, "Timestamp must be greater than zero");
+                Preconditions.checkArgument(valueVersion > 0, "Version must be greater than zero");
                 if (!forceApply) {
                     keys.add(key);
                     values.add(walValue);
@@ -690,9 +692,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         io,
                         highwater[0],
                         (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
-                            oldestTimestamp.set(Math.min(oldestTimestamp.get(), valueTimestamp));
+                            minimize(oldestTimestamp, valueTimestamp);
+                            minimize(oldestVersion, valueVersion);
+
                             if (valueTombstoned) {
-                                oldestTombstonedTimestamp.set(Math.min(oldestTombstonedTimestamp.get(), valueTimestamp));
+                                minimize(oldestTombstonedTimestamp, valueTimestamp);
+                                minimize(oldestTombstonedVersion, valueVersion);
                             }
                             indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
                             return true;
@@ -738,6 +743,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
+    private static void minimize(AtomicLong existing, long value) {
+        long existingValue = existing.get();
+        if (existingValue == -1 || value < existingValue) {
+            existing.set(value);
+        }
+    }
+
     private void flush(RowType rowType,
         long txId,
         int estimatedNumberOfRows,
@@ -764,7 +776,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (NullPointerException e) {
                 throw new IllegalStateException("Illogical NPE: " + (indexCommitedUpToTxId == null), e);
             }
-            rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, false, hardFsyncBeforeLeapBoundary);
+            rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, true, hardFsyncBeforeLeapBoundary);
             if (highwater != null) {
                 writeHighwaterMarker(rowWriter, highwater);
             }

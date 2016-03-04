@@ -281,7 +281,7 @@ public class AmzaServiceInitializer {
 
         long startupVersion = orderIdProvider.nextId();
         Member rootAquariumMember = ringMember.asAquariumMember();
-        AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootAquariumMember, startupVersion);
+        AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, orderIdProvider, walUpdated, rootAquariumMember, startupVersion);
         AtQuorum livelinessAtQuorm = count -> count > ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
         Liveliness liveliness = new Liveliness(System::currentTimeMillis,
             livelinessStorage,

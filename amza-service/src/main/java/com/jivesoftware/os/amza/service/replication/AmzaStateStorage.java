@@ -12,8 +12,7 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
-import com.jivesoftware.os.aquarium.interfaces.StateStorage.StateStream;
-import com.jivesoftware.os.aquarium.interfaces.StateStorage.StateUpdates;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
 /**
  * @author jonathan.colt
@@ -22,17 +21,20 @@ class AmzaStateStorage implements StateStorage<Long> {
 
     private final BAInterner interner;
     private final SystemWALStorage systemWALStorage;
+    private final OrderIdProvider orderIdProvider;
     private final WALUpdated walUpdated;
     private final PartitionName partitionName;
     private final byte context;
 
     public AmzaStateStorage(BAInterner interner,
         SystemWALStorage systemWALStorage,
+        OrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
         PartitionName partitionName,
         byte context) {
         this.interner = interner;
         this.systemWALStorage = systemWALStorage;
+        this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
         this.partitionName = partitionName;
         this.context = context;
@@ -71,7 +73,7 @@ class AmzaStateStorage implements StateStorage<Long> {
         if (result && amzaPartitionUpdates.size() > 0) {
             RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX,
                 null,
-                new AmzaPartitionCommitable(amzaPartitionUpdates),
+                new AmzaPartitionCommitable(amzaPartitionUpdates, orderIdProvider),
                 walUpdated);
             return !rowsChanged.isEmpty();
         } else {

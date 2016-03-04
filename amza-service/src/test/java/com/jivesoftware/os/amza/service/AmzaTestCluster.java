@@ -368,7 +368,9 @@ public class AmzaTestCluster {
                 false,
                 rowType,
                 indexClassName,
-                null));
+                null,
+                -1,
+                -1));
             amzaService.awaitOnline(partitionName, Integer.MAX_VALUE); //TODO lololol
         }
 

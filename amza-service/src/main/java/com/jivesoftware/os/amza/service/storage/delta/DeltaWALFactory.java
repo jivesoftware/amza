@@ -47,7 +47,12 @@ public class DeltaWALFactory {
     }
 
     private DeltaWAL createOrOpen(long id, long prevId) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(prevId) + "_" + String.valueOf(id), ioProvider, primaryRowMarshaller);
+        WALTx deltaWALRowsTx = new BinaryWALTx(walDir,
+            String.valueOf(prevId) + "_" + String.valueOf(id),
+            ioProvider,
+            primaryRowMarshaller,
+            Integer.MAX_VALUE,
+            64);
         MutableLong rows = new MutableLong();
         deltaWALRowsTx.open(io -> {
             io.validate(true, false,

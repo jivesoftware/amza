@@ -119,12 +119,18 @@ public class DeltaStripeWALStorageNGTest {
             false);
         walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
-        indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
+        amzaStats = new AmzaStats();
+        indexedWALStorageProvider = new IndexedWALStorageProvider(amzaStats,
+            new PartitionStripeFunction(workingDirectories.length),
             workingDirectories,
-            walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
+            walIndexProviderRegistry,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            ids,
+            new SickPartitions(),
+            -1);
         orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
-        amzaStats = new AmzaStats();
         partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider,
             partitionPropertyMarshaller, 4);
 
@@ -171,7 +177,9 @@ public class DeltaStripeWALStorageNGTest {
             false,
             testRowType1,
             "memory_persistent",
-            null));
+            null,
+            -1,
+            -1));
         partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName2, new PartitionProperties(Durability.fsync_never,
             0, 0, 0, 0, 0, 0, 0, 0,
             false,
@@ -181,7 +189,9 @@ public class DeltaStripeWALStorageNGTest {
             false,
             testRowType2,
             "memory_persistent",
-            null));
+            null,
+            -1,
+            -1));
         partitionStore1 = partitionIndex.get(versionedPartitionName1);
         partitionStore2 = partitionIndex.get(versionedPartitionName2);
         Assert.assertNotNull(partitionStore1);

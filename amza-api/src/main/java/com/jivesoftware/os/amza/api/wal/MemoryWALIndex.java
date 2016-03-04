@@ -285,6 +285,10 @@ public class MemoryWALIndex implements WALIndex {
                 index.putAll(rowsIndex.index);
                 prefixFpIndex.putAll(rowsIndex.prefixFpIndex);
             }
+
+            @Override
+            public void abort() throws Exception {
+            }
         };
 
     }

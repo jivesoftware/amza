@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
@@ -18,6 +19,7 @@ import java.io.File;
  */
 public class IndexedWALStorageProvider {
 
+    private final AmzaStats amzaStats;
     private final PartitionStripeFunction partitionStripeFunction;
     private final File[] workingDirectories;
     private final WALIndexProviderRegistry indexProviderRegistry;
@@ -27,7 +29,8 @@ public class IndexedWALStorageProvider {
     private final SickPartitions sickPartitions;
     private final int tombstoneCompactionFactor;
 
-    public IndexedWALStorageProvider(PartitionStripeFunction partitionStripeFunction,
+    public IndexedWALStorageProvider(AmzaStats amzaStats,
+        PartitionStripeFunction partitionStripeFunction,
         File[] workingDirectories,
         WALIndexProviderRegistry indexProviderRegistry,
         PrimaryRowMarshaller primaryRowMarshaller,
@@ -35,6 +38,7 @@ public class IndexedWALStorageProvider {
         TimestampedOrderIdProvider orderIdProvider,
         SickPartitions sickPartitions,
         int tombstoneCompactionFactor) {
+        this.amzaStats = amzaStats;
 
         this.partitionStripeFunction = partitionStripeFunction;
         this.workingDirectories = workingDirectories;
@@ -72,9 +76,12 @@ public class IndexedWALStorageProvider {
         BinaryWALTx binaryWALTx = new BinaryWALTx(baseKey,
             name,
             rowIOProvider,
-            primaryRowMarshaller);
+            primaryRowMarshaller,
+            partitionProperties.updatesBetweenLeaps,
+            partitionProperties.maxLeaps);
         boolean hardFsyncBeforeLeapBoundary = versionedPartitionName.getPartitionName().isSystemPartition();
-        return new WALStorage<>(versionedPartitionName,
+        return new WALStorage<>(amzaStats,
+            versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
             highwaterRowMarshaller,

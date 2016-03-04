@@ -9,7 +9,7 @@ import java.util.List;
  */
 public interface RowIOProvider {
 
-    RowIO open(File key, String name, boolean createIfAbsent) throws Exception;
+    RowIO open(File key, String name, boolean createIfAbsent, int updatesBetweenLeaps, int maxLeaps) throws Exception;
 
     List<String> listExisting(File key);
 

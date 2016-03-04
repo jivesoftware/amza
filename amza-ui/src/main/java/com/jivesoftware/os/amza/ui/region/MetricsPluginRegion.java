@@ -505,6 +505,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
             getDurationBreakdown(grandTotal.takeAppliesLag.longValue()) + " lag"));
 
+        sb.append(progress("Took Average Rows (" + numberFormat.format(amzaStats.takes.get()) + ")",
+            (int) (((double) amzaStats.takeExcessRows.get() / amzaStats.takes.get()) / 4096 * 100),
+            numberFormat.format(amzaStats.takeExcessRows.get())));
+
         sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.get()) + ")",
             (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
 

@@ -12,4 +12,5 @@ public interface CompactionWALIndex {
 
     void commit(boolean fsync, Callable<Void> commit) throws Exception;
 
+    void abort() throws Exception;
 }

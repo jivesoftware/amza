@@ -19,8 +19,8 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     private final IoStats ioStats;
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
-    private final int updatesBetweenLeaps;
-    private final int maxLeaps;
+    private final int defaultUpdatesBetweenLeaps;
+    private final int defaultMaxLeaps;
     private final ByteBufferFactory byteBufferFactory;
 
     private final ConcurrentHashMap<File, MemoryBackedWALFiler> filers = new ConcurrentHashMap<>();
@@ -28,14 +28,14 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     public MemoryBackedRowIOProvider(IoStats ioStats,
         long initialBufferSegmentSize,
         long maxBufferSegmentSize,
-        int updatesBetweenLeaps,
-        int maxLeaps,
+        int defaultUpdatesBetweenLeaps,
+        int defaultMaxLeaps,
         ByteBufferFactory byteBufferFactory) {
         this.ioStats = ioStats;
         this.initialBufferSegmentSize = initialBufferSegmentSize;
         this.maxBufferSegmentSize = maxBufferSegmentSize;
-        this.updatesBetweenLeaps = updatesBetweenLeaps;
-        this.maxLeaps = maxLeaps;
+        this.defaultUpdatesBetweenLeaps = defaultUpdatesBetweenLeaps;
+        this.defaultMaxLeaps = defaultMaxLeaps;
         this.byteBufferFactory = byteBufferFactory;
     }
 
@@ -50,12 +50,17 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     }
 
     @Override
-    public RowIO open(File key, String name, boolean createIfAbsent) throws Exception {
+    public RowIO open(File key, String name, boolean createIfAbsent, int updatesBetweenLeaps, int maxLeaps) throws Exception {
         File file = new File(key, name);
         MemoryBackedWALFiler filer = getFiler(file);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO(key, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
+        return new BinaryRowIO(key,
+            name,
+            rowReader,
+            rowWriter,
+            updatesBetweenLeaps > 0 ? updatesBetweenLeaps : defaultUpdatesBetweenLeaps,
+            maxLeaps > 0 ? maxLeaps : defaultMaxLeaps);
     }
 
     @Override

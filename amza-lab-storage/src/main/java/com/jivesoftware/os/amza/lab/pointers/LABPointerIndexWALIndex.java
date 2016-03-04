@@ -377,14 +377,15 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 public void commit(boolean fsync, Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
-                        compactingTo.set(null);
+                        compactingWALIndex.commit(fsync);
+                        compactingWALIndex.close();
+                        if (!compactingTo.compareAndSet(compactingWALIndex, null)) {
+                            throw new IllegalStateException("Tried to commit a stale compaction index");
+                        }
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
                         } else {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
-
-                            compactingWALIndex.commit(fsync);
-                            compactingWALIndex.close();
 
                             boolean compactedNonEmpty = rename(Type.compacting, Type.compacted, false);
                             primaryDb.close();
@@ -422,6 +423,14 @@ public class LABPointerIndexWALIndex implements WALIndex {
                         }
                     } finally {
                         lock.release(numPermits);
+                    }
+                }
+
+                @Override
+                public void abort() throws Exception {
+                    compactingWALIndex.close();
+                    if (compactingTo.compareAndSet(compactingWALIndex, null)) {
+                        removeDatabase(Type.compacting);
                     }
                 }
             };

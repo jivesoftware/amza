@@ -33,6 +33,8 @@ public class PartitionProperties {
 
     public String indexClassName;
     public Map<String, String> indexProperties;
+    public int updatesBetweenLeaps = -1;
+    public int maxLeaps = -1;
 
     public PartitionProperties() {
     }
@@ -53,7 +55,9 @@ public class PartitionProperties {
         boolean disabled,
         RowType rowType,
         String indexClassName,
-        Map<String, String> indexProperties) {
+        Map<String, String> indexProperties,
+        int updatesBetweenLeaps,
+        int maxLeaps) {
         this.durability = durability;
         this.tombstoneTimestampAgeInMillis = tombstoneTimestampAgeInMillis;
         this.tombstoneTimestampIntervalMillis = tombstoneTimestampIntervalMillis;
@@ -74,6 +78,8 @@ public class PartitionProperties {
         this.rowType = rowType;
         this.indexClassName = indexClassName;
         this.indexProperties = indexProperties;
+        this.updatesBetweenLeaps = updatesBetweenLeaps;
+        this.maxLeaps = maxLeaps;
     }
 
     @Override
@@ -96,6 +102,8 @@ public class PartitionProperties {
             ", rowType=" + rowType +
             ", indexClassName='" + indexClassName + '\'' +
             ", indexProperties=" + indexProperties +
+            ", updatesBetweenLeaps=" + updatesBetweenLeaps +
+            ", maxLeaps=" + maxLeaps +
             '}';
     }
 }

@@ -366,7 +366,9 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             false,
             rowType,
             indexClassName,
-            null);
+            null,
+            -1,
+            -1);
         long timeoutMillis = 10_000;
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
 

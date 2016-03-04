@@ -252,6 +252,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     public String renderStats(String filter) {
         Map<String, Object> data = Maps.newHashMap();
         try {
+            List<Map<String, String>> longPolled = new ArrayList<>();
+            for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
+                AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
+                longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
+                    "longPolled", numberFormat.format(polled.getValue().get()),
+                    "longPollAvailables", numberFormat.format(longPollAvailables == null ? -1L : longPollAvailables.get())));
+            }
+
+            data.put("longPolled", longPolled);
+
             data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), true));
             List<Map<String, Object>> regionTotals = new ArrayList<>();
             List<PartitionName> partitionNames = Lists.newArrayList();

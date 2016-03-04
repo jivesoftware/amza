@@ -61,13 +61,14 @@ public class AmzaStateStorageNGTest {
             false);
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
-        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
+        AmzaStats amzaStats = new AmzaStats();
+        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(amzaStats,
+            new PartitionStripeFunction(workingDirectories.length),
             workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
 
         TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
-        AmzaStats amzaStats = new AmzaStats();
         PartitionIndex partitionIndex = new PartitionIndex(interner,
             amzaStats,
             orderIdProvider,

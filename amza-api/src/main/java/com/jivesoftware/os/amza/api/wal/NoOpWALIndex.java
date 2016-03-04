@@ -112,6 +112,10 @@ public class NoOpWALIndex implements WALIndex {
         @Override
         public void commit(boolean fsync, Callable<Void> commit) throws Exception {
         }
+
+        @Override
+        public void abort() throws Exception {
+        }
     }
 
     @Override

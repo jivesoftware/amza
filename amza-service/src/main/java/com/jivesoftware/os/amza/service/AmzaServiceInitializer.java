@@ -186,7 +186,8 @@ public class AmzaServiceInitializer {
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
 
-        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(partitionStripeFunction,
+        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(amzaStats,
+            partitionStripeFunction,
             workingWALDirectories,
             indexProviderRegistry,
             primaryRowMarshaller,

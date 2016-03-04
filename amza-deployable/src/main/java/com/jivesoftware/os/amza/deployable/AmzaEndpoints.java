@@ -210,7 +210,9 @@ public class AmzaEndpoints {
                 false,
                 RowType.primary,
                 indexClassName,
-                null));
+                null,
+                -1,
+                -1));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);

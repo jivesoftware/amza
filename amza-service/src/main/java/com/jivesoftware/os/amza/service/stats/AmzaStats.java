@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -62,6 +63,9 @@ public class AmzaStats {
 
     public final AtomicLong deltaFirstCheckRemoves = new AtomicLong();
     public final AtomicLong deltaSecondCheckRemoves = new AtomicLong();
+
+    public final AtomicLong takes = new AtomicLong();
+    public final AtomicLong takeExcessRows = new AtomicLong();
 
     public AmzaStats() {
     }

@@ -109,7 +109,9 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                             false,
                             input.rowType,
                             input.indexClassName,
-                            null));
+                            null,
+                            -1,
+                            -1));
                     amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
                 }
             } else if (input.action.equals("promote")) {

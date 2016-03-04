@@ -521,13 +521,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     lock.acquire(numPermits);
                     try {
                         environment.flushLog(fsync);
-                        compactingTo.set(null);
+                        compactingWALIndex.close();
+                        if (!compactingTo.compareAndSet(compactingWALIndex, null)) {
+                            throw new IllegalStateException("Tried to commit a stale compaction index");
+                        }
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
                         } else {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
 
-                            compactingWALIndex.close();
                             renameDatabase(Type.compacting, Type.compacted);
 
                             primaryDb.close();
@@ -554,6 +556,14 @@ public class BerkeleyDBWALIndex implements WALIndex {
                         }
                     } finally {
                         lock.release(numPermits);
+                    }
+                }
+
+                @Override
+                public void abort() throws Exception {
+                    compactingWALIndex.close();
+                    if (compactingTo.compareAndSet(compactingWALIndex, null)) {
+                        removeDatabase(Type.compacting);
                     }
                 }
             };

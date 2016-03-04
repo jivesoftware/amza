@@ -49,7 +49,9 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         false,
         RowType.primary,
         "memory_persistent",
-        null);
+        null,
+        -1,
+        -1);
 
     private static final PartitionProperties NON_REPLICATED_PROPERTIES = new PartitionProperties(Durability.fsync_never,
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -60,7 +62,9 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         false,
         RowType.primary,
         "memory_persistent",
-        null);
+        null,
+        Integer.MAX_VALUE,
+        -1);
 
     private static final PartitionProperties AQUARIUM_PROPERTIES = new PartitionProperties(Durability.ephemeral,
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -71,7 +75,9 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         false,
         RowType.primary,
         "memory_ephemeral",
-        null);
+        null,
+        16,
+        4);
 
     // TODO consider replacing ConcurrentHashMap<Long, PartitionStore> LHash
     private final ConcurrentMap<PartitionName, ConcurrentLHash<PartitionStore>> partitionStores = Maps.newConcurrentMap();

@@ -49,6 +49,7 @@ import com.jivesoftware.os.amza.api.wal.WALWriter.IndexableKeys;
 import com.jivesoftware.os.amza.api.wal.WALWriter.RawRows;
 import com.jivesoftware.os.amza.api.wal.WALWriter.TxKeyPointerFpStream;
 import com.jivesoftware.os.amza.service.SickPartitions;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -74,6 +75,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private static final int numTickleMeElmaphore = 1024; // TODO config
     private static final int numKeyHighwaterStripes = 1024; // TODO expose to config
 
+    private final AmzaStats amzaStats;
     private final VersionedPartitionName versionedPartitionName;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller primaryRowMarshaller;
@@ -95,6 +97,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final AtomicLong keyCount = new AtomicLong(0);
     private final AtomicLong clobberCount = new AtomicLong(0);
     private final AtomicLong highestTxId = new AtomicLong(-1);
+    private final AtomicBoolean hasEndOfMergeMarker = new AtomicBoolean(false);
     private final int tombstoneCompactionFactor;
 
     private final ThreadLocal<Integer> reentrant = new ReentrantThreadLocal();
@@ -110,7 +113,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public WALStorage(VersionedPartitionName versionedPartitionName,
+    public WALStorage(AmzaStats amzaStats,
+        VersionedPartitionName versionedPartitionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
@@ -119,6 +123,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         SickPartitions sickPartitions,
         boolean hardFsyncBeforeLeapBoundary,
         int tombstoneCompactionFactor) {
+        this.amzaStats = amzaStats;
 
         this.versionedPartitionName = versionedPartitionName;
         this.orderIdProvider = orderIdProvider;
@@ -208,6 +213,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         long ttlVersion,
         boolean expectedEndOfMerge) throws Exception {
 
+        if (expectedEndOfMerge && !hasEndOfMergeMarker.get()) {
+            return 0;
+        }
+
         WALTx.Compacted<I> compact = walTx.compact(rowType,
             tombstoneTimestampId,
             tombstoneVersion,
@@ -282,6 +291,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }
 
             walTx.open(io -> {
+                boolean[] endOfMergeMarker = { false };
                 long[] lastTxId = { -1 };
                 long[] fpOfLastLeap = { -1 };
                 long[] updatesSinceLastMergeMarker = { 0 };
@@ -308,6 +318,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                     return -1;
                                 }
 
+                                endOfMergeMarker[0] = true;
                                 trailingDeltaWALId[0] = marker[EOM_DELTA_WAL_ID_INDEX];
                                 lastTxId[0] = Math.max(lastTxId[0], marker[EOM_HIGHEST_TX_ID_INDEX]);
                                 loadOldestTimestamp[0] = marker[EOM_OLDEST_TIMESTAMP_INDEX];
@@ -347,6 +358,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
                                 updatesSinceLastMergeMarker[0] = 0;
 
+                                endOfMergeMarker[0] = true;
                                 trailingDeltaWALId[0] = marker[EOM_DELTA_WAL_ID_INDEX];
                                 lastTxId[0] = Math.max(lastTxId[0], marker[EOM_HIGHEST_TX_ID_INDEX]);
                                 loadOldestTimestamp[0] = Math.min(loadOldestTimestamp[0], marker[EOM_OLDEST_TIMESTAMP_INDEX]);
@@ -399,6 +411,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     return true;
                 });
 
+                hasEndOfMergeMarker.set(endOfMergeMarker[0]);
                 highestTxId.set(lastTxId[0]);
                 mergedTxId = lastTxId[0];
                 oldestTimestamp.set(loadOldestTimestamp[0]);
@@ -478,6 +491,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 hardFsyncBeforeLeapBoundary);
             return null;
         });
+        hasEndOfMergeMarker.set(true);
     }
 
     private static final int EOM_VERSION_INDEX = 0;
@@ -1006,7 +1020,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
         acquireOne();
         try {
-            long[] takeMetrics = new long[1];
+            long[] excessRows = new long[1];
             boolean readFromTransactionId = walIndex.get() == null || walTx.readFromTransactionId(sinceTransactionId,
                 (offset, reader) -> reader.scan(offset,
                     false,
@@ -1014,11 +1028,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                             return rowStream.row(rowPointer, rowTxId, rowType, row);
                         } else {
-                            takeMetrics[0]++;
+                            excessRows[0]++;
                         }
                         return true;
                     }));
-            LOG.inc("excessTakes", takeMetrics[0]);
+            amzaStats.takes.incrementAndGet();
+            amzaStats.takeExcessRows.addAndGet(excessRows[0]);
             return readFromTransactionId;
         } finally {
             releaseOne();

@@ -18,23 +18,23 @@ import org.apache.commons.io.FileUtils;
 public class BinaryRowIOProvider implements RowIOProvider {
 
     private final IoStats ioStats;
-    private final int updatesBetweenLeaps;
-    private final int maxLeaps;
+    private final int defaultUpdatesBetweenLeaps;
+    private final int defaultMaxLeaps;
     private final boolean useMemMap;
 
     public BinaryRowIOProvider(
         IoStats ioStats,
-        int updatesBetweenLeaps,
-        int maxLeaps,
+        int defaultUpdatesBetweenLeaps,
+        int defaultMaxLeaps,
         boolean useMemMap) {
         this.ioStats = ioStats;
-        this.updatesBetweenLeaps = updatesBetweenLeaps;
-        this.maxLeaps = maxLeaps;
+        this.defaultUpdatesBetweenLeaps = defaultUpdatesBetweenLeaps;
+        this.defaultMaxLeaps = defaultMaxLeaps;
         this.useMemMap = useMemMap;
     }
 
     @Override
-    public RowIO open(File dir, String name, boolean createIfAbsent) throws Exception {
+    public RowIO open(File dir, String name, boolean createIfAbsent, int updatesBetweenLeaps, int maxLeaps) throws Exception {
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("Failed trying to mkdirs for " + dir);
         }
@@ -45,7 +45,12 @@ public class BinaryRowIOProvider implements RowIOProvider {
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap, 0);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO(dir, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
+        return new BinaryRowIO(dir,
+            name,
+            rowReader,
+            rowWriter,
+            updatesBetweenLeaps > 0 ? updatesBetweenLeaps : defaultUpdatesBetweenLeaps,
+            maxLeaps > 0 ? maxLeaps : defaultMaxLeaps);
     }
 
     @Override

@@ -310,22 +310,22 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             while (System.currentTimeMillis() < endAfterTimestamp);
         }
 
-        awaitLeader(partitionName, Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
+        RingMember currentLeader = awaitLeader(partitionName, Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
 
-        RingMemberAndHost leader = null;
+        RingMemberAndHost leaderMemberAndHost = null;
         for (RingMemberAndHost entry : ring.entries) {
             RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(entry.ringMember, partitionName);
             if (remoteVersionedState != null && remoteVersionedState.waterline != null) {
                 State state = remoteVersionedState.waterline.getState();
-                if (state == State.leader) {
-                    leader = entry;
+                if (state == State.leader && entry.ringMember.equals(currentLeader)) {
+                    leaderMemberAndHost = entry;
                 }
                 if (state == State.leader || state == State.follower) {
                     orderedPartitionHosts.add(entry);
                 }
             }
         }
-        return new AmzaPartitionRoute(orderedPartitionHosts, leader);
+        return new AmzaPartitionRoute(orderedPartitionHosts, leaderMemberAndHost);
     }
 
     public void visualizePartition(byte[] rawRingName, byte[] rawPartitionName, RowStream rowStream) throws Exception {

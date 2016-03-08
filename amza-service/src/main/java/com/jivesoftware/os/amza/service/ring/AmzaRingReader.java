@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.ring;
 
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 
@@ -18,6 +19,8 @@ public interface AmzaRingReader {
     RingTopology getRing(byte[] ringName) throws Exception;
 
     int getRingSize(byte[] ringName) throws Exception;
+
+    int getTakeFromFactor(byte[] ringName) throws Exception;
 
     void allRings(RingStream ringStream) throws Exception;
 

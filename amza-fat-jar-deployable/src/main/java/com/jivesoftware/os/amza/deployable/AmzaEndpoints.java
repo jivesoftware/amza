@@ -207,7 +207,7 @@ public class AmzaEndpoints {
                 false,
                 consistency,
                 requireConsistency,
-                1,
+                true,
                 false,
                 RowType.primary,
                 indexClassName,

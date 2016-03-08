@@ -222,12 +222,12 @@ public class TakeVersionedPartitionCoordinator {
             .reofferAtTimeInMillis));
     }
 
-    void updateTxId(VersionedRing versionedRing, int takeFromFactor, long updateTxId, boolean invalidateOnline) throws Exception {
+    void updateTxId(VersionedRing versionedRing, boolean replicated, long updateTxId, boolean invalidateOnline) throws Exception {
         if (expunged) {
             return;
         }
 
-        updateCategory(versionedRing, takeFromFactor, updateTxId);
+        updateCategory(versionedRing, replicated, updateTxId);
 
         for (Session session : sessions.values()) {
             synchronized (session) {
@@ -245,7 +245,7 @@ public class TakeVersionedPartitionCoordinator {
         VersionedRing versionedRing,
         RingMember remoteRingMember,
         long localTxId,
-        int takeFromFactor) throws Exception {
+        boolean replicated) throws Exception {
 
         lastTakenMillis = System.currentTimeMillis();
 
@@ -265,7 +265,7 @@ public class TakeVersionedPartitionCoordinator {
                 }
             }
         }
-        updateCategory(versionedRing, takeFromFactor, localTxId);
+        updateCategory(versionedRing, replicated, localTxId);
     }
 
     //TODO call this?
@@ -278,14 +278,14 @@ public class TakeVersionedPartitionCoordinator {
         keySet.removeAll(Sets.difference(keySet, retain));
     }
 
-    private void updateCategory(VersionedRing versionedRing, int takeFromFactor, long latestTxId) throws Exception {
+    private void updateCategory(VersionedRing versionedRing, boolean replicated, long latestTxId) throws Exception {
         lastCategoryCheckMillis = System.currentTimeMillis();
-        if (takeFromFactor > 0) {
+        if (replicated) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
             int[] fastEnough = { 0 };
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
-                if (fastEnough[0] < Math.max(versionedRing.takeFromFactor, takeFromFactor)) {
+                if (fastEnough[0] < versionedRing.takeFromFactor) {
                     worstCategory = Math.max(worstCategory, candidate.getValue());
                     Session session = sessions.get(candidate.getKey());
                     if (session != null) {

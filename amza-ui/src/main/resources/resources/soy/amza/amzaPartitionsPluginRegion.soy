@@ -20,7 +20,7 @@
                                 <th>Properties</th>
                                 <th>Consistency</th>
                                 <th>Require Consistency</th>
-                                <th>TakeFromFactor</th>
+                                <th>Replicated</th>
                                 <th>Highwaters</th>
                             </tr>
                         </thead>
@@ -62,11 +62,12 @@
                                     <td>
                                         <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
                                         class="form-control" placeholder="Require Consistency" value=""
-                                        name="requireConsistency" id="requireConsistencyPicker"  title="">
+                                        name="requireConsistency" id="requireConsistencyPicker" title="">
                                     </td>
                                     <td>
-                                        <input type="number" name="takeFromFactor" min="0" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
-                                        class="form-control" placeholder="takeFromFactor" value=""   title="">
+                                        <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                        class="form-control" placeholder="Replicated" value=""
+                                        name="replicated" id="replicated" title="">
                                     </td>
                                     <td></td>
                                 </tr>
@@ -142,10 +143,11 @@
                                         </td>
                                         <td>
                                             {if $r.type == 'SYSTEM'}
-                                                {$r.takeFromFactor}
+                                                {$r.replicated}
                                             {else}
-                                                <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
-                                                placeholder="takeFromFactor" value="{$r.takeFromFactor}" name="takeFromFactor" class="form-control">
+                                                <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                class="form-control" placeholder="Replicated" value="true"
+                                                name="replicated" id="replicated" title="" {if $r.replicated}checked="checked"{/if}>
                                             {/if}
                                         </td>
                                         <td>{$r.highwaters|noAutoescape}</td>

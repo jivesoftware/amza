@@ -217,7 +217,12 @@ public class AmzaServiceInitializer {
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, numProc);
 
         AtomicLong nodeCacheId = new AtomicLong(0);
-        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(interner, ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache,
+        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(interner,
+            ringMember,
+            ringIndex,
+            nodeIndex,
+            ringsCache,
+            ringMemberRingNamesCache,
             nodeCacheId);
 
         WALUpdated walUpdated = (versionedPartitionName, txId) -> {
@@ -341,6 +346,7 @@ public class AmzaServiceInitializer {
                 amzaStats,
                 ackWaters,
                 sickThreads,
+                ringStoreReader,
                 deltaWALFactory,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction,

@@ -48,7 +48,7 @@ public class AmzaSystemReady {
 
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
             PartitionProperties properties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
-            if (properties.takeFromFactor > 0) {
+            if (properties.replicated) {
                 sickPartitions.sick(versionedPartitionName, new Throwable("System partition has not yet taken fully from a quorum"));
                 systemTookFully.put(versionedPartitionName, Collections.newSetFromMap(Maps.newConcurrentMap()));
             }

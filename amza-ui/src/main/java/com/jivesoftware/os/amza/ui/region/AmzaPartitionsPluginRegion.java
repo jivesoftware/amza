@@ -63,7 +63,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         final String partitionName;
         final String consistency;
         final boolean requireConsistency;
-        final int takeFromFactor;
+        final boolean replicated;
         final RowType rowType;
 
         public AmzaPartitionsPluginRegionInput(String action,
@@ -72,7 +72,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             String partitionName,
             String consistency,
             boolean requireConsistency,
-            int takeFromFactor,
+            boolean replicated,
             RowType rowType) {
             this.action = action;
             this.ringName = ringName;
@@ -80,7 +80,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             this.partitionName = partitionName;
             this.consistency = consistency;
             this.requireConsistency = requireConsistency;
-            this.takeFromFactor = takeFromFactor;
+            this.replicated = replicated;
             this.rowType = rowType;
         }
 
@@ -105,7 +105,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                             false,
                             Consistency.valueOf(input.consistency),
                             input.requireConsistency,
-                            input.takeFromFactor,
+                            input.replicated,
                             false,
                             input.rowType,
                             input.indexClassName,
@@ -180,7 +180,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                     } else {
                         row.put("disabled", partitionProperties.disabled);
-                        row.put("takeFromFactor", partitionProperties.takeFromFactor);
+                        row.put("replicated", partitionProperties.replicated);
                         row.put("consistency", partitionProperties.consistency.name());
                         row.put("requireConsistency", partitionProperties.requireConsistency);
                         row.put("partitionProperties", partitionProperties.toString());

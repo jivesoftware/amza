@@ -232,14 +232,17 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                 throw new RuntimeException(e);
             }
         }
-        ringSet.ringNames.stream((byte[] key, byte[] value) -> {
-            return ringNameStream.stream(key);
-        });
+        ringSet.ringNames.stream((key, value) -> ringNameStream.stream(key));
     }
 
     @Override
     public int getRingSize(byte[] ringName) throws Exception {
         return getRing(ringName).entries.size();
+    }
+
+    @Override
+    public int getTakeFromFactor(byte[] ringName) throws Exception {
+        return getRing(ringName).getTakeFromFactor();
     }
 
     @Override

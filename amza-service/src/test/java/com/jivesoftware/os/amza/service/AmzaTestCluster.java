@@ -364,7 +364,7 @@ public class AmzaTestCluster {
                 false,
                 consistency,
                 true,
-                2,
+                true,
                 false,
                 rowType,
                 indexClassName,

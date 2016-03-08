@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -83,7 +84,7 @@ public class TakeRingCoordinator {
         VersionedRing versionedRing = ensureVersionedRing(ring);
         TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName);
         PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-        coordinator.updateTxId(versionedRing, properties.takeFromFactor, txId, invalidateOnline);
+        coordinator.updateTxId(versionedRing, properties.replicated, txId, invalidateOnline);
     }
 
     private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName) {
@@ -110,7 +111,7 @@ public class TakeRingCoordinator {
             coordinator.versionedPartitionProperties = versionedPartitionProvider.getVersionedProperties(coordinator.versionedPartitionName.getPartitionName(),
                 coordinator.versionedPartitionProperties);
             PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
-            if (properties.takeFromFactor > 0) {
+            if (properties.replicated) {
                 long timeout = coordinator.availableRowsStream(partitionStateStorage,
                     txHighestPartitionTx,
                     takeSessionId,
@@ -137,7 +138,7 @@ public class TakeRingCoordinator {
                 versionedRing,
                 remoteRingMember,
                 localTxId,
-                properties.takeFromFactor);
+                properties.replicated);
         }
     }
 
@@ -197,13 +198,13 @@ public class TakeRingCoordinator {
             int ringSize = ring.entries.size();
             int neighborsSize = ringSize - (ring.rootMemberIndex == -1 ? 0 : 1);
             RingMember[] ringMembers = new RingMember[neighborsSize];
-            for (int i = ring.rootMemberIndex + 1, j = 0; j < ringSize - 1; i++, j++) {
+            for (int i = ring.rootMemberIndex + 1, j = 0; j < neighborsSize; i++, j++) {
                 ringMembers[j] = ring.entries.get(i % ringSize).ringMember;
             }
 
             LinkedHashMap<RingMember, Integer> members = new LinkedHashMap<>();
-            int takeFromFactor = 1 + (int) Math.sqrt(ringMembers.length);
 
+            int takeFromFactor = ring.getTakeFromFactor();
             int taken = takeFromFactor;
             int category = 1;
             for (int start = 0; start < ringMembers.length; start++) {

@@ -817,7 +817,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         @Override
         public boolean is(int count) throws Exception {
             PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-            if (properties.takeFromFactor > 0) {
+            if (properties.replicated) {
                 return count > amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName()) / 2;
             } else {
                 return true;

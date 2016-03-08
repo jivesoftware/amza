@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AckWaters;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
 import com.jivesoftware.os.amza.service.SickPartitions;
@@ -32,6 +33,9 @@ import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
+import com.jivesoftware.os.amza.service.ring.CacheId;
+import com.jivesoftware.os.amza.service.ring.RingSet;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
@@ -49,6 +53,7 @@ import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -56,6 +61,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
+import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -91,6 +97,7 @@ public class DeltaStripeWALStorageNGTest {
     private DeltaWALFactory deltaWALFactory;
     private WALIndexProviderRegistry walIndexProviderRegistry;
     private DeltaStripeWALStorage deltaStripeWALStorage;
+    private AmzaRingStoreReader ringStoreReader;
     private HighwaterStorage highwaterStorage;
     private RowType testRowType1 = RowType.snappy_primary;
     private RowType testRowType2 = RowType.primary;
@@ -173,7 +180,7 @@ public class DeltaStripeWALStorageNGTest {
             false,
             Consistency.none,
             true,
-            0,
+            false,
             false,
             testRowType1,
             "memory_persistent",
@@ -185,7 +192,7 @@ public class DeltaStripeWALStorageNGTest {
             false,
             Consistency.none,
             true,
-            0,
+            false,
             false,
             testRowType2,
             "memory_persistent",
@@ -204,6 +211,15 @@ public class DeltaStripeWALStorageNGTest {
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
+
+        ringStoreReader = new AmzaRingStoreReader(interner,
+            member,
+            partitionIndex.get(PartitionCreator.RING_INDEX),
+            partitionIndex.get(PartitionCreator.NODE_INDEX),
+            new ConcurrentBAHash<>(13, true, 4),
+            new ConcurrentBAHash<>(13, true, 4),
+            new AtomicLong());
+
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
@@ -212,6 +228,7 @@ public class DeltaStripeWALStorageNGTest {
             new AmzaStats(),
             new AckWaters(2),
             new SickThreads(),
+            ringStoreReader,
             deltaWALFactory,
             walIndexProviderRegistry,
             20_000, 8);

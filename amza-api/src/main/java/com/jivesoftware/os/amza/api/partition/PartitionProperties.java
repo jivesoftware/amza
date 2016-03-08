@@ -27,7 +27,7 @@ public class PartitionProperties {
 
     public Consistency consistency;
     public boolean requireConsistency = true;
-    public int takeFromFactor = 0;
+    public boolean replicated = true;
     public boolean disabled = false;
     public RowType rowType = RowType.primary;
 
@@ -51,7 +51,7 @@ public class PartitionProperties {
         boolean forceCompactionOnStartup,
         Consistency consistency,
         boolean requireConsistency,
-        int takeFromFactor,
+        boolean replicated,
         boolean disabled,
         RowType rowType,
         String indexClassName,
@@ -69,10 +69,10 @@ public class PartitionProperties {
         this.ttlVersionIntervalMillis = ttlVersionIntervalMillis;
         this.forceCompactionOnStartup = forceCompactionOnStartup;
 
-        Preconditions.checkArgument(takeFromFactor > 0 || consistency == Consistency.none, "Consistency:%s requires a takeFromFactor > 0", consistency);
+        Preconditions.checkArgument(replicated || consistency == Consistency.none, "Consistency:%s requires replication", consistency);
         this.consistency = consistency;
         this.requireConsistency = requireConsistency;
-        this.takeFromFactor = takeFromFactor;
+        this.replicated = replicated;
 
         this.disabled = disabled;
         this.rowType = rowType;
@@ -97,7 +97,7 @@ public class PartitionProperties {
             ", forceCompactionOnStartup=" + forceCompactionOnStartup +
             ", consistency=" + consistency +
             ", requireConsistency=" + requireConsistency +
-            ", takeFromFactor=" + takeFromFactor +
+            ", replicated=" + replicated +
             ", disabled=" + disabled +
             ", rowType=" + rowType +
             ", indexClassName='" + indexClassName + '\'' +

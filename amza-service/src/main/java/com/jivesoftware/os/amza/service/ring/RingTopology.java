@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.ring;
 
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import java.util.List;
 
@@ -18,6 +19,11 @@ public class RingTopology {
         this.nodeCacheId = nodeCacheId;
         this.entries = entries;
         this.rootMemberIndex = rootMemberIndex;
+    }
+
+    public int getTakeFromFactor() {
+        int ringSize = entries.size();
+        return UIO.chunkPower(ringSize < 1 ? 1 : ringSize, 2) - 1;
     }
 
     @Override

@@ -362,7 +362,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             false,
             consistency,
             requireConsistency,
-            2,
+            true,
             false,
             rowType,
             indexClassName,

@@ -530,7 +530,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 if (state == State.leader) {
                     if (rootMember.equals(ackMember)) {
                         Waterline member = new Waterline(rootMember, state, timestamp, version, false);
-                        if (leader[0] == null || Waterline.compare(leader[0], member) < 0) {
+                        if (leader[0] == null || Waterline.compare(leader[0], member) > 0) {
                             leader[0] = member;
                         }
                     }

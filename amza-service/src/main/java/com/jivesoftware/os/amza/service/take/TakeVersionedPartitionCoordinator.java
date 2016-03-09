@@ -300,9 +300,9 @@ public class TakeVersionedPartitionCoordinator {
                             }
                         }
                     }
-                } else if (candidate.getValue() > worstCategory) {
+                }/* else if (candidate.getValue() > worstCategory) {
                     sessions.remove(candidate.getKey());
-                }
+                }*/
             }
             currentCategory.set(worstCategory);
         }

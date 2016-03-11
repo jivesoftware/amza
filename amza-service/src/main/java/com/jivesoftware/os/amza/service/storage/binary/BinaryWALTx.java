@@ -227,6 +227,7 @@ public class BinaryWALTx implements WALTx {
             throw new IOException("Failed remove " + compactingKey);
         }
         RowIO compactionIO = ioProvider.open(compactingKey, name, true, updatesBetweenLeaps, maxLeaps);
+        compactionIO.initLeaps(-1, 0);
 
         MutableLong oldestTimestamp = new MutableLong(Long.MAX_VALUE);
         MutableLong oldestVersion = new MutableLong(Long.MAX_VALUE);

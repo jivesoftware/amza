@@ -166,6 +166,12 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     LOG.inc("timeout>read>" + consistency.name());
                     LOG.warn("Timed out reading from leader.", x);
                 }
+            } catch (IllegalArgumentException x) {
+                if (future != null) {
+                    future.cancel(true);
+                }
+                LOG.error("Illegal argument, there is likely a problem with the request.", x);
+                throw x;
             } catch (Exception x) {
                 partitionRoutingCache.invalidate(partitionName);
                 if (consistency == Consistency.leader) {

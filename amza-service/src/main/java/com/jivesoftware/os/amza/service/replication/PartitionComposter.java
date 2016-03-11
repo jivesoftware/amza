@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
@@ -140,6 +141,9 @@ public class PartitionComposter implements RowChanges {
                             }
                             return null;
                         });
+                        return true;
+                    } catch (NotARingMemberException e) {
+                        LOG.debug("Skipped compost for non-member partition without strorage: {}", partitionName);
                         return true;
                     } catch (Throwable t) {
                         dirtyPartitions.put(key, key);

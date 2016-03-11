@@ -278,7 +278,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             ring = partitionHostsProvider.getPartitionHosts(partitionName, useHost, consistency.requiresLeader() ? waitForLeaderElection : 0);
             if (consistency.requiresLeader()) {
                 if (ring.leader() == null) {
-                    throw new LeaderElectionInProgressException("It took to long for a leader to be elected.");
+                    throw new LeaderElectionInProgressException("It took too long for a leader to be elected.");
                 }
             }
             partitionRoutingCache.put(partitionName, ring);

@@ -22,8 +22,11 @@ public class RingTopology {
     }
 
     public int getTakeFromFactor() {
-        int ringSize = entries.size();
-        return UIO.chunkPower(ringSize < 1 ? 1 : ringSize, 2) - 1;
+        //TODO We require takeFromFactor to satisfy a quorum, forcing quorum here is a
+        //TODO temporary workaround until VersionedRing is pushed down to the partition level.
+        /*int ringSize = entries.size();
+        return UIO.chunkPower(ringSize < 1 ? 1 : ringSize, 2) - 1;*/
+        return Math.max(entries.size() / 2, 1);
     }
 
     @Override

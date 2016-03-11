@@ -160,8 +160,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         int enters = reentrant.get();
         if (enters - 1 == 0) {
             tickleMeElmophore.release();
+            reentrant.remove();
+        } else {
+            reentrant.set(enters - 1);
         }
-        reentrant.set(enters - 1);
     }
 
     private void acquireAll() throws InterruptedException {

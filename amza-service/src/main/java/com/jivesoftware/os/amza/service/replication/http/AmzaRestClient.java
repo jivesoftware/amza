@@ -6,8 +6,10 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * @author jonathan.colt
@@ -31,7 +33,7 @@ public interface AmzaRestClient {
 
     void ring(RingLeader ringLeader, IWriteable writeable) throws IOException;
 
-    void scan(PartitionName partitionName, IReadable in, IWriteable out) throws Exception;
+    void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out) throws Exception;
 
     StateMessageCause status(PartitionName partitionName, Consistency consistency, boolean checkLeader, long partitionAwaitOnlineTimeoutMillis);
 

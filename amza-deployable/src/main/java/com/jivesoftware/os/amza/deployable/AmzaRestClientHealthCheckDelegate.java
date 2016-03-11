@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
@@ -12,6 +13,7 @@ import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.TimerHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import java.io.IOException;
+import java.util.List;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.StringDefault;
 
@@ -261,10 +263,10 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
     private static final HealthTimer scanResponseLatency = HealthFactory.getHealthTimer(ScanResponseLatency.class, TimerHealthChecker.FACTORY);
 
     @Override
-    public void scan(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
+    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out) throws Exception {
         try {
             scanResponseLatency.startTimer();
-            client.scan(partitionName, in, out);
+            client.scan(partitionName, ranges, out);
         } finally {
             scanResponseLatency.stopTimer("Ensure", "Check cluster health.");
         }

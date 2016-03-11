@@ -169,18 +169,9 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public void scan(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
+    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
-
-        List<ScanRange> ranges = Lists.newArrayList();
-        while (UIO.readByte(in, "eos") == (byte) 1) {
-            byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
-            byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
-            byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
-            byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
-            ranges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
-        }
 
         partition.scan(ranges,
             (prefix, key, value, timestamp, version) -> {

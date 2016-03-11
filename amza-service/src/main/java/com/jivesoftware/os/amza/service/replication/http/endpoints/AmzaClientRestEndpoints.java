@@ -15,15 +15,20 @@
  */
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
+import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.ICloseable;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.wal.KeyUtil;
+import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient.RingLeader;
@@ -34,6 +39,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
@@ -263,20 +269,42 @@ public class AmzaClientRestEndpoints {
             return stateMessageCauseToResponse(stateMessageCause);
         }
 
+        List<ScanRange> ranges = Lists.newArrayList();
+        FilerInputStream in = new FilerInputStream(inputStream);
+        try {
+            byte[] intLongBuffer = new byte[8];
+            while (UIO.readByte(in, "eos") == (byte) 1) {
+                byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
+                byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
+                byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
+                byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
+
+                byte[] from = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+                byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
+                if (from != null && to != null && KeyUtil.compare(from, to) > 0) {
+                    return Response.status(Status.BAD_REQUEST).entity("Invalid range").build();
+                }
+                ranges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to get ranges for stream scan", e);
+            return Response.serverError().build();
+        } finally {
+            closeStreams("scan", in, null);
+        }
+
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
-            FilerInputStream in = null;
             ChunkedOutputFiler out = null;
             try {
-                in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
-                client.scan(partitionName, in, out);
+                client.scan(partitionName, ranges, out);
                 out.flush(true);
 
             } catch (Exception x) {
                 LOG.warn("Failed to stream scan", x);
             } finally {
-                closeStreams("scan", in, out);
+                closeStreams("scan", null, out);
             }
         });
         return chunkedOutput;

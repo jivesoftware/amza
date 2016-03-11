@@ -58,7 +58,30 @@ public class VersionedRingTest {
 
     @Test
     public void testTakeFromFactor() {
+        // using simple quorum method
         List<RingMemberAndHost> ring = Lists.newArrayList();
+        ring.add(memberAndHost("1"));
+        assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 1);
+        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 1);
+
+        ring.addAll(Arrays.asList(memberAndHost("2"), memberAndHost("3"), memberAndHost("4")));
+        assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 2);
+        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 2);
+
+        ring.addAll(Arrays.asList(memberAndHost("5")));
+        assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 2);
+        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 2);
+
+        ring.addAll(Arrays.asList(memberAndHost("6"), memberAndHost("7"), memberAndHost("8")));
+        assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 4);
+        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 4);
+
+        ring.addAll(Arrays.asList(memberAndHost("9")));
+        assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 4);
+        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 4);
+
+        // using simple logarithmic method
+        /*List<RingMemberAndHost> ring = Lists.newArrayList();
         ring.add(memberAndHost("1"));
         assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 1);
         assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 1);
@@ -77,7 +100,7 @@ public class VersionedRingTest {
 
         ring.addAll(Arrays.asList(memberAndHost("9")));
         assertEquals(new RingTopology(-1, -1, ring, -1).getTakeFromFactor(), 3);
-        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 3);
+        assertEquals(new RingTopology(-1, -1, ring, 0).getTakeFromFactor(), 3);*/
     }
 
     private RingMemberAndHost memberAndHost(String name) {

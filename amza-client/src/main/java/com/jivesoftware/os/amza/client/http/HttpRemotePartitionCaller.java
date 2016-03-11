@@ -80,7 +80,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
             throw new FailedToAchieveQuorumException(
                 "The server could NOT achieve " + consistency.name() + " within " + abandonSolutionAfterNMillis + "millis");
         }
-        handleLeaderStatusCodes(consistency, got.getStatusCode(), null);
+        handleLeaderStatusCodes(consistency, got.getStatusCode(), got.getStatusReasonPhrase(), null);
         return new PartitionResponse<>(new NoOpCloseable(), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
     }
 
@@ -112,7 +112,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
                 }
             }, null);
         CloseableHttpStreamResponse closeableHttpStreamResponse = new CloseableHttpStreamResponse(got);
-        handleLeaderStatusCodes(consistency, got.getStatusCode(), closeableHttpStreamResponse);
+        handleLeaderStatusCodes(consistency, got.getStatusCode(), got.getStatusReasonPhrase(), closeableHttpStreamResponse);
         return new PartitionResponse<>(closeableHttpStreamResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
     }
 
@@ -197,8 +197,10 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
     }
 
-    private void handleLeaderStatusCodes(Consistency consistency, int statusCode, Closeable closeable) {
-        if (consistency.requiresLeader()) {
+    private void handleLeaderStatusCodes(Consistency consistency, int statusCode, String statusReasonPhrase, Closeable closeable) {
+        if (statusCode == HttpStatus.SC_BAD_REQUEST) {
+            throw new IllegalArgumentException("Bad request: " + statusReasonPhrase);
+        } else if (consistency.requiresLeader()) {
             if (statusCode == HttpStatus.SC_SERVICE_UNAVAILABLE) {
                 try {
                     if (closeable != null) {

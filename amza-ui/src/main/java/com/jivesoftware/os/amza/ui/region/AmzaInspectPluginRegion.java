@@ -219,7 +219,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 PartitionClient partition = partitionClient(input, msg);
                 List<byte[]> rawKeys = stringToWALKeys(input.key);
                 if (rawKeys.isEmpty()) {
-                    msg.add("No keys to remove. Please specify a valid key. key='" + input.key + "'");
+                    msg.add("No keys to set. Please specify a valid key. key='" + input.key + "'");
                 } else {
                     long start = System.currentTimeMillis();
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
@@ -232,7 +232,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         30_000,
                         30_000,
                         Optional.of(msg));
-                    partition.get(Consistency.none, getPrefix(input.prefix), walKeysFromList(rawKeys),
+                    partition.get(input.consistency, getPrefix(input.prefix), walKeysFromList(rawKeys),
                         (prefix, key, value, timestamp, version) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("prefixAsHex", bytesToHex(prefix));
@@ -276,7 +276,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             toRawKeys.get(0)),
                         (prefix, key, value, timestamp, version) -> {
                             if (updates.size() >= input.batchSize || !Arrays.equals(lastPrefix[0], prefix)) {
-                                partition.commit(Consistency.none, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));
+                                partition.commit(input.consistency, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));
                                 updates.reset();
                             }
                             lastPrefix[0] = prefix;
@@ -288,7 +288,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         30_000L,
                         Optional.of(msg));
                     if (updates.size() > 0) {
-                        partition.commit(Consistency.none, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));
+                        partition.commit(input.consistency, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));
                     }
                 } else {
                     long start = System.currentTimeMillis();

@@ -76,7 +76,9 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             final TimestampedValue[] r = new TimestampedValue[1];
             get(consistency, prefix, stream -> stream.stream(key),
                 (_prefix, _key, value, timestamp, version) -> {
-                    r[0] = new TimestampedValue(timestamp, version, value);
+                    if (timestamp != -1) {
+                        r[0] = new TimestampedValue(timestamp, version, value);
+                    }
                     return true;
                 });
             return r[0];

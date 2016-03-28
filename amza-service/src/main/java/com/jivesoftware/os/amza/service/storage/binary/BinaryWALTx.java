@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -74,6 +75,24 @@ public class BinaryWALTx implements WALTx {
             }
         }
         return matched;
+    }
+
+    public boolean exists() {
+        return ioProvider.exists(key, name) || ioProvider.exists(backupKey, name);
+    }
+
+    public void moveFrom(BinaryWALTx source) throws Exception {
+        LOG.info("Moving WAL {} from:{} to:{}", name, source.key, key);
+        if (ioProvider.exists(source.key, source.name)) {
+            ioProvider.safeMoveTo(source.key, source.name, key, name);
+            ioProvider.delete(source.backupKey, source.name);
+            ioProvider.delete(source.compactingKey, source.name);
+        } else if (ioProvider.exists(source.backupKey, source.name)) {
+            ioProvider.safeMoveTo(source.backupKey, source.name, key, name);
+            ioProvider.delete(source.compactingKey, source.name);
+        } else {
+            throw new IllegalStateException("Attempted to move nonexistent WAL: " + source.name + " from source: " + source.key);
+        }
     }
 
     @Override

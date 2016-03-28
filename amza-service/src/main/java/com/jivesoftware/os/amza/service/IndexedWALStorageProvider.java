@@ -89,29 +89,7 @@ public class IndexedWALStorageProvider {
         for (int i = 0; i < baseKey.length; i++) {
             if (baseKey[i].exists()) {
                 if (i > 0) {
-                    LOG.info("Improperly striped WAL {} will be moved from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                    while (baseKey[0].getUsableSpace() < baseKey[i].length()) {
-                        LOG.warn("Awaiting sufficient free space to move WAL {} from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                        Thread.sleep(5_000); //TODO config
-                    }
-                    if (baseKey[i].renameTo(baseKey[0])) {
-                        LOG.info("Successfully renamed WAL {} from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                    } else {
-                        LOG.warn("Unable to rename WAL {} from:{} to:{}, the file must be copied", versionedPartitionName, baseKey[i], baseKey[0]);
-                        File dest = new File(baseKey[0].getParent(), orderIdProvider.nextId() + ".tmp");
-                        FileUtils.copyFile(baseKey[i], dest);
-                        if (dest.renameTo(baseKey[0])) {
-                            //TODO fsync dir
-                            LOG.info("Successfully copied WAL {} from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                            FileUtils.deleteQuietly(baseKey[i]);
-                        } else {
-                            FileUtils.deleteQuietly(dest);
-                            throw new IOException("Failed to move copied WAL " + versionedPartitionName +
-                                " from:" + dest +
-                                " to:" + baseKey[0] +
-                                ", the file system does not appear to support this operation");
-                        }
-                    }
+
                 }
                 break;
             }
@@ -123,6 +101,21 @@ public class IndexedWALStorageProvider {
             primaryRowMarshaller,
             partitionProperties.updatesBetweenLeaps,
             partitionProperties.maxLeaps);
+        if (!binaryWALTx.exists()) {
+            for (int i = 1; i < baseKey.length; i++) {
+                BinaryWALTx old = new BinaryWALTx(baseKey[i],
+                    name,
+                    rowIOProvider,
+                    primaryRowMarshaller,
+                    partitionProperties.updatesBetweenLeaps,
+                    partitionProperties.maxLeaps);
+                if (old.exists()) {
+                    binaryWALTx.moveFrom(old);
+                    break;
+                }
+            }
+        }
+
         boolean hardFsyncBeforeLeapBoundary = versionedPartitionName.getPartitionName().isSystemPartition();
         return new WALStorage<>(amzaStats,
             versionedPartitionName,

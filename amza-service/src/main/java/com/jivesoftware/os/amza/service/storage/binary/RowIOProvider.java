@@ -19,6 +19,8 @@ public interface RowIOProvider {
 
     void moveTo(File fromKey, String fromName, File toKey, String toName) throws Exception;
 
+    void safeMoveTo(File fromKey, String fromName, File toKey, String toName) throws Exception;
+
     void delete(File key, String name) throws Exception;
 
     boolean ensureKey(File key);

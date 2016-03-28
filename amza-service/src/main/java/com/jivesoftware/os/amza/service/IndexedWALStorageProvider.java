@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service;
 
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -12,18 +13,26 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
-import java.io.IOException;
-import org.apache.commons.io.FileUtils;
+import java.nio.charset.StandardCharsets;
 
 /**
  * @author jonathan.colt
  */
 public class IndexedWALStorageProvider {
 
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    public static void main(String[] args) {
+        PartitionStripeFunction f = new PartitionStripeFunction(3);
+        int[] histo = new int[f.getNumberOfStripes()];
+        for (int i = 0; i <= 160; i++) {
+            byte[] ringName = ("activityWAL-global").getBytes(StandardCharsets.UTF_8);
+            byte[] partitionName = ("activityWAL-global-" + i).getBytes(StandardCharsets.UTF_8);
+            histo[f.stripe(new PartitionName(false, ringName, partitionName))]++;
+        }
+        for (int i = 0; i < f.getNumberOfStripes(); i++) {
+            System.out.println("[" + (i + 1) + "] " + histo[i]);
+        }
+    }
 
     private final AmzaStats amzaStats;
     private final PartitionStripeFunction partitionStripeFunction;
@@ -85,39 +94,16 @@ public class IndexedWALStorageProvider {
             ? versionedPartitionName.toBase64()
             : String.valueOf(versionedPartitionName.getPartitionVersion());
 
-        // support stripe function changes by moving misplaced files
+        // support stripe function changes by checking each stripe, favoring the current suggestion
+        int index = 0;
         for (int i = 0; i < baseKey.length; i++) {
             if (baseKey[i].exists()) {
-                if (i > 0) {
-                    LOG.info("Improperly striped WAL {} will be moved from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                    while (baseKey[0].getUsableSpace() < baseKey[i].length()) {
-                        LOG.warn("Awaiting sufficient free space to move WAL {} from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                        Thread.sleep(5_000); //TODO config
-                    }
-                    if (baseKey[i].renameTo(baseKey[0])) {
-                        LOG.info("Successfully renamed WAL {} from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                    } else {
-                        LOG.warn("Unable to rename WAL {} from:{} to:{}, the file must be copied", versionedPartitionName, baseKey[i], baseKey[0]);
-                        File dest = new File(baseKey[0].getParent(), orderIdProvider.nextId() + ".tmp");
-                        FileUtils.copyFile(baseKey[i], dest);
-                        if (dest.renameTo(baseKey[0])) {
-                            //TODO fsync dir
-                            LOG.info("Successfully copied WAL {} from:{} to:{}", versionedPartitionName, baseKey[i], baseKey[0]);
-                            FileUtils.deleteQuietly(baseKey[i]);
-                        } else {
-                            FileUtils.deleteQuietly(dest);
-                            throw new IOException("Failed to move copied WAL " + versionedPartitionName +
-                                " from:" + dest +
-                                " to:" + baseKey[0] +
-                                ", the file system does not appear to support this operation");
-                        }
-                    }
-                }
+                index = i;
                 break;
             }
         }
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(baseKey[0],
+        BinaryWALTx binaryWALTx = new BinaryWALTx(baseKey[index],
             name,
             rowIOProvider,
             primaryRowMarshaller,

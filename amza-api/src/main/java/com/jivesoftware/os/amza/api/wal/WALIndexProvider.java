@@ -25,7 +25,5 @@ public interface WALIndexProvider<T> {
 
     void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception;
 
-    void clean(VersionedPartitionName versionedPartitionName) throws Exception;
-
     void flush(Iterable<T> indexes, boolean fsync) throws Exception;
 }

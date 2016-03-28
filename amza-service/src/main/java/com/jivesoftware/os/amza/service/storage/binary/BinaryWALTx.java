@@ -136,6 +136,8 @@ public class BinaryWALTx implements WALTx {
 
             I walIndex = walIndexProvider.createIndex(versionedPartitionName);
             if (walIndex.isEmpty()) {
+                LOG.info("Index for {} is empty, ensuring clean environment", versionedPartitionName);
+                walIndexProvider.clean(versionedPartitionName);
                 rebuildIndex(versionedPartitionName, walIndex, true);
             }
 

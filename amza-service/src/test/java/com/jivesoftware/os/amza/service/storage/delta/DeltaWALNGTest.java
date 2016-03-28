@@ -34,10 +34,11 @@ public class DeltaWALNGTest {
         File tmp = Files.createTempDir();
         final PrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+        String[] workingDirs = new String[]{tmp.getAbsolutePath()};
+
+        BinaryRowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(new IoStats(), 4_096, 64, false);
 
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        BinaryRowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(new IoStats(), ids, 4_096, 64, false);
-
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, binaryRowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, 1);
 
         DeltaWAL deltaWAL = deltaWALFactory.create(-1);

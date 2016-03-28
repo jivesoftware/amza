@@ -89,6 +89,11 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     }
 
     @Override
+    public void safeMoveTo(File fromKey, String fromName, File toKey, String toName) throws Exception {
+        moveTo(fromKey, fromName, toKey, toName);
+    }
+
+    @Override
     public void delete(File key, String name) throws Exception {
         filers.remove(new File(key, name));
     }

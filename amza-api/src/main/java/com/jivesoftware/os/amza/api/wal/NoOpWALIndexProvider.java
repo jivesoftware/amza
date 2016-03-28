@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.api.wal;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 
 /**
+ *
  * @author jonathan.colt
  */
 public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
@@ -25,10 +26,6 @@ public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
-    }
-
-    @Override
-    public void clean(VersionedPartitionName versionedPartitionName) {
     }
 
     @Override

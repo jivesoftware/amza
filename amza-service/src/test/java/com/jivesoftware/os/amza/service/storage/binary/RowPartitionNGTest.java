@@ -42,9 +42,8 @@ public class RowPartitionNGTest {
     @Test(enabled = false)
     public void concurrencyTest() throws Exception {
         File walDir = Files.createTempDir();
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         IoStats ioStats = new IoStats();
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, orderIdProvider, 4096, 64, false);
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider("memory");
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
@@ -131,9 +130,8 @@ public class RowPartitionNGTest {
     public void diskBackedEventualConsistencyTest() throws Exception {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
 
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, orderIdProvider, 4096, 64, false);
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider("memory");
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),

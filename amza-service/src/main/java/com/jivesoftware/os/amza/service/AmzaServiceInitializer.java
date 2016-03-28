@@ -169,7 +169,7 @@ public class AmzaServiceInitializer {
 
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             amzaStats.ioStats,
-            orderIdProvider, config.updatesBetweenLeaps,
+            config.updatesBetweenLeaps,
             config.maxLeaps,
             config.useMemMap);
 
@@ -328,7 +328,7 @@ public class AmzaServiceInitializer {
         HighwaterStorage[] highwaterStorages = new HighwaterStorage[deltaStorageStripes];
         BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
             amzaStats.ioStats,
-            orderIdProvider, -1,
+            -1,
             0,
             config.useMemMap);
         for (int i = 0; i < deltaStorageStripes; i++) {

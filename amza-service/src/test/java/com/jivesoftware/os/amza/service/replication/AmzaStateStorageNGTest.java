@@ -56,7 +56,6 @@ public class AmzaStateStorageNGTest {
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
-            ids,
             4_096,
             64,
             false);

@@ -68,22 +68,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
-        cleanEnvDb(name, getEnvironment(versionedPartitionName));
-    }
-
-    @Override
-    public void clean(VersionedPartitionName versionedPartitionName) throws Exception {
-        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
-        int numberOfStripes = partitionStripeFunction.getNumberOfStripes();
-        int stripe = partitionStripeFunction.stripe(versionedPartitionName.getPartitionName());
-        for (int i = 0; i < numberOfStripes; i++) {
-            if (i != stripe) {
-                cleanEnvDb(name, environments[i]);
-            }
-        }
-    }
-
-    private void cleanEnvDb(BerkeleyDBWALIndexName name, Environment env) {
+        Environment env = getEnvironment(versionedPartitionName);
         for (BerkeleyDBWALIndexName n : name.all()) {
             try {
                 env.removeDatabase(null, n.getPrimaryName());

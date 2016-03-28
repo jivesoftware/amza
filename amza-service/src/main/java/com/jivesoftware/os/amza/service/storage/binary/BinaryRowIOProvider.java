@@ -5,9 +5,6 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -20,22 +17,17 @@ import org.apache.commons.io.FileUtils;
  */
 public class BinaryRowIOProvider implements RowIOProvider {
 
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-
     private final IoStats ioStats;
-    private final OrderIdProvider orderIdProvider;
     private final int defaultUpdatesBetweenLeaps;
     private final int defaultMaxLeaps;
     private final boolean useMemMap;
 
     public BinaryRowIOProvider(
         IoStats ioStats,
-        OrderIdProvider orderIdProvider,
         int defaultUpdatesBetweenLeaps,
         int defaultMaxLeaps,
         boolean useMemMap) {
         this.ioStats = ioStats;
-        this.orderIdProvider = orderIdProvider;
         this.defaultUpdatesBetweenLeaps = defaultUpdatesBetweenLeaps;
         this.defaultMaxLeaps = defaultMaxLeaps;
         this.useMemMap = useMemMap;
@@ -94,36 +86,6 @@ public class BinaryRowIOProvider implements RowIOProvider {
         File from = new File(fromDir, fromName);
         File to = new File(toDir, toName);
         Files.move(from, to);
-    }
-
-    @Override
-    public void safeMoveTo(File fromDir, String fromName, File toDir, String toName) throws Exception {
-        File from = new File(fromDir, fromName);
-        File to = new File(toDir, toName);
-
-        while (to.getUsableSpace() < from.length()) {
-            LOG.warn("Awaiting sufficient free space to move WAL from:{} to:{}", from, to);
-            Thread.sleep(5_000); //TODO config
-        }
-        if (from.renameTo(to)) {
-            LOG.info("Successfully renamed WAL from:{} to:{}", from, to);
-        } else {
-            LOG.warn("Unable to rename WAL from:{} to:{}, the file must be copied", from, to);
-            File dest = new File(to.getParent(), orderIdProvider.nextId() + ".tmp");
-            FileUtils.copyFile(from, dest);
-            if (dest.renameTo(to)) {
-                //TODO fsync dir
-                LOG.info("Successfully copied WAL from:{} to:{}", from, to);
-                FileUtils.deleteQuietly(from);
-            } else {
-                FileUtils.deleteQuietly(dest);
-                throw new IOException("Failed to move copied WAL " +
-                    " from:" + from +
-                    " via:" + dest +
-                    " to:" + to +
-                    ", the file system does not appear to support this operation");
-            }
-        }
     }
 
     @Override

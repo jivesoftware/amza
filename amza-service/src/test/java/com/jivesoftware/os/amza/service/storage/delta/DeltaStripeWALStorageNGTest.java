@@ -33,6 +33,9 @@ import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
+import com.jivesoftware.os.amza.service.ring.CacheId;
+import com.jivesoftware.os.amza.service.ring.RingSet;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
@@ -118,7 +121,7 @@ public class DeltaStripeWALStorageNGTest {
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
-            orderIdProvider, 4_096,
+            4_096,
             64,
             false);
         walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
@@ -205,7 +208,7 @@ public class DeltaStripeWALStorageNGTest {
 
         File tmp = Files.createTempDir();
         workingDirectories = new File[] { tmp };
-        RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, orderIdProvider, 4_096, 64, false);
+        RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
 

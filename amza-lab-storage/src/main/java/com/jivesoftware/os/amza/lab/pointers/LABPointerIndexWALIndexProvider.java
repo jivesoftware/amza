@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.lab.LABEnvironment;
-import com.jivesoftware.os.lab.LABValueMerger;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
@@ -50,7 +49,6 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             this.environments[i] = new LABEnvironment(compactorThreadPool,
                 destroyThreadPool,
                 active,
-                new LABValueMerger(),
                 config.getUseMemMap(),
                 config.getMinMergeDebt(),
                 config.getMaxMergeDebt(),

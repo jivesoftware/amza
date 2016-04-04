@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.lab.LABEnvironment;
+import com.jivesoftware.os.lab.LABRawhide;
 import com.jivesoftware.os.lab.api.ValueIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -71,13 +72,15 @@ public class LABPointerIndexWALIndex implements WALIndex {
             config.getMaxUpdatesBeforeFlush(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
-            config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
+            config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+            new LABRawhide());
         this.prefixDb = environment.open(name.getPrefixName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxUpdatesBeforeFlush(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
-            config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
+            config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+            new LABRawhide());
     }
 
     private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
@@ -126,7 +129,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             byte[] txFpBytes = new byte[16];
             return pointers.consume((txId, prefix, key, timestamp, tombstoned, version, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                return primaryDb.get(key, (key1, timestamp1, tombstoned1, version1, payload) -> {
+                return primaryDb.get(key, (index1, key1, timestamp1, tombstoned1, version1, payload) -> {
                     long pointer = (payload == null) ? -1 : UIO.bytesLong(payload);
                     if (pointer != -1) {
                         int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
@@ -137,16 +140,16 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
                     if (mode[0] != WALMergeKeyPointerStream.ignored) {
                         primaryDb.append((pointerStream) -> {
-                            return pointerStream.stream(pk, timestamp, tombstoned, version, UIO.longBytes(fp));
-                        });
+                            return pointerStream.stream(-1, pk, timestamp, tombstoned, version, UIO.longBytes(fp));
+                        }, true);
 
                         if (prefix != null) {
                             UIO.longBytes(txId, txFpBytes, 0);
                             UIO.longBytes(fp, txFpBytes, 8);
                             byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
                             prefixDb.append((pointerStream) -> {
-                                return pointerStream.stream(prefixTxFp, timestamp, tombstoned, version, UIO.longBytes(fp));
-                            });
+                                return pointerStream.stream(-1, prefixTxFp, timestamp, tombstoned, version, UIO.longBytes(fp));
+                            }, true);
                         }
                     }
                     if (stream != null) {
@@ -168,7 +171,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             byte[] fromFpPk = WALKey.compose(prefix, new byte[0]);
             byte[] toFpPk = WALKey.prefixUpperExclusive(fromFpPk);
-            return prefixDb.rangeScan(fromFpPk, toFpPk, (rawKey, timestamp, tombstoned, version, pointer) -> {
+            return prefixDb.rangeScan(fromFpPk, toFpPk, (index, rawKey, timestamp, tombstoned, version, pointer) -> {
                 if (KeyUtil.compare(rawKey, toFpPk) >= 0) {
                     return false;
                 }
@@ -191,7 +194,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
         }
         try {
             byte[] pk = WALKey.compose(prefix, key);
-            return primaryDb.get(pk, (rawKey, timestamp, tombstoned, version, pointer1) -> {
+            return primaryDb.get(pk, (index, rawKey, timestamp, tombstoned, version, pointer1) -> {
                 return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1));
             });
         } finally {
@@ -205,7 +208,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             return keys.consume((key) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                return primaryDb.get(pk, (rawKey, timestamp, tombstoned, version, pointer1) -> {
+                return primaryDb.get(pk, (index, rawKey, timestamp, tombstoned, version, pointer1) -> {
                     return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1));
                 });
             });
@@ -220,7 +223,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                return primaryDb.get(pk, (rawKey, timestamp, tombstoned, version, pointer1) -> {
+                return primaryDb.get(pk, (index, rawKey, timestamp, tombstoned, version, pointer1) -> {
                     return entryToWALPointer(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
                         timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1), stream);
                 });
@@ -305,9 +308,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
     public void close() throws Exception {
         lock.acquire(numPermits);
         try {
-            primaryDb.close();
+            primaryDb.close(true, true);
             primaryDb = null;
-            prefixDb.close();
+            prefixDb.close(true, true);
             prefixDb = null;
         } finally {
             lock.release(numPermits);
@@ -319,7 +322,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         lock.acquire();
         try {
             return primaryDb.rowScan(
-                (rawKey, timestamp, tombstoned, version, pointer) -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version,
+                (index, rawKey, timestamp, tombstoned, version, pointer) -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned,
+                    version,
                     pointer == null ? -1 : UIO.bytesLong(pointer)));
         } finally {
             lock.release();
@@ -334,7 +338,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
             byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
             byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
             return primaryDb.rangeScan(fromPk, toPk,
-                (rawKey, timestamp, tombstoned, version, pointer) -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version,
+                (index, rawKey, timestamp, tombstoned, version, pointer) -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned,
+                    version,
                     pointer == null ? -1 : UIO.bytesLong(pointer)));
 
         } finally {
@@ -388,9 +393,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
 
                             boolean compactedNonEmpty = rename(Type.compacting, Type.compacted, false);
-                            primaryDb.close();
+                            primaryDb.close(true, true);
                             primaryDb = null;
-                            prefixDb.close();
+                            prefixDb.close(true, true);
                             prefixDb = null;
                             if (hasActive) {
                                 rename(Type.active, Type.backup, compactedNonEmpty);
@@ -410,14 +415,16 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getMaxUpdatesBeforeFlush(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
-                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
+                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+                                new LABRawhide());
 
                             prefixDb = environment.open(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
                                 config.getMaxUpdatesBeforeFlush(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
-                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
+                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+                                new LABRawhide());
 
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }
@@ -441,11 +448,11 @@ public class LABPointerIndexWALIndex implements WALIndex {
         boolean primaryRenamed = environment.rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
         boolean prefixRenamed = environment.rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
         if (!primaryRenamed && (required || prefixRenamed)) {
-            throw new IOException("Failed to rename" +
-                " from:" + name.typeName(fromType).getPrimaryName() +
-                " to:" + name.typeName(toType).getPrimaryName() +
-                " required:" + required +
-                " prefix:" + prefixRenamed);
+            throw new IOException("Failed to rename"
+                + " from:" + name.typeName(fromType).getPrimaryName()
+                + " to:" + name.typeName(toType).getPrimaryName()
+                + " required:" + required
+                + " prefix:" + prefixRenamed);
         }
         return primaryRenamed;
     }

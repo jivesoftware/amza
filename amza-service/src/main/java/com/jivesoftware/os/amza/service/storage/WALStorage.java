@@ -196,7 +196,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public boolean compactableTombstone(long tombstoneTimestampId, long tombstoneVersion, long ttlTimestampId, long ttlVersion) throws Exception {
+    public boolean compactableTombstone(long tombstoneTimestampId,
+        long tombstoneVersion,
+        long ttlTimestampId,
+        long ttlVersion) throws Exception {
+
         long compactableOldestTombstonedTimestamp = oldestTombstonedTimestamp.get();
         long compactableOldestTombstonedVersion = oldestTombstonedVersion.get();
         long compactableOldestTimestamp = oldestTimestamp.get();
@@ -213,18 +217,20 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
+        int stripe,
         boolean expectedEndOfMerge) throws Exception {
 
         if (expectedEndOfMerge && !hasEndOfMergeMarker.get()) {
             return 0;
         }
-
+        I got = walIndex.get();
         WALTx.Compacted<I> compact = walTx.compact(rowType,
             tombstoneTimestampId,
             tombstoneVersion,
             ttlTimestampId,
             ttlVersion,
-            walIndex.get());
+            got,
+            stripe);
 
         long[] compactKeyHighwaterTimestamps = findKeyHighwaterTimestamps();
 
@@ -257,7 +263,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (Exception e) {
                 LOG.inc("failedCompaction");
                 LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
-                loadInternal(-1, -1, true, false, false);
+                loadInternal(-1, -1, true, false, false, stripe);
                 return -1;
             }
             walIndex.set(compacted.index);
@@ -271,10 +277,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public void load(long deltaWALId, long prevDeltaWALId, boolean backwardScan, boolean truncateToEndOfMergeMarker) throws Exception {
+    public void load(long deltaWALId, long prevDeltaWALId, boolean backwardScan, boolean truncateToEndOfMergeMarker, int stripe) throws Exception {
         acquireAll();
         try {
-            loadInternal(deltaWALId, prevDeltaWALId, false, backwardScan, truncateToEndOfMergeMarker);
+            loadInternal(deltaWALId, prevDeltaWALId, false, backwardScan, truncateToEndOfMergeMarker, stripe);
         } finally {
             releaseAll();
         }
@@ -284,7 +290,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         long prevDeltaWALId,
         boolean recovery,
         boolean backwardScan,
-        boolean truncateToEndOfMergeMarker) throws Exception {
+        boolean truncateToEndOfMergeMarker,
+        int stripe) throws Exception {
         try {
 
             long initialHighestTxId = highestTxId.get();
@@ -438,7 +445,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 return null;
             });
 
-            I index = walTx.openIndex(walIndexProvider, versionedPartitionName);
+            I index = walTx.openIndex(walIndexProvider, versionedPartitionName, stripe);
             walIndex.compareAndSet(null, index);
 
         } catch (Exception e) {

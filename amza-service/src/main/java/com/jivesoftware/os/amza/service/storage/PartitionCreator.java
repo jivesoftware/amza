@@ -92,12 +92,13 @@ public class PartitionCreator {
     }
 
     public boolean createPartitionStoreIfAbsent(VersionedPartitionName versionedPartitionName,
+        int stripe,
         PartitionProperties properties) throws Exception {
 
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot create a system partition");
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripe);
         if (partitionStore == null) {
             long propertiesTimestamp = updatePartitionProperties(partitionName, properties);
 
@@ -108,7 +109,7 @@ public class PartitionCreator {
             if (!changed.isEmpty()) {
                 rowChanges.changes(changed);
             }
-            partitionIndex.get(versionedPartitionName);
+            partitionIndex.get(versionedPartitionName, stripe);
             return true;
         } else {
             return false;

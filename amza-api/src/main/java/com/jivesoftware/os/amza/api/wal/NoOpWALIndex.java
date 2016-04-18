@@ -20,9 +20,16 @@ import java.util.concurrent.Callable;
 public class NoOpWALIndex implements WALIndex {
 
     private final String providerName;
+    private volatile int currentStripe;
 
-    public NoOpWALIndex(String providerName) {
+    public NoOpWALIndex(String providerName, int currentStripe) {
         this.providerName = providerName;
+        this.currentStripe = currentStripe;
+    }
+
+    @Override
+    public int getStripe() {
+        return currentStripe;
     }
 
     @Override
@@ -87,7 +94,6 @@ public class NoOpWALIndex implements WALIndex {
 //    public long size() throws Exception {
 //        return 0;
 //    }
-
     @Override
     public void commit(boolean fsync) throws Exception {
     }
@@ -98,24 +104,23 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
-        return new NoOpCompactionWALIndex();
-    }
+    public CompactionWALIndex startCompaction(boolean hasActive, int compactionStripe) throws Exception {
+        return new CompactionWALIndex() {
 
-    static class NoOpCompactionWALIndex implements CompactionWALIndex {
+            @Override
+            public boolean merge(TxKeyPointers pointers) throws Exception {
+                return true;
+            }
 
-        @Override
-        public boolean merge(TxKeyPointers pointers) throws Exception {
-            return true;
-        }
+            @Override
+            public void commit(boolean fsync, Callable<Void> commit) throws Exception {
+                currentStripe = compactionStripe;
+            }
 
-        @Override
-        public void commit(boolean fsync, Callable<Void> commit) throws Exception {
-        }
-
-        @Override
-        public void abort() throws Exception {
-        }
+            @Override
+            public void abort() throws Exception {
+            }
+        };
     }
 
     @Override

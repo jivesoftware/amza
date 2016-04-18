@@ -10,7 +10,9 @@ import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
  */
 public interface CompactableWALIndex {
 
-    CompactionWALIndex startCompaction(boolean hasActive) throws Exception;
+    int getStripe();
+
+    CompactionWALIndex startCompaction(boolean hasActive, int stripe) throws Exception;
 
     boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception;
 

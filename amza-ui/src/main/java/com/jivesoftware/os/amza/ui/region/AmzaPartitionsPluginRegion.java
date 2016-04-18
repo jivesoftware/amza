@@ -13,8 +13,6 @@ import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
-import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -146,14 +144,14 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 }
                 return i;
             });
-            PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
+            PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
-                partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
 
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                   
+
                     row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                     row.put("name", new String(partitionName.getName()));
                     row.put("ringName", new String(partitionName.getRingName()));
@@ -191,12 +189,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
                         row.put("highwaters", renderHighwaters(partitionHighwater));
                     } else {
-                        PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
-                        partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                            row.put("highwaters", renderHighwaters(partitionHighwater));
-                            return null;
-                        });
+                        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                        row.put("highwaters", renderHighwaters(partitionHighwater));
                     }
                     return null;
                 });

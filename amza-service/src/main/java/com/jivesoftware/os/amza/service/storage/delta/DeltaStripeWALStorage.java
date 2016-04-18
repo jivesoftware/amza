@@ -9,10 +9,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
@@ -177,6 +175,7 @@ public class DeltaStripeWALStorage {
 
     public void load(TxPartitionState txPartitionState,
         PartitionIndex partitionIndex,
+        int stripe,
         CurrentVersionProvider currentVersionProvider,
         PrimaryRowMarshaller primaryRowMarshaller) throws Exception {
 
@@ -192,7 +191,7 @@ public class DeltaStripeWALStorage {
                     DeltaWAL currentWAL = deltaWALs.get(i);
                     if (prevWAL != null) {
                         Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(), "Delta WALs were not contiguous");
-                        mergeDelta(partitionIndex, currentVersionProvider, prevWAL, true, () -> currentWAL);
+                        mergeDelta(partitionIndex, stripe, currentVersionProvider, prevWAL, true, () -> currentWAL);
                     }
                     deltaWAL.set(currentWAL);
                     Set<VersionedPartitionName> accepted = Sets.newHashSet();
@@ -220,8 +219,10 @@ public class DeltaStripeWALStorage {
                                         acceptable = false;
                                     } else {
                                         acceptable = txPartitionState.tx(versionedPartitionName.getPartitionName(),
-                                            versionedAquarium -> (versionedAquarium.getVersionedPartitionName().getPartitionVersion()
-                                            == versionedPartitionName.getPartitionVersion()));
+                                            (versionedAquarium, stripe1) -> {
+                                                long partitionVersion = versionedAquarium.getVersionedPartitionName().getPartitionVersion();
+                                                return (partitionVersion == versionedPartitionName.getPartitionVersion());
+                                            });
                                         if (acceptable) {
                                             accepted.add(versionedPartitionName);
                                         } else {
@@ -301,7 +302,7 @@ public class DeltaStripeWALStorage {
         return updateSinceLastMerge.get() > mergeAfterNUpdates;
     }
 
-    public void merge(PartitionIndex partitionIndex, CurrentVersionProvider currentVersionProvider, boolean force) throws Exception {
+    public void merge(PartitionIndex partitionIndex, int stripe, CurrentVersionProvider currentVersionProvider, boolean force) throws Exception {
         if (!force && !mergeable()) {
             return;
         }
@@ -314,7 +315,7 @@ public class DeltaStripeWALStorage {
         amzaStats.beginCompaction(CompactionFamily.merge, "Delta Stripe:" + index);
         try {
             DeltaWAL wal = deltaWAL.get();
-            if (mergeDelta(partitionIndex, currentVersionProvider, wal, false, () -> deltaWALFactory.create(wal.getId()))) {
+            if (mergeDelta(partitionIndex, stripe, currentVersionProvider, wal, false, () -> deltaWALFactory.create(wal.getId()))) {
                 merging.set(0);
             }
         } finally {
@@ -323,6 +324,7 @@ public class DeltaStripeWALStorage {
     }
 
     private boolean mergeDelta(PartitionIndex partitionIndex,
+        int stripe,
         CurrentVersionProvider currentVersionProvider,
         DeltaWAL wal,
         boolean validate,
@@ -363,7 +365,7 @@ public class DeltaStripeWALStorage {
                         try {
                             while (true) {
                                 try {
-                                    result = currentDelta.merge(partitionIndex, validate);
+                                    result = currentDelta.merge(partitionIndex, stripe, validate);
                                     sickThreads.recovered();
                                     break;
                                 } catch (Throwable x) {
@@ -416,7 +418,7 @@ public class DeltaStripeWALStorage {
         }
         ListMultimap<String, WALIndex> providerIndexes = ArrayListMultimap.create();
         for (MergeResult result : results) {
-            partitionIndex.get(result.versionedPartitionName).flush(true);
+            partitionIndex.get(result.versionedPartitionName, stripe).flush(true);
             if (result.walIndex != null) {
                 providerIndexes.put(result.walIndex.getProviderName(), result.walIndex);
             }
@@ -442,6 +444,7 @@ public class DeltaStripeWALStorage {
         RowType rowType,
         HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
+        int stripe,
         WALStorage storage,
         byte[] prefix,
         Commitable updates,
@@ -454,10 +457,10 @@ public class DeltaStripeWALStorage {
         }
 
         if (directApply && mergeDebt > 0) {
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripe);
             long highestTxId = partitionStore.mergedTxId();
             int takeFromFactor = ringReader.getTakeFromFactor(versionedPartitionName.getPartitionName().getRingName());
-            int[] taken = { 0 };
+            int[] taken = {0};
             ackWaters.streamPartitionTxIds(versionedPartitionName, (member, txId) -> {
                 if (txId >= highestTxId) {
                     taken[0]++;

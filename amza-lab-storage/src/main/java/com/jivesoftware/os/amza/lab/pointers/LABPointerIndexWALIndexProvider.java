@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.lab.pointers;
 
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
@@ -21,19 +20,17 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
     public static final String INDEX_CLASS_NAME = "lab";
 
     private final String name;
-    private final PartitionStripeFunction partitionStripeFunction;
     private final LABEnvironment[] environments;
     private final LABPointerIndexConfig config;
 
     public LABPointerIndexWALIndexProvider(LABPointerIndexConfig config,
         String name,
-        PartitionStripeFunction partitionStripeFunction,
+        int numberOfStripes,
         File[] baseDirs) {
         this.config = config;
 
         this.name = name;
-        this.partitionStripeFunction = partitionStripeFunction;
-        this.environments = new LABEnvironment[partitionStripeFunction.getNumberOfStripes()];
+        this.environments = new LABEnvironment[numberOfStripes];
 
         ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
@@ -56,30 +53,27 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         }
     }
 
-    private LABEnvironment getEnvironment(VersionedPartitionName versionedPartitionName) {
-        return environments[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())];
-    }
-
     @Override
     public String getName() {
         return name;
     }
 
     @Override
-    public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(Type.active, versionedPartitionName.toBase64());
         //TODO config flush interval
         return new LABPointerIndexWALIndex(name,
             versionedPartitionName,
-            getEnvironment(versionedPartitionName),
+            environments,
+            stripe,
             indexName,
             config);
     }
 
     @Override
-    public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(LABPointerIndexWALIndexName.Type.active, versionedPartitionName.toBase64());
-        LABEnvironment env = getEnvironment(versionedPartitionName);
+        LABEnvironment env = environments[stripe];
         for (LABPointerIndexWALIndexName n : name.all()) {
             try {
                 env.remove(n.getPrimaryName());

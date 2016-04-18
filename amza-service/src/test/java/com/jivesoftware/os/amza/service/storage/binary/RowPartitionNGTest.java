@@ -64,14 +64,14 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, -1, false, false);
+        indexedWAL.load(-1, -1, false, false, 0);
 
         final Random r = new Random();
 
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
         compact.scheduleAtFixedRate(() -> {
             try {
-                indexedWAL.compactTombstone(RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, false);
+                indexedWAL.compactTombstone(RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, 0, false);
             } catch (Exception x) {
                 x.printStackTrace();
             }
@@ -176,7 +176,7 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, -1, false, false);
+        indexedWAL.load(-1, -1, false, false, 0);
         WALKey walKey = k(1);
         TimestampedValue value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertNull(value);

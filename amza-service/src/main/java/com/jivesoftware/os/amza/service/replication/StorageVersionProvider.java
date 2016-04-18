@@ -4,7 +4,6 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.RingMembership;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -26,14 +25,16 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
  */
-public class StorageVersionProvider implements CurrentVersionProvider, RowChanges {
+public class StorageVersionProvider implements CurrentVersionProvider, RowChanges, SystemStriper {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private static final Random rand = new Random();
 
     private final BAInterner interner;
     private final OrderIdProvider orderIdProvider;
@@ -41,7 +42,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final SystemWALStorage systemWALStorage;
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final RingMembership ringMembership;
-    private final PartitionStripeFunction partitionStripeFunction;
     private final long[] stripeVersions;
     private final WALUpdated walUpdated;
     private final AwaitNotify<PartitionName> awaitNotify;
@@ -55,7 +55,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         SystemWALStorage systemWALStorage,
         VersionedPartitionProvider versionedPartitionProvider,
         RingMembership ringMembership,
-        PartitionStripeFunction partitionStripeFunction,
         long[] stripeVersions,
         WALUpdated walUpdated,
         AwaitNotify<PartitionName> awaitNotify) {
@@ -65,7 +64,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         this.systemWALStorage = systemWALStorage;
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.ringMembership = ringMembership;
-        this.partitionStripeFunction = partitionStripeFunction;
         this.stripeVersions = stripeVersions;
         this.walUpdated = walUpdated;
         this.awaitNotify = awaitNotify;
@@ -99,17 +97,29 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         }
         synchronized (versionStripingLocks.lock(partitionName, 0)) {
             StorageVersion storageVersion = lookupStorageVersion(partitionName);
-            if (storageVersion == null || storageVersion.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
+            int stripe = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
+            if (stripe == -1) {
+                stripe = rand.nextInt(stripeVersions.length);
                 if (versionedPartitionProvider.getProperties(partitionName) == null) {
                     throw new PropertiesNotPresentException("Properties missing for " + partitionName);
                 }
                 if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
                     throw new NotARingMemberException("Not a member of ring for " + partitionName);
                 }
-                storageVersion = set(partitionName, orderIdProvider.nextId());
+                storageVersion = set(partitionName, orderIdProvider.nextId(), stripe);
             }
             return storageVersion;
         }
+    }
+    
+    // Sucks but its our legacy
+    @Override
+    public int getSystemStripe(PartitionName partitionName) {
+        return Math.abs(partitionName.hashCode() % stripeVersions.length);
+    }
+
+    public int getCurrentStripe(StorageVersion storageVersion) {
+        return (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
     }
 
     @Override
@@ -122,7 +132,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         return storageVersion != null && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion();
     }
 
-    private StorageVersion lookupStorageVersion(PartitionName partitionName) {
+    public StorageVersion lookupStorageVersion(PartitionName partitionName) {
         return localVersionCache.computeIfAbsent(partitionName, key -> {
             try {
                 TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
@@ -143,8 +153,9 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         synchronized (versionStripingLocks.lock(partitionName, 0)) {
             StorageVersion storageVersion = lookupStorageVersion(partitionName);
-            if (storageVersion != null && storageVersion.partitionVersion <= versionedPartitionName.getPartitionVersion()) {
-                storageVersion = set(partitionName, orderIdProvider.nextId());
+            int stripe = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
+            if (stripe != -1 && storageVersion.partitionVersion <= versionedPartitionName.getPartitionVersion()) {
+                storageVersion = set(partitionName, orderIdProvider.nextId(), stripe);
             }
         }
     }
@@ -173,12 +184,22 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     PartitionName partitionName = PartitionName.fromBytes(key, o, interner);
                     StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
-                    if (storageVersion.stripeVersion == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
+                    int stripe = getStripe(storageVersion.stripeVersion);
+                    if (stripe != -1) {
                         return stream.stream(partitionName, ringMember, storageVersion);
                     }
                 }
                 return true;
             });
+    }
+
+    private int getStripe(long stripeVersion) {
+        for (int i = 0; i < stripeVersions.length; i++) {
+            if (stripeVersions[i] == stripeVersion) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public static PartitionName fromKey(byte[] key, BAInterner interner) throws Exception {
@@ -206,8 +227,8 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         });
     }
 
-    private StorageVersion set(PartitionName partitionName, long partitionVersion) throws Exception {
-        StorageVersion storageVersion = new StorageVersion(partitionVersion, stripeVersions[partitionStripeFunction.stripe(partitionName)]);
+    private StorageVersion set(PartitionName partitionName, long partitionVersion, int stripe) throws Exception {
+        StorageVersion storageVersion = new StorageVersion(partitionVersion, stripeVersions[stripe]);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);
         StorageVersion cachedVersion = localVersionCache.get(partitionName);
         if (cachedVersion != null && cachedVersion.equals(storageVersion)) {

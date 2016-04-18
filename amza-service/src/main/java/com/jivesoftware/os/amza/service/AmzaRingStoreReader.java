@@ -16,6 +16,8 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.CacheId;
 import com.jivesoftware.os.amza.service.ring.RingSet;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -33,26 +35,32 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     private final BAInterner interner;
     private final RingMember rootRingMember;
-    private final PartitionStore ringIndex;
-    private final PartitionStore nodeIndex;
+    private PartitionStore ringIndex;
+    private PartitionStore nodeIndex;
     private final ConcurrentBAHash<CacheId<RingTopology>> ringsCache;
     private final ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache;
     private final AtomicLong nodeCacheId;
 
     public AmzaRingStoreReader(BAInterner interner,
         RingMember rootRingMember,
-        PartitionStore ringIndex,
-        PartitionStore nodeIndex,
         ConcurrentBAHash<CacheId<RingTopology>> ringsCache,
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache,
         AtomicLong nodeCacheId) {
         this.interner = interner;
         this.rootRingMember = rootRingMember;
-        this.ringIndex = ringIndex;
-        this.nodeIndex = nodeIndex;
         this.ringsCache = ringsCache;
         this.ringMemberRingNamesCache = ringMemberRingNamesCache;
         this.nodeCacheId = nodeCacheId;
+    }
+
+    public void start(PartitionIndex partitionIndex) throws Exception {
+        ringIndex = partitionIndex.getSystemPartition(PartitionCreator.RING_INDEX);
+        nodeIndex = partitionIndex.getSystemPartition(PartitionCreator.NODE_INDEX);
+    }
+
+    public void stop() {
+        ringIndex = null;
+        nodeIndex = null;
     }
 
     byte[] keyToRingName(WALKey walKey) throws IOException {
@@ -93,6 +101,10 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     public TimestampedRingHost getRingHost() throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
+
         TimestampedValue registeredHost = nodeIndex.getTimestampedValue(null, rootRingMember.toBytes());
         if (registeredHost != null) {
             return new TimestampedRingHost(RingHost.fromBytes(registeredHost.getValue()), registeredHost.getTimestampId());
@@ -108,6 +120,10 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public RingTopology getRing(byte[] ringName) throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
+
         CacheId<RingTopology> cacheIdRingTopology = ringsCache.computeIfAbsent(ringName, key -> new CacheId<>(null));
         RingTopology ring = cacheIdRingTopology.entry;
         long currentRingCacheId = cacheIdRingTopology.currentCacheId;
@@ -153,6 +169,10 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     public void streamRingMembersAndHosts(RingMemberAndHostStream stream) throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
+
         nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
             if (value != null && !valueTombstoned) {
@@ -173,11 +193,19 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
+
         TimestampedValue rawRingHost = nodeIndex.getTimestampedValue(null, ringMember.toBytes());
         return rawRingHost == null ? null : RingHost.fromBytes(rawRingHost.getValue());
     }
 
     public Set<RingMember> getNeighboringRingMembers(byte[] ringName) throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
+
         byte[] from = key(ringName, null);
         Set<RingMember> ring = Sets.newHashSet();
         ringIndex.rangeScan(null,
@@ -198,6 +226,10 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public void getRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
+
         CacheId<RingSet> cacheIdRingSet = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember.leakBytes(), key -> new CacheId<>(null));
         RingSet ringSet = cacheIdRingSet.entry;
         long currentMemberCacheId = cacheIdRingSet.currentCacheId;
@@ -247,6 +279,9 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public void allRings(RingStream ringStream) throws Exception {
+        if (ringIndex == null || nodeIndex == null) {
+            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+        }
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
         nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {

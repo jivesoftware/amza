@@ -64,7 +64,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage;
     }
 
-    public void load(long deltaWALId, long prevDeltaWALId) throws Exception {
+    public void load(long deltaWALId, long prevDeltaWALId, int stripe) throws Exception {
         long loaded = loadedAtDeltaWALId.get();
         if (deltaWALId > -1) {
             if (loaded == -1) {
@@ -74,16 +74,14 @@ public class PartitionStore implements RangeScannable {
             } else if (loaded != Integer.MIN_VALUE && deltaWALId >= loaded) {
                 return;
             }
-        } else {
-            if (loaded != Integer.MIN_VALUE) {
-                return;
-            }
+        } else if (loaded != Integer.MIN_VALUE) {
+            return;
         }
         boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
-        walStorage.load(deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker);
+        walStorage.load(deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stripe);
         if (properties.forceCompactionOnStartup) {
-            compactTombstone(true);
+            compactTombstone(true, stripe);
         }
         loadedAtDeltaWALId.set(deltaWALId);
     }
@@ -106,7 +104,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream);
     }
 
-    public void compactTombstone(boolean force) {
+    public void compactTombstone(boolean force, int stripe) {
         // ageInMillis: 180 days
         // intervalMillis: 10 days
         // Do I have anything older than (180+10) days?
@@ -151,6 +149,7 @@ public class PartitionStore implements RangeScannable {
                             tombstoneCompactVersion,
                             ttlCompactTimestamp,
                             ttlCompactVersion,
+                            stripe,
                             expectedEndOfMerge);
                     } finally {
                         amzaStats.endCompaction(CompactionFamily.tombstone, versionedPartitionName.toString());
@@ -160,7 +159,7 @@ public class PartitionStore implements RangeScannable {
                         tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
                 }
             } catch (Exception x) {
-                LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
+                LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
             }
         }
     }

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.SickPartitions;
@@ -63,7 +62,6 @@ public class AmzaStateStorageNGTest {
 
         AmzaStats amzaStats = new AmzaStats();
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(amzaStats,
-            new PartitionStripeFunction(workingDirectories.length),
             workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
 
@@ -76,7 +74,7 @@ public class AmzaStateStorageNGTest {
             partitionPropertyMarshaller,
             4);
 
-        partitionIndex.open();
+        partitionIndex.open((partitionName) -> 0);
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,

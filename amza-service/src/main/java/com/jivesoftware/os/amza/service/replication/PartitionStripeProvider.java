@@ -11,9 +11,15 @@ import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.service.AmzaPartitionWatcher;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionTransactor;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Waterline;
@@ -37,7 +43,10 @@ public class PartitionStripeProvider implements TxPartitionState {
 
     private final ExecutorService compactDeltasThreadPool;
     private final ExecutorService flusherExecutor;
-    private final PartitionStripe[] partitionStripes;
+    private final PartitionIndex partitionIndex;
+    private final PrimaryRowMarshaller primaryRowMarshaller;
+    private final DeltaStripeWALStorage[] deltaStripeWALStorages;
+    private final PartitionStripe[][] partitionStripes;
     private final HighwaterStorage highwaterStorage;
     private final RingMember rootRingMember;
     private final AmzaRingStoreReader ringStoreReader;
@@ -50,20 +59,25 @@ public class PartitionStripeProvider implements TxPartitionState {
     private final AsyncStripeFlusher[] flushers;
     private final long deltaStripeCompactionIntervalInMillis;
 
-    public PartitionStripeProvider(
-        PartitionStripe[] partitionStripes,
+    public PartitionStripeProvider(AmzaStats stats,
+        PartitionIndex partitionIndex,
+        PrimaryRowMarshaller primaryRowMarshaller,
+        DeltaStripeWALStorage[] deltaStripeWALStorages,
         HighwaterStorage highwaterStorage,
+        HighwaterRowMarshaller highwaterRowMarshaller,
         RingMember rootRingMember,
         AmzaRingStoreReader ringStoreReader,
         AmzaAquariumProvider aquariumProvider,
         StorageVersionProvider storageVersionProvider,
         TakeCoordinator takeCoordinator,
         AwaitNotify<PartitionName> awaitNotify,
+        AmzaPartitionWatcher amzaStripedPartitionWatcher,
         long asyncFlushIntervalMillis,
         long deltaStripeCompactionIntervalInMillis) {
 
-        this.deltaStripeCompactionIntervalInMillis = deltaStripeCompactionIntervalInMillis;
-        this.partitionStripes = partitionStripes;
+        this.partitionIndex = partitionIndex;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.deltaStripeWALStorages = deltaStripeWALStorages;
         this.highwaterStorage = highwaterStorage;
         this.rootRingMember = rootRingMember;
         this.ringStoreReader = ringStoreReader;
@@ -72,15 +86,32 @@ public class PartitionStripeProvider implements TxPartitionState {
         this.takeCoordinator = takeCoordinator;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = awaitNotify;
+        this.deltaStripeCompactionIntervalInMillis = deltaStripeCompactionIntervalInMillis;
 
-        this.compactDeltasThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
+        int numberOfStripes = deltaStripeWALStorages.length;
+        this.partitionStripes = new PartitionStripe[numberOfStripes][numberOfStripes];
+        for (int deltaIndex = 0; deltaIndex < numberOfStripes; deltaIndex++) {
+            for (int stripeIndex = 0; stripeIndex < numberOfStripes; stripeIndex++) {
+                partitionStripes[deltaIndex][stripeIndex] = new PartitionStripe(stats,
+                    "stripe-" + deltaIndex + "-" + stripeIndex,
+                    stripeIndex,
+                    partitionIndex,
+                    deltaStripeWALStorages[deltaIndex],
+                    amzaStripedPartitionWatcher,
+                    primaryRowMarshaller,
+                    highwaterRowMarshaller);
+
+            }
+        }
+
+        this.compactDeltasThreadPool = Executors.newFixedThreadPool(numberOfStripes,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-        this.flusherExecutor = Executors.newFixedThreadPool(partitionStripes.length,
+        this.flusherExecutor = Executors.newFixedThreadPool(numberOfStripes,
             new ThreadFactoryBuilder().setNameFormat("stripe-flusher-%d").build());
 
-        this.flushers = new AsyncStripeFlusher[partitionStripes.length];
-        for (int i = 0; i < partitionStripes.length; i++) {
-            this.flushers[i] = new AsyncStripeFlusher(this.partitionStripes[i], this.highwaterStorage, asyncFlushIntervalMillis);
+        this.flushers = new AsyncStripeFlusher[numberOfStripes];
+        for (int i = 0; i < numberOfStripes; i++) {
+            this.flushers[i] = new AsyncStripeFlusher(this.deltaStripeWALStorages[i], this.highwaterStorage, asyncFlushIntervalMillis);
         }
     }
 
@@ -88,12 +119,12 @@ public class PartitionStripeProvider implements TxPartitionState {
         ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
-        for (PartitionStripe partitionStripe : partitionStripes) {
+        for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    partitionStripe.load(this);
+                    deltaStripeWALStorage.load(this, partitionIndex, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
-                    LOG.error("Failed while loading " + partitionStripe, x);
+                    LOG.error("Failed while loading {} ", new Object[]{deltaStripeWALStorage}, x);
                     throw new RuntimeException(x);
                 }
             }));
@@ -114,14 +145,18 @@ public class PartitionStripeProvider implements TxPartitionState {
     }
 
     public void start() {
-        for (PartitionStripe partitionStripe : partitionStripes) {
+        for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             compactDeltasThreadPool.submit(() -> {
                 while (true) {
                     try {
-                        if (partitionStripe.mergeable()) {
-                            partitionStripe.merge(false);
+                        if (deltaStripeWALStorage.mergeable()) {
+                            try {
+                                deltaStripeWALStorage.merge(partitionIndex, storageVersionProvider, false);
+                            } catch (Throwable x) {
+                                LOG.error("Compactor failed.", x);
+                            }
                         }
-                        Object awakeCompactionLock = partitionStripe.getAwakeCompactionLock();
+                        Object awakeCompactionLock = deltaStripeWALStorage.getAwakeCompactionLock();
                         synchronized (awakeCompactionLock) {
                             awakeCompactionLock.wait(deltaStripeCompactionIntervalInMillis);
                         }
@@ -146,40 +181,45 @@ public class PartitionStripeProvider implements TxPartitionState {
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
+
         return tx(partitionName,
-            (versionedAquarium1, stripeIndex) -> tx.tx(stripeIndex, partitionStripes[stripeIndex], highwaterStorage, versionedAquarium1));
+            (versionedAquarium1) -> {
+                return storageVersionProvider.tx(partitionName, false,
+                    (deltaIndex, stripeIndex, storageVersion) -> {
+                        return tx.tx(stripeIndex, partitionStripes[deltaIndex == -1 ? stripeIndex : deltaIndex][stripeIndex], highwaterStorage, versionedAquarium1);
+                    });
+            });
     }
 
     @Override
     public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-        VersionedAquarium versionedAquarium;
-        int stripe;
         if (partitionName.isSystemPartition()) {
-            versionedAquarium = new VersionedAquarium(new VersionedPartitionName(partitionName, 0), null, 0);
-            stripe = storageVersionProvider.getSystemStripe(partitionName);
+            return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), null, 0));
         } else {
-            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-            stripe = storageVersionProvider.getCurrentStripe(storageVersion);
-            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-            versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+            return storageVersionProvider.tx(partitionName, false,
+                (deltaIndex, stripeIndex, storageVersion) -> {
+                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+                    VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+                    return transactor.doWithOne(versionedAquarium, tx);
+                });
         }
-        if (stripe == -1) {
-            throw new IllegalStateException("Failed to compute stripe for " + partitionName);
-        }
-        return transactor.doWithOne(versionedAquarium, stripe, tx);
     }
 
     public void flush(PartitionName partitionName, Durability durability, long waitForFlushInMillis) throws Exception {
-        tx(partitionName,
-            (versionedAquarium, stripeIndex) -> {
-                flushers[stripeIndex].forceFlush(durability, waitForFlushInMillis);
+        storageVersionProvider.tx(partitionName, false,
+            (deltaIndex, stripeIndex, storageVersion) -> {
+                flushers[deltaIndex].forceFlush(durability, waitForFlushInMillis);
                 return null;
             });
     }
 
     public void mergeAll(boolean force) {
-        for (PartitionStripe stripe : partitionStripes) {
-            stripe.merge(force);
+        for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
+            try {
+                deltaStripeWALStorage.merge(partitionIndex, storageVersionProvider, force);
+            } catch (Throwable x) {
+                LOG.error("mergeAll failed.", x);
+            }
         }
     }
 
@@ -203,7 +243,7 @@ public class PartitionStripeProvider implements TxPartitionState {
         }
 
         if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-            return tx(partitionName, (versionedAquarium, stripe) -> {
+            return tx(partitionName, (versionedAquarium) -> {
                 Waterline leaderWaterline = versionedAquarium.awaitOnline(timeoutMillis).getLeaderWaterline();
                 if (!aquariumProvider.isOnline(leaderWaterline)) {
                     versionedAquarium.wipeTheGlass();
@@ -217,53 +257,39 @@ public class PartitionStripeProvider implements TxPartitionState {
 
     public interface PartitionMemberStateStream {
 
-        boolean stream(PartitionName partitionName, RingMember ringMember, VersionedAquarium versionedAquarium, int stripe) throws Exception;
+        boolean stream(PartitionName partitionName, RingMember ringMember, VersionedAquarium versionedAquarium) throws Exception;
     }
 
     public void streamLocalAquariums(PartitionMemberStateStream stream) throws Exception {
         storageVersionProvider.streamLocal((partitionName, ringMember, storageVersion) -> {
             VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
             VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
-            int stripe = stripe(partitionName, storageVersion);
-            return transactor.doWithOne(versionedAquarium, stripe,
-                (versionedAquarium1, stripe1) -> stream.stream(partitionName, ringMember, versionedAquarium1, stripe1));
+            return transactor.doWithOne(versionedAquarium,
+                (versionedAquarium1) -> stream.stream(partitionName, ringMember, versionedAquarium1));
         });
     }
 
     public void expunged(VersionedPartitionName versionedPartitionName) throws Exception {
+
         VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, -1);
-        StorageVersion storageVersion = storageVersionProvider.lookupStorageVersion(versionedPartitionName.getPartitionName());
-        int stripe = storageVersion == null ? -1 : storageVersionProvider.getCurrentStripe(storageVersion);
 
-        if (stripe != -1) {
-            LOG.info("Removing storage versions for composted partition: {} stripe:{}", versionedPartitionName, stripe);
-            transactor.doWithAll(versionedAquarium, stripe, (versionedAquarium1, stripe1) -> {
-                awaitNotify.notifyChange(versionedPartitionName.getPartitionName(), () -> {
-                    versionedAquarium1.delete();
-                    storageVersionProvider.remove(rootRingMember, versionedAquarium1.getVersionedPartitionName());
-                    return true;
-                });
-                return null;
+        LOG.info("Removing storage versions for composted partition: {}", versionedPartitionName);
+        transactor.doWithAll(versionedAquarium, (versionedAquarium1) -> {
+
+            awaitNotify.notifyChange(versionedPartitionName.getPartitionName(), () -> {
+                versionedAquarium1.delete();
+                storageVersionProvider.remove(rootRingMember, versionedAquarium1.getVersionedPartitionName());
+                return true;
             });
-            takeCoordinator.expunged(versionedPartitionName);
-        } else {
-            LOG.warn("Failed to locate storage versions for composted partition: {}", versionedPartitionName);
-        }
-    }
+            return null;
+        });
+        takeCoordinator.expunged(versionedPartitionName);
 
-    private int stripe(PartitionName partitionName, StorageVersion storageVersion) {
-        int stripe = -1;
-        if (partitionName.isSystemPartition()) {
-            stripe = storageVersionProvider.getSystemStripe(partitionName);
-        } else {
-            stripe = storageVersionProvider.getCurrentStripe(storageVersion);
-        }
-        return stripe;
     }
 
     private final static class AsyncStripeFlusher implements Runnable {
 
-        private final PartitionStripe deltaStripe;
+        private final DeltaStripeWALStorage deltaStripeWALStorage;
         private final HighwaterStorage highwaterStorage;
         private final AtomicBoolean running = new AtomicBoolean(false);
         private final AtomicLong asyncVersion = new AtomicLong(0);
@@ -273,11 +299,11 @@ public class PartitionStripeProvider implements TxPartitionState {
         private final Object force = new Object();
         private final long asyncFlushIntervalMillis;
 
-        public AsyncStripeFlusher(PartitionStripe deltaStripe,
+        public AsyncStripeFlusher(DeltaStripeWALStorage deltaStripeWALStorage,
             HighwaterStorage highwaterStorage,
             long asyncFlushIntervalMillis) {
 
-            this.deltaStripe = deltaStripe;
+            this.deltaStripeWALStorage = deltaStripeWALStorage;
             this.highwaterStorage = highwaterStorage;
             this.asyncFlushIntervalMillis = asyncFlushIntervalMillis;
         }
@@ -357,7 +383,7 @@ public class PartitionStripeProvider implements TxPartitionState {
                             try {
                                 force.wait(asyncFlushIntervalMillis);
                             } catch (InterruptedException ex) {
-                                LOG.warn("Async flusher for {} was interrupted.", deltaStripe);
+                                LOG.warn("Async flusher for {} was interrupted.", deltaStripeWALStorage);
                                 return;
                             }
                         }
@@ -370,7 +396,7 @@ public class PartitionStripeProvider implements TxPartitionState {
 
         private void flush() throws Exception {
             highwaterStorage.flush(() -> {
-                deltaStripe.flush(true); // TODO eval for correctness
+                deltaStripeWALStorage.flush(true); // TODO eval for correctness
                 return null;
             });
         }

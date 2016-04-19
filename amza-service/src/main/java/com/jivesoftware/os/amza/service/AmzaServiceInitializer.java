@@ -30,7 +30,6 @@ import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
-import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
@@ -254,6 +253,36 @@ public class AmzaServiceInitializer {
 
         AwaitNotify<PartitionName> awaitOnline = new AwaitNotify<>(config.awaitOnlineStripingLevel);
 
+        long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
+
+        AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
+
+        DeltaStripeWALStorage[] deltaStripeWALStorages = new DeltaStripeWALStorage[numberOfStripes];
+
+        BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
+            amzaStats.ioStats,
+            -1,
+            0,
+            config.useMemMap);
+        for (int i = 0; i < numberOfStripes; i++) {
+
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], deltaRowIOProvider, primaryRowMarshaller,
+                highwaterRowMarshaller, config.corruptionParanoiaFactor);
+
+            deltaStripeWALStorages[i] = new DeltaStripeWALStorage(
+                interner,
+                i,
+                amzaStats,
+                ackWaters,
+                sickThreads,
+                ringStoreReader,
+                deltaWALFactory,
+                indexProviderRegistry,
+                maxUpdatesBeforeCompaction,
+                numProc);
+
+        }
+
         StorageVersionProvider storageVersionProvider = new StorageVersionProvider(interner,
             orderIdProvider,
             ringMember,
@@ -261,6 +290,7 @@ public class AmzaServiceInitializer {
             partitionIndex,
             ringStoreReader,
             stripeVersions,
+            deltaStripeWALStorages,
             walUpdated,
             awaitOnline);
 
@@ -298,47 +328,7 @@ public class AmzaServiceInitializer {
             awaitOnline, sickThreads);
         amzaSystemPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
-        
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
-        long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
-
-        AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
-
-        PartitionStripe[] partitionStripes = new PartitionStripe[numberOfStripes];
-
-        BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
-            amzaStats.ioStats,
-            -1,
-            0,
-            config.useMemMap);
-        for (int i = 0; i < numberOfStripes; i++) {
-
-            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], deltaRowIOProvider, primaryRowMarshaller,
-                highwaterRowMarshaller, config.corruptionParanoiaFactor);
-
-            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
-                interner,
-                i,
-                amzaStats,
-                ackWaters,
-                sickThreads,
-                ringStoreReader,
-                storageVersionProvider,
-                deltaWALFactory,
-                indexProviderRegistry,
-                maxUpdatesBeforeCompaction,
-                numProc);
-
-            partitionStripes[i] = new PartitionStripe(amzaStats,
-                "stripe-" + i,
-                i,
-                partitionIndex,
-                storageVersionProvider,
-                deltaWALStorage,
-                amzaStripedPartitionWatcher,
-                primaryRowMarshaller,
-                highwaterRowMarshaller);
-        }
 
         HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(interner,
             orderIdProvider,
@@ -349,14 +339,19 @@ public class AmzaServiceInitializer {
             config.flushHighwatersAfterNUpdates);
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
-            partitionStripes,
+            amzaStats,
+            partitionIndex,
+            primaryRowMarshaller,
+            deltaStripeWALStorages,
             highwaterStorage,
+            highwaterRowMarshaller,
             ringMember,
             ringStoreReader,
             aquariumProvider,
             storageVersionProvider,
             takeCoordinator,
             awaitOnline,
+            amzaStripedPartitionWatcher,
             config.asyncFsyncIntervalMillis,
             config.deltaStripeCompactionIntervalInMillis);
 

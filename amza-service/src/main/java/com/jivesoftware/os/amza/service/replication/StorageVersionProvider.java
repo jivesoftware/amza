@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -26,12 +27,13 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
  */
-public class StorageVersionProvider implements CurrentVersionProvider, RowChanges, SystemStriper, PartitionStriper {
+public class StorageVersionProvider implements CurrentVersionProvider, RowChanges, SystemStriper {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final Random rand = new Random();
@@ -43,11 +45,14 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final RingMembership ringMembership;
     private final long[] stripeVersions;
+    private final DeltaStripeWALStorage[] deltaStripeWALStorages;
     private final WALUpdated walUpdated;
     private final AwaitNotify<PartitionName> awaitNotify;
 
     private final ConcurrentHashMap<PartitionName, StorageVersion> localVersionCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = new ConcurrentHashMap<>();
+    private final CallableTransactor callableTransactor = new CallableTransactor(1024, Short.MAX_VALUE); // TODO config?
+    private final ConcurrentHashMap<VersionedPartitionName, Integer> localDeltaIndexCache = new ConcurrentHashMap<>();
 
     public StorageVersionProvider(BAInterner interner,
         OrderIdProvider orderIdProvider,
@@ -56,6 +61,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         VersionedPartitionProvider versionedPartitionProvider,
         RingMembership ringMembership,
         long[] stripeVersions,
+        DeltaStripeWALStorage[] deltaStripeWALStorages,
         WALUpdated walUpdated,
         AwaitNotify<PartitionName> awaitNotify) {
         this.interner = interner;
@@ -65,6 +71,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.ringMembership = ringMembership;
         this.stripeVersions = stripeVersions;
+        this.deltaStripeWALStorages = deltaStripeWALStorages;
         this.walUpdated = walUpdated;
         this.awaitNotify = awaitNotify;
     }
@@ -91,30 +98,59 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
     private final StripingLocksProvider<PartitionName> versionStripingLocks = new StripingLocksProvider<>(1024);
 
-    public StorageVersion createIfAbsent(PartitionName partitionName) throws Exception {
+    @Override
+    public <R> R tx(PartitionName partitionName,
+        boolean createIfAbsent,
+        StripeIndexs<R> tx) throws Exception {
+
         if (partitionName.isSystemPartition()) {
-            return new StorageVersion(0, 0);
+            return tx.tx(-1, getSystemStripe(partitionName), new StorageVersion(0, 0));
         }
-        synchronized (versionStripingLocks.lock(partitionName, 0)) {
+        return callableTransactor.doWithOne(partitionName, () -> {
             StorageVersion storageVersion = lookupStorageVersion(partitionName);
-            int stripe = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
-            if (stripe == -1) {
-                stripe = rand.nextInt(stripeVersions.length);
-                if (versionedPartitionProvider.getProperties(partitionName) == null) {
-                    throw new PropertiesNotPresentException("Properties missing for " + partitionName);
+            int stripeIndex = getCurrentStripe(storageVersion);
+            if (stripeIndex == -1 && createIfAbsent) {
+                synchronized (versionStripingLocks.lock(partitionName, 0)) {
+                    storageVersion = lookupStorageVersion(partitionName);
+                    stripeIndex = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
+                    if (stripeIndex == -1) {
+                        stripeIndex = rand.nextInt(stripeVersions.length);
+                        if (versionedPartitionProvider.getProperties(partitionName) == null) {
+                            throw new PropertiesNotPresentException("Properties missing for " + partitionName);
+                        }
+                        if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                            throw new NotARingMemberException("Not a member of ring for " + partitionName);
+                        }
+                        storageVersion = set(partitionName, orderIdProvider.nextId(), stripeIndex);
+                    }
                 }
-                if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
-                    throw new NotARingMemberException("Not a member of ring for " + partitionName);
-                }
-                storageVersion = set(partitionName, orderIdProvider.nextId(), stripe);
             }
-            return storageVersion;
-        }
+            int deltaIndex = getAndCacheDeltaIndexIfNeeded(stripeIndex, new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
+            return tx.tx(deltaIndex, stripeIndex, storageVersion);
+        });
     }
 
-    @Override
-    public int getStripe(PartitionName partitionName) {
-        return getCurrentStripe(lookupStorageVersion(partitionName));
+    public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception {
+
+        callableTransactor.doWithAll(versionedPartitionName.getPartitionName(), () -> {
+            if (invalidatable.call()) {
+                localDeltaIndexCache.remove(versionedPartitionName);
+            }
+            return null;
+        });
+    }
+
+    private int getAndCacheDeltaIndexIfNeeded(int stripeIndex, VersionedPartitionName versionedPartitionName) {
+
+        return localDeltaIndexCache.computeIfAbsent(versionedPartitionName, (vpn) -> {
+            for (int i = 0; i < deltaStripeWALStorages.length; i++) {
+                DeltaStripeWALStorage deltaStripeWALStorage = deltaStripeWALStorages[i];
+                if (deltaStripeWALStorage.hasChangesFor(vpn)) {
+                    return i;
+                }
+            }
+            return stripeIndex;
+        });
     }
 
     // Sucks but its our legacy
@@ -123,21 +159,11 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         return Math.abs(partitionName.hashCode() % stripeVersions.length);
     }
 
-    public int getCurrentStripe(StorageVersion storageVersion) {
+    private int getCurrentStripe(StorageVersion storageVersion) {
         return (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
     }
 
-    @Override
-    public boolean isCurrentVersion(VersionedPartitionName versionedPartitionName) {
-        PartitionName partitionName = versionedPartitionName.getPartitionName();
-        if (partitionName.isSystemPartition()) {
-            return true;
-        }
-        StorageVersion storageVersion = lookupStorageVersion(partitionName);
-        return storageVersion != null && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion();
-    }
-
-    public StorageVersion lookupStorageVersion(PartitionName partitionName) {
+    private StorageVersion lookupStorageVersion(PartitionName partitionName) {
         return localVersionCache.computeIfAbsent(partitionName, key -> {
             try {
                 TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
@@ -151,6 +177,16 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 throw new RuntimeException("Failed to deserialize version", e);
             }
         });
+    }
+
+    @Override
+    public boolean isCurrentVersion(VersionedPartitionName versionedPartitionName) {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        if (partitionName.isSystemPartition()) {
+            return true;
+        }
+        StorageVersion storageVersion = lookupStorageVersion(partitionName);
+        return storageVersion != null && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion();
     }
 
     @Override

@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
+import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -57,6 +58,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -143,7 +145,7 @@ public class DeltaStripeWALStorageNGTest {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0), 0);
+                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0));
             }
         };
 
@@ -158,6 +160,16 @@ public class DeltaStripeWALStorageNGTest {
             @Override
             public void abandonVersion(VersionedPartitionName versionedPartitionName) throws Exception {
                 throw new UnsupportedOperationException("Stop it");
+            }
+
+            @Override
+            public <R> R tx(PartitionName partitionName, boolean createIfAbsent, CurrentVersionProvider.StripeIndexs<R> tx) throws Exception {
+                return tx.tx(0, 0, new StorageVersion(0, 0));
+            }
+
+            @Override
+            public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception {
+                invalidatable.call();
             }
         };
 
@@ -216,13 +228,13 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
+       
         DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner,
             1,
             new AmzaStats(),
             new AckWaters(2),
             new SickThreads(),
             ringStoreReader,
-            partitionName -> 0,
             deltaWALFactory,
             walIndexProviderRegistry,
             20_000, 8);

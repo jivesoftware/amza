@@ -159,8 +159,10 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                         iter.remove();
                         try {
                             if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-                                StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-                                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+
+                                VersionedPartitionName versionedPartitionName = storageVersionProvider.tx(partitionName, true,
+                                    (deltaIndex, stripeIndex, storageVersion) -> new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
+
                                 Aquarium aquarium = getAquarium(versionedPartitionName);
                                 aquarium.acknowledgeOther();
                                 aquarium.tapTheGlass();
@@ -284,16 +286,21 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         if (versionedPartitionProvider.getProperties(partitionName) == null) {
             throw new PropertiesNotPresentException("Properties missing for " + partitionName);
         }
-        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
-        Preconditions.checkArgument(storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion(), "Version mismatch for %s: %s != %s",
-            partitionName, versionedPartitionName.getPartitionVersion(), storageVersion.partitionVersion);
-        return aquariums.computeIfAbsent(versionedPartitionName, key -> {
-            try {
-                return buildAquarium(key);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to build aquarium for partition " + versionedPartitionName, e);
-            }
-        });
+
+        return storageVersionProvider.tx(partitionName, true,
+            (deltaIndex, stripeIndex, storageVersion) -> {
+                Preconditions.checkArgument(storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion(),
+                    "Version mismatch for %s: %s != %s",
+                    partitionName, versionedPartitionName.getPartitionVersion(), storageVersion.partitionVersion);
+                return aquariums.computeIfAbsent(versionedPartitionName, key -> {
+                    try {
+                        return buildAquarium(key);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to build aquarium for partition " + versionedPartitionName, e);
+                    }
+                });
+            });
+
     }
 
     public Waterline getCurrentState(PartitionName partitionName, RingMember remoteRingMember, long remotePartitionVersion) throws Exception {

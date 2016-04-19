@@ -117,7 +117,7 @@ public class PartitionComposter implements RowChanges {
         List<VersionedPartitionName> composted = new ArrayList<>();
         try {
             if (coldstart) {
-                partitionStripeProvider.streamLocalAquariums((partitionName, ringMember, versionedAquarium, stripeIndex) -> {
+                partitionStripeProvider.streamLocalAquariums((partitionName, ringMember, versionedAquarium) -> {
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     if (compostIfNecessary(versionedAquarium)) {
                         composted.add(versionedPartitionName);

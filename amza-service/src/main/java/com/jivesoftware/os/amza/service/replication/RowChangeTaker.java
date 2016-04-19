@@ -5,7 +5,6 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -157,14 +156,11 @@ public class RowChangeTaker implements RowChanges {
                 versionedPartitionName -> {
 
                     PartitionName partitionName = versionedPartitionName.getPartitionName();
-                    int stripe = 0;
-                    if (partitionName.isSystemPartition()) {
-                        stripe = storageVersionProvider.getSystemStripe(partitionName);
-                    } else {
-                        StorageVersion storageVersion = storageVersionProvider.lookupStorageVersion(partitionName);
-                        stripe = storageVersion == null ? -1 : storageVersionProvider.getCurrentStripe(storageVersion);
+                    try {
+                        return storageVersionProvider.tx(partitionName, false, (deltaIndex, stripeIndex, storageVersion) -> stripeIndex == consumerForStripe);
+                    } catch (Exception x) {
+                        throw new RuntimeException(x);
                     }
-                    return stripe == consumerForStripe;
                 }
             );
         }
@@ -219,17 +215,17 @@ public class RowChangeTaker implements RowChanges {
 
     }
 
-    private Object consumerLock(PartitionName partitionName) {
+    private Object consumerLock(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return systemConsumerLock;
         } else {
-            StorageVersion storageVersion = storageVersionProvider.lookupStorageVersion(partitionName);
-            int stripe = storageVersion == null ? -1 : storageVersionProvider.getCurrentStripe(storageVersion);
-            if (stripe == -1) {
-                return null;
-            } else {
-                return stripedConsumerLocks[stripe];
-            }
+            return storageVersionProvider.tx(partitionName, false, (deltaIndex, stripeIndex, storageVersion) -> {
+                if (stripeIndex == -1) {
+                    return null;
+                } else {
+                    return stripedConsumerLocks[stripeIndex];
+                }
+            });
         }
     }
 

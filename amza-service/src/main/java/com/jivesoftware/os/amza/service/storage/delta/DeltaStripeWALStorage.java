@@ -9,6 +9,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
@@ -38,7 +39,6 @@ import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
-import com.jivesoftware.os.amza.service.replication.PartitionStriper;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
@@ -85,7 +85,6 @@ public class DeltaStripeWALStorage {
     private final AckWaters ackWaters;
     private final SickThreads sickThreads;
     private final AmzaRingReader ringReader;
-    private final PartitionStriper partitionStriper;
     private final DeltaWALFactory deltaWALFactory;
     private final WALIndexProviderRegistry walIndexProviderRegistry;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
@@ -118,7 +117,6 @@ public class DeltaStripeWALStorage {
         AckWaters ackWaters,
         SickThreads sickThreads,
         AmzaRingReader ringReader,
-        PartitionStriper partitionStriper,
         DeltaWALFactory deltaWALFactory,
         WALIndexProviderRegistry walIndexProviderRegistry,
         long mergeAfterNUpdates,
@@ -130,7 +128,6 @@ public class DeltaStripeWALStorage {
         this.ackWaters = ackWaters;
         this.sickThreads = sickThreads;
         this.ringReader = ringReader;
-        this.partitionStriper = partitionStriper;
         this.deltaWALFactory = deltaWALFactory;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
@@ -222,7 +219,7 @@ public class DeltaStripeWALStorage {
                                         acceptable = false;
                                     } else {
                                         acceptable = txPartitionState.tx(versionedPartitionName.getPartitionName(),
-                                            (versionedAquarium, stripe1) -> {
+                                            (versionedAquarium) -> {
                                                 long partitionVersion = versionedAquarium.getVersionedPartitionName().getPartitionVersion();
                                                 return (partitionVersion == versionedPartitionName.getPartitionVersion());
                                             });
@@ -277,6 +274,10 @@ public class DeltaStripeWALStorage {
         }
     }
 
+    public boolean hasChangesFor(VersionedPartitionName versionedPartitionName) {
+        return partitionDeltas.contains(versionedPartitionName);
+    }
+
     public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
@@ -326,7 +327,8 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    private boolean mergeDelta(PartitionIndex partitionIndex,
+    private boolean mergeDelta(
+        PartitionIndex partitionIndex,
         CurrentVersionProvider currentVersionProvider,
         DeltaWAL wal,
         boolean validate,
@@ -367,9 +369,13 @@ public class DeltaStripeWALStorage {
                         try {
                             while (true) {
                                 try {
-                                    int stripe = partitionStriper.getStripe(versionedPartitionName.getPartitionName());
-                                    result = currentDelta.merge(partitionIndex, stripe, validate);
-                                    sickThreads.recovered();
+                                    result = currentVersionProvider.tx(versionedPartitionName.getPartitionName(), false,
+                                        (int deltaIndex, int stripeIndex, StorageVersion storageVersion) -> {
+                                            MergeResult r = currentDelta.merge(partitionIndex, stripeIndex, validate);
+                                            sickThreads.recovered();
+                                            return r;
+                                        });
+
                                     break;
                                 } catch (Throwable x) {
                                     sickThreads.sick(x);
@@ -440,6 +446,19 @@ public class DeltaStripeWALStorage {
             LOG.info("Compacted delta partitions.");
         } finally {
             releaseAll();
+        }
+
+
+        for (MergeResult result : results) {
+            VersionedPartitionName versionedPartitionName = result.versionedPartitionName;
+            currentVersionProvider.invalidateDeltaIndexCache(versionedPartitionName, () -> {
+                if (!hasChangesFor(versionedPartitionName)) {
+                    partitionDeltas.remove(versionedPartitionName);
+                    return true;
+                } else {
+                    return false;
+                }
+            });
         }
         return true;
     }
@@ -901,6 +920,11 @@ public class DeltaStripeWALStorage {
                 return true;
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "DeltaStripeWALStorage{" + "index=" + index + '}';
     }
 
 }

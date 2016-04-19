@@ -299,8 +299,6 @@ public class AmzaMain {
                 instanceConfig.getServiceName(),
                 amzaService,
                 amzaConfig.getDiscoveryIntervalMillis());
-            // run once to populate system ring
-            routingBirdAmzaDiscovery.run();
 
             amzaService.start(ringMember, ringHost);
 

@@ -9,7 +9,8 @@ import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
 import com.jivesoftware.os.amza.service.take.TakeRingCoordinator.VersionedRing;
@@ -22,7 +23,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -66,7 +66,7 @@ public class TakeVersionedPartitionCoordinator {
         this.currentCategory = new AtomicInteger(1);
     }
 
-    long availableRowsStream(PartitionStateStorage partitionStateStorage,
+    long availableRowsStream(PartitionStripeProvider partitionStripeProvider,
         TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
         VersionedRing versionedRing,
@@ -81,31 +81,32 @@ public class TakeVersionedPartitionCoordinator {
         callCount++;
 
         try {
-            return partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
-                VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                Stable stable = stableTaker(ringMember, takeSessionId, versionedAquarium);
-                if (stable.isDormant()) {
-                    return Long.MAX_VALUE;
-                } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                    return txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, highestTxId) -> {
-                        if (versionedAquarium1 != null) {
-                            return streamHighestTxId(versionedAquarium1,
-                                highestTxId,
-                                takeSessionId,
-                                versionedRing,
-                                ringMember,
-                                stable.isOnline(),
-                                availableStream);
-                        } else {
-                            LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
-                            return Long.MAX_VALUE;
-                        }
-                    });
-                } else {
-                    LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
-                    return Long.MAX_VALUE;
-                }
-            });
+            return partitionStripeProvider.txPartition(versionedPartitionName.getPartitionName(),
+                (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                    VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                    Stable stable = stableTaker(ringMember, takeSessionId, versionedAquarium);
+                    if (stable.isDormant()) {
+                        return Long.MAX_VALUE;
+                    } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
+                        return txHighestPartitionTx.tx(partitionStripe, versionedAquarium, (versionedAquarium1, highestTxId) -> {
+                            if (versionedAquarium1 != null) {
+                                return streamHighestTxId(versionedAquarium1,
+                                    highestTxId,
+                                    takeSessionId,
+                                    versionedRing,
+                                    ringMember,
+                                    stable.isOnline(),
+                                    availableStream);
+                            } else {
+                                LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
+                                return Long.MAX_VALUE;
+                            }
+                        });
+                    } else {
+                        LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
+                        return Long.MAX_VALUE;
+                    }
+                });
         } catch (PropertiesNotPresentException e) {
             LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
             return Long.MAX_VALUE;
@@ -218,8 +219,7 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     private boolean shouldOffer(Session session, long highestTxId) {
-        return highestTxId > -1 && (highestTxId > session.offeredTxId || (highestTxId > session.tookTxId && System.currentTimeMillis() > session
-            .reofferAtTimeInMillis));
+        return highestTxId > -1 && (highestTxId > session.offeredTxId || (highestTxId > session.tookTxId && System.currentTimeMillis() > session.reofferAtTimeInMillis));
     }
 
     void updateTxId(VersionedRing versionedRing, boolean replicated, long updateTxId, boolean invalidateOnline) throws Exception {
@@ -241,6 +241,7 @@ public class TakeVersionedPartitionCoordinator {
 
     void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
+        PartitionStripe partitionStripe,
         VersionedAquarium versionedAquarium,
         VersionedRing versionedRing,
         RingMember remoteRingMember,
@@ -253,7 +254,7 @@ public class TakeVersionedPartitionCoordinator {
             return;
         }
 
-        long highestTxId = txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, _highestTxId) -> _highestTxId);
+        long highestTxId = txHighestPartitionTx.tx(partitionStripe, versionedAquarium, (versionedAquarium1, _highestTxId) -> _highestTxId);
         Session session = sessions.get(remoteRingMember);
         if (session != null) {
             synchronized (session) {
@@ -282,7 +283,7 @@ public class TakeVersionedPartitionCoordinator {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (replicated) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
-            int[] fastEnough = { 0 };
+            int[] fastEnough = {0};
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
                 if (fastEnough[0] < versionedRing.takeFromFactor) {

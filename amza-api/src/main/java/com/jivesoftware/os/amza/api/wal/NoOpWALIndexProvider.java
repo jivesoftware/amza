@@ -20,12 +20,12 @@ public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
     }
 
     @Override
-    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
-        return new NoOpWALIndex(name);
+    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+        return new NoOpWALIndex(name, stripe);
     }
 
     @Override
-    public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
     }
 
     @Override

@@ -4,7 +4,6 @@ import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -362,7 +361,7 @@ public class LABPointerIndexWALIndexTest {
 
         index.commit(false);
 
-        CompactionWALIndex compactionWALIndex = index.startCompaction(true);
+        CompactionWALIndex compactionWALIndex = index.startCompaction(true, 0);
         compactionWALIndex.merge((stream) -> {
             for (long i = 100; i < 200; i++) {
                 if (!stream.stream(i, UIO.longBytes(-i), UIO.longBytes(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
@@ -386,7 +385,7 @@ public class LABPointerIndexWALIndexTest {
 
     private LABPointerIndexWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
         LABPointerIndexConfig config = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
-        return new LABPointerIndexWALIndexProvider(config, "lab", new PartitionStripeFunction(1), new File[]{dir}).createIndex(partitionName);
+        return new LABPointerIndexWALIndexProvider(config, "lab", 1, new File[]{dir}).createIndex(partitionName, 0);
     }
 
 }

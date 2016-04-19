@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
+import com.jivesoftware.os.amza.service.replication.SystemStriper;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.collections.lh.ConcurrentLHash;
@@ -120,9 +121,10 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         .put(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, AQUARIUM_PROPERTIES)
         .build();
 
-    public void open() throws Exception {
+    public void open(SystemStriper systemStriper) throws Exception {
         for (VersionedPartitionName versionedPartitionName : SYSTEM_PARTITIONS.keySet()) {
-            get(versionedPartitionName);
+            int systemStripe = systemStriper.getSystemStripe(versionedPartitionName.getPartitionName());
+            get(versionedPartitionName, systemStripe);
         }
     }
 
@@ -164,11 +166,11 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         return null;
     }
 
-    public PartitionStore get(VersionedPartitionName versionedPartitionName) throws Exception {
-        return getAndValidate(-1, -1, versionedPartitionName);
+    public PartitionStore get(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+        return getAndValidate(-1, -1, versionedPartitionName, stripe);
     }
 
-    public PartitionStore getAndValidate(long deltaWALId, long prevDeltaWALId, VersionedPartitionName versionedPartitionName) throws Exception {
+    public PartitionStore getAndValidate(long deltaWALId, long prevDeltaWALId, VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         if (deltaWALId > -1 && partitionName.isSystemPartition()) {
             throw new IllegalStateException("Hooray you have a bug! Should never call get with something other than -1 for system parititions." + deltaWALId);
@@ -177,7 +179,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (versionedStores != null) {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
-                partitionStore.load(deltaWALId, prevDeltaWALId);
+                partitionStore.load(deltaWALId, prevDeltaWALId, stripe);
                 return partitionStore;
             }
         }
@@ -191,11 +193,11 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (properties == null) {
             return null;
         }
-        return open(deltaWALId, prevDeltaWALId, versionedPartitionName, properties);
+        return open(deltaWALId, prevDeltaWALId, versionedPartitionName, stripe, properties);
 
     }
 
-    private PartitionStore getSystemPartition(VersionedPartitionName versionedPartitionName) {
+    public PartitionStore getSystemPartition(VersionedPartitionName versionedPartitionName) {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Should only be called by system partitions.");
         ConcurrentLHash<PartitionStore> versionedPartitionStores = partitionStores.get(versionedPartitionName.getPartitionName());
         PartitionStore store = versionedPartitionStores == null ? null : versionedPartitionStores.get(0L);
@@ -219,6 +221,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private PartitionStore open(long deltaWALId,
         long prevDeltaWALId,
         VersionedPartitionName versionedPartitionName,
+        int stripe,
         PartitionProperties properties) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
             ConcurrentLHash<PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
@@ -229,9 +232,9 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 return partitionStore;
             }
 
-            WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties);
+            WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, stripe, properties);
             partitionStore = new PartitionStore(amzaStats, orderIdProvider, versionedPartitionName, walStorage, properties);
-            partitionStore.load(deltaWALId, prevDeltaWALId);
+            partitionStore.load(deltaWALId, prevDeltaWALId, stripe);
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);
@@ -248,13 +251,13 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         partitionProperties.remove(partitionName);
     }
 
-    public boolean exists(VersionedPartitionName versionedPartitionName) throws Exception {
-        return get(versionedPartitionName) != null;
+    public boolean exists(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+        return get(versionedPartitionName, stripe) != null;
     }
 
     @Override
     public Iterable<PartitionName> getMemberPartitions(RingMembership ringMembership) throws Exception {
-        PartitionStore propertiesStore = get(PartitionCreator.REGION_PROPERTIES);
+        PartitionStore propertiesStore = getSystemPartition(PartitionCreator.REGION_PROPERTIES);
         List<PartitionName> partitionNames = Lists.newArrayList();
         propertiesStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned && valueTimestamp != -1) {
@@ -269,6 +272,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     public interface PartitionStream {
+
         boolean stream(VersionedPartitionName versionedPartitionName) throws Exception;
     }
 

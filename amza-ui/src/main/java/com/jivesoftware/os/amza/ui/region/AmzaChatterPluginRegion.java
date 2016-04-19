@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
-import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -144,7 +143,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                 Partition partition = amzaService.getPartition(versionedPartitionName.getPartitionName());
                 LivelyEndState[] livelyEndState = new LivelyEndState[1];
-                partition.highestTxId((VersionedAquarium versionedAquarium, long highestTxId) -> {
+                partition.highestTxId((versionedAquarium, highestTxId) -> {
                     livelyEndState[0] = versionedAquarium.getLivelyEndState();
                     return highestTxId;
                 });

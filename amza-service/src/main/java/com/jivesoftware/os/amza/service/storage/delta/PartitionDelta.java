@@ -355,13 +355,13 @@ class PartitionDelta {
 
         public MergeResult(VersionedPartitionName versionedPartitionName, WALIndex walIndex, long count, long lastTxId) {
             this.versionedPartitionName = versionedPartitionName;
-            this.walIndex = walIndex;
+             this.walIndex = walIndex;
             this.count = count;
             this.lastTxId = lastTxId;
         }
     }
 
-    MergeResult merge(PartitionIndex partitionIndex, boolean validate) throws Exception {
+    MergeResult merge(PartitionIndex partitionIndex,int stripe, boolean validate) throws Exception {
         final PartitionDelta merge = merging.get();
         long merged = 0;
         long lastTxId = 0;
@@ -372,8 +372,8 @@ class PartitionDelta {
                 lastTxId = merge.highestTxId();
 
                 PartitionStore partitionStore = validate
-                    ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName)
-                    : partitionIndex.get(merge.versionedPartitionName);
+                    ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName, stripe)
+                    : partitionIndex.get(merge.versionedPartitionName, stripe);
                 PartitionProperties properties = partitionIndex.getProperties(merge.versionedPartitionName.getPartitionName());
                 long highestTxId = partitionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);

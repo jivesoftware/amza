@@ -15,7 +15,7 @@ public interface WALTx {
 
     <R> R open(Tx<R> tx) throws Exception;
 
-    <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider, VersionedPartitionName partitionName) throws Exception;
+    <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider, VersionedPartitionName partitionName, int stripe) throws Exception;
 
     long length() throws Exception;
 
@@ -28,7 +28,8 @@ public interface WALTx {
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
-        I rowIndex) throws Exception;
+        I rowIndex,
+        int stripe) throws Exception;
 
     interface EndOfMerge {
 
@@ -85,16 +86,16 @@ public interface WALTx {
 
         @Override
         public String toString() {
-            return "CommittedCompacted{" +
-                "index=" + index +
-                ", sizeBeforeCompaction=" + sizeBeforeCompaction +
-                ", sizeAfterCompaction=" + sizeAfterCompaction +
-                ", keyCount=" + keyCount +
-                ", clobberCount=" + clobberCount +
-                ", tombstoneCount=" + tombstoneCount +
-                ", ttlCount=" + ttlCount +
-                ", duration=" + duration +
-                '}';
+            return "CommittedCompacted{"
+                + "index=" + index
+                + ", sizeBeforeCompaction=" + sizeBeforeCompaction
+                + ", sizeAfterCompaction=" + sizeAfterCompaction
+                + ", keyCount=" + keyCount
+                + ", clobberCount=" + clobberCount
+                + ", tombstoneCount=" + tombstoneCount
+                + ", ttlCount=" + ttlCount
+                + ", duration=" + duration
+                + '}';
         }
     }
 }

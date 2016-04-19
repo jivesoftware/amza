@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
@@ -20,7 +19,6 @@ import java.io.File;
 public class IndexedWALStorageProvider {
 
     private final AmzaStats amzaStats;
-    private final PartitionStripeFunction partitionStripeFunction;
     private final File[] workingDirectories;
     private final WALIndexProviderRegistry indexProviderRegistry;
     private final PrimaryRowMarshaller primaryRowMarshaller;
@@ -30,7 +28,6 @@ public class IndexedWALStorageProvider {
     private final int tombstoneCompactionFactor;
 
     public IndexedWALStorageProvider(AmzaStats amzaStats,
-        PartitionStripeFunction partitionStripeFunction,
         File[] workingDirectories,
         WALIndexProviderRegistry indexProviderRegistry,
         PrimaryRowMarshaller primaryRowMarshaller,
@@ -40,7 +37,6 @@ public class IndexedWALStorageProvider {
         int tombstoneCompactionFactor) {
         this.amzaStats = amzaStats;
 
-        this.partitionStripeFunction = partitionStripeFunction;
         this.workingDirectories = workingDirectories;
         this.indexProviderRegistry = indexProviderRegistry;
         this.primaryRowMarshaller = primaryRowMarshaller;
@@ -50,13 +46,13 @@ public class IndexedWALStorageProvider {
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
     }
 
-    public File baseKey(VersionedPartitionName versionedPartitionName) {
-        return new File(workingDirectories[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())],
+    public File baseKey(VersionedPartitionName versionedPartitionName, int stripe) {
+        return new File(workingDirectories[stripe],
             String.valueOf(versionedPartitionName.getPartitionVersion() % 1024));
     }
 
-    public WALStorage<?> create(VersionedPartitionName versionedPartitionName, PartitionProperties partitionProperties) throws Exception {
-        return create(baseKey(versionedPartitionName), versionedPartitionName, partitionProperties);
+    public WALStorage<?> create(VersionedPartitionName versionedPartitionName, int stripe, PartitionProperties partitionProperties) throws Exception {
+        return create(baseKey(versionedPartitionName, stripe), versionedPartitionName, partitionProperties);
     }
 
     public <I extends WALIndex> WALStorage<I> create(File baseKey,

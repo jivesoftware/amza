@@ -54,7 +54,7 @@ public class SystemWALStorage {
         WALUpdated updated) throws Exception {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         RowsChanged changed = partitionStore.getWalStorage().update(true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
@@ -69,7 +69,7 @@ public class SystemWALStorage {
 
     public TimestampedValue getTimestampedValue(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getTimestampedValue(prefix, key);
+        return partitionIndex.getSystemPartition(versionedPartitionName).getTimestampedValue(prefix, key);
     }
 
     public boolean get(VersionedPartitionName versionedPartitionName,
@@ -77,7 +77,7 @@ public class SystemWALStorage {
         UnprefixedWALKeys keys,
         KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys,
+        return partitionIndex.getSystemPartition(versionedPartitionName).streamValues(prefix, keys,
             (rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (valueTimestamp == -1) {
                     return stream.stream(rowType, prefix, key, null, -1, false, -1);
@@ -92,7 +92,7 @@ public class SystemWALStorage {
         UnprefixedWALKeys keys,
         KeyContainedStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).containsKeys(prefix, keys, stream);
+        return partitionIndex.getSystemPartition(versionedPartitionName).containsKeys(prefix, keys, stream);
     }
 
     public <R> R takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
@@ -101,7 +101,7 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         PartitionStripe.RowStreamer streamer = rowStream -> partitionStore.takeRowUpdatesSince(transactionId, rowStream);
         return takeRowUpdates.give(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, streamer);
     }
@@ -112,7 +112,7 @@ public class SystemWALStorage {
         TxKeyValueStream txKeyValueStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId,
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId,
             (rowFP, rowTxId, rowType, row) -> {
                 if (rowType == RowType.highwater && highwaters != null) {
                     WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
@@ -131,7 +131,7 @@ public class SystemWALStorage {
         TxKeyValueStream txKeyValueStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowUpdatesSince(prefix, transactionId,
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(prefix, transactionId,
             (rowFP, rowTxId, rowType, row) -> {
                 if (rowType == RowType.highwater && highwaters != null) {
                     WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
@@ -146,17 +146,17 @@ public class SystemWALStorage {
     public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, long transactionId, RowStream rowStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId, rowStream);
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId, rowStream);
     }
 
     public boolean rowScan(VersionedPartitionName versionedPartitionName, KeyValueStream keyValueStream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return partitionIndex.get(versionedPartitionName).getWalStorage().rowScan(keyValueStream);
+            return partitionStore.getWalStorage().rowScan(keyValueStream);
         }
     }
 
@@ -169,17 +169,17 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return partitionIndex.get(versionedPartitionName).getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
+            return partitionStore.getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
         }
     }
 
     private void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
                 tx.tx(new VersionedAquarium(versionedPartitionName, null, 0), highestTxId);
@@ -188,7 +188,8 @@ public class SystemWALStorage {
     }
 
     public long highestPartitionTxId(VersionedPartitionName versionedPartitionName, HighestPartitionTx tx) throws Exception {
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         if (partitionStore != null) {
             long highestTxId = partitionStore.getWalStorage().highestTxId();
             return tx.tx(new VersionedAquarium(versionedPartitionName, null, 0), highestTxId);
@@ -199,6 +200,7 @@ public class SystemWALStorage {
     }
 
     public long count(VersionedPartitionName versionedPartitionName) throws Exception {
-        return partitionIndex.get(versionedPartitionName).getWalStorage().count(keyStream -> true);
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().count(keyStream -> true);
     }
 }

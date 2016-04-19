@@ -39,13 +39,20 @@ import java.util.concurrent.ConcurrentSkipListMap;
 public class MemoryWALIndex implements WALIndex {
 
     private final String providerName;
+    private volatile int currentStripe;
 
     private final ConcurrentSkipListMap<byte[], WALPointer> index = new ConcurrentSkipListMap<>(KeyUtil::compare);
     private final ConcurrentSkipListMap<byte[], ConcurrentSkipListMap<Long, ConcurrentLinkedQueue<Long>>> prefixFpIndex = new ConcurrentSkipListMap<>(
         UnsignedBytes.lexicographicalComparator());
 
-    public MemoryWALIndex(String providerName) {
+    public MemoryWALIndex(String providerName, int currentStripe) {
         this.providerName = providerName;
+        this.currentStripe = currentStripe;
+    }
+
+    @Override
+    public int getStripe() {
+        return currentStripe;
     }
 
     @Override
@@ -265,9 +272,9 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
+    public CompactionWALIndex startCompaction(boolean hasActive, int compactionStripe) throws Exception {
 
-        final MemoryWALIndex rowsIndex = new MemoryWALIndex(providerName);
+        final MemoryWALIndex rowsIndex = new MemoryWALIndex(providerName, compactionStripe);
         return new CompactionWALIndex() {
 
             @Override
@@ -284,6 +291,7 @@ public class MemoryWALIndex implements WALIndex {
                 }
                 index.putAll(rowsIndex.index);
                 prefixFpIndex.putAll(rowsIndex.prefixFpIndex);
+                currentStripe = compactionStripe;
             }
 
             @Override

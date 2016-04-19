@@ -25,6 +25,7 @@ import com.jivesoftware.os.lab.api.ValueIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
@@ -48,7 +49,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
     private final VersionedPartitionName versionedPartitionName;
     private final LABPointerIndexWALIndexName name;
     private final LABPointerIndexConfig config;
-    private final LABEnvironment environment;
+    private final LABEnvironment[] environments;
+    private volatile int currentStripe;
     private ValueIndex primaryDb;
     private ValueIndex prefixDb;
 
@@ -59,28 +61,34 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     public LABPointerIndexWALIndex(String providerName,
         VersionedPartitionName versionedPartitionName,
-        LABEnvironment environment,
+        LABEnvironment[] environments,
+        int currentStripe,
         LABPointerIndexWALIndexName name,
         LABPointerIndexConfig config) throws Exception {
         this.providerName = providerName;
         this.versionedPartitionName = versionedPartitionName;
         this.name = name;
         this.config = config;
-        this.environment = environment;
-        this.primaryDb = environment.open(name.getPrimaryName(),
+        this.environments = environments;
+        this.currentStripe = currentStripe;
+        this.primaryDb = environments[currentStripe].open(name.getPrimaryName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxUpdatesBeforeFlush(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
             new LABRawhide());
-        this.prefixDb = environment.open(name.getPrefixName(),
+        this.prefixDb = environments[currentStripe].open(name.getPrefixName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxUpdatesBeforeFlush(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
             new LABRawhide());
+    }
+
+    public int getStripe() {
+        return currentStripe;
     }
 
     private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
@@ -109,7 +117,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                     wali.close();
                 }
                 for (Type type : Type.values()) {
-                    removeDatabase(type);
+                    removeDatabase(currentStripe, type);
                 }
             }
         } finally {
@@ -348,7 +356,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
+    public CompactionWALIndex startCompaction(boolean hasActive, int compactionStripe) throws Exception {
 
         synchronized (compactingTo) {
             WALIndex got = compactingTo.get();
@@ -360,15 +368,16 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 throw new IllegalStateException("Tried to compact a index that has been expunged: " + name);
             }
 
-            if (!hasActive) {
-                removeDatabase(Type.active);
-            }
-            removeDatabase(Type.compacting);
-            removeDatabase(Type.compacted);
-            removeDatabase(Type.backup);
+            removeDatabase(compactionStripe, Type.compacting);
+            removeDatabase(compactionStripe, Type.compacted);
+            removeDatabase(currentStripe, Type.backup);
 
-            final LABPointerIndexWALIndex compactingWALIndex = new LABPointerIndexWALIndex(providerName, versionedPartitionName, environment,
-                name.typeName(Type.compacting), config);
+            final LABPointerIndexWALIndex compactingWALIndex = new LABPointerIndexWALIndex(providerName,
+                versionedPartitionName,
+                environments,
+                compactionStripe,
+                name.typeName(Type.compacting),
+                config);
             compactingTo.set(compactingWALIndex);
 
             return new CompactionWALIndex() {
@@ -392,13 +401,16 @@ public class LABPointerIndexWALIndex implements WALIndex {
                         } else {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
 
-                            boolean compactedNonEmpty = rename(Type.compacting, Type.compacted, false);
+                            boolean compactedNonEmpty = rename(compactionStripe, Type.compacting, Type.compacted, false);
+
                             primaryDb.close(true, true);
                             primaryDb = null;
                             prefixDb.close(true, true);
                             prefixDb = null;
                             if (hasActive) {
-                                rename(Type.active, Type.backup, compactedNonEmpty);
+                                rename(currentStripe, Type.active, Type.backup, compactedNonEmpty);
+                            } else {
+                                removeDatabase(currentStripe, Type.active);
                             }
 
                             if (commit != null) {
@@ -406,11 +418,11 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             }
 
                             if (compactedNonEmpty) {
-                                rename(Type.compacted, Type.active, true);
+                                rename(compactionStripe, Type.compacted, Type.active, true);
                             }
-                            removeDatabase(Type.backup);
+                            removeDatabase(currentStripe, Type.backup);
 
-                            primaryDb = environment.open(name.getPrimaryName(),
+                            primaryDb = environments[compactionStripe].open(name.getPrimaryName(),
                                 config.getEntriesBetweenLeaps(),
                                 config.getMaxUpdatesBeforeFlush(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
@@ -418,7 +430,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
                                 new LABRawhide());
 
-                            prefixDb = environment.open(name.getPrefixName(),
+                            prefixDb = environments[compactionStripe].open(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
                                 config.getMaxUpdatesBeforeFlush(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
@@ -426,6 +438,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
                                 new LABRawhide());
 
+                            currentStripe = compactionStripe;
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }
                     } finally {
@@ -437,16 +450,17 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 public void abort() throws Exception {
                     compactingWALIndex.close();
                     if (compactingTo.compareAndSet(compactingWALIndex, null)) {
-                        removeDatabase(Type.compacting);
+                        removeDatabase(compactionStripe, Type.compacting);
                     }
                 }
             };
+
         }
     }
 
-    private boolean rename(Type fromType, Type toType, boolean required) throws Exception {
-        boolean primaryRenamed = environment.rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
-        boolean prefixRenamed = environment.rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
+    private boolean rename(int stripe, Type fromType, Type toType, boolean required) throws Exception {
+        boolean primaryRenamed = environments[stripe].rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
+        boolean prefixRenamed = environments[stripe].rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
         if (!primaryRenamed && (required || prefixRenamed)) {
             throw new IOException("Failed to rename"
                 + " from:" + name.typeName(fromType).getPrimaryName()
@@ -457,9 +471,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
         return primaryRenamed;
     }
 
-    private void removeDatabase(Type type) throws Exception {
-        environment.remove(name.typeName(type).getPrimaryName());
-        environment.remove(name.typeName(type).getPrefixName());
+    private void removeDatabase(int stripe, Type type) throws Exception {
+        environments[stripe].remove(name.typeName(type).getPrimaryName());
+        environments[stripe].remove(name.typeName(type).getPrefixName());
     }
 
     @Override
@@ -469,7 +483,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     @Override
     public String toString() {
         return "LABPointerIndexWALIndex{" + "name=" + name
-            + ", environment=" + environment
+            + ", environments=" + Arrays.toString(environments)
             + ", primaryDb=" + primaryDb
             + ", prefixDb=" + prefixDb
             + ", lock=" + lock

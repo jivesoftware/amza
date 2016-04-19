@@ -15,7 +15,6 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
@@ -45,7 +44,6 @@ public class PartitionComposter implements RowChanges {
     private final PartitionCreator partitionCreator;
     private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
-    private final PartitionStateStorage partitionStateStorage;
     private final StorageVersionProvider storageVersionProvider;
     private final BAInterner interner;
     private final StripingLocksProvider<PartitionName> stripingLocksProvider;
@@ -57,7 +55,6 @@ public class PartitionComposter implements RowChanges {
         PartitionIndex partitionIndex,
         PartitionCreator partitionCreator,
         AmzaRingStoreReader amzaRingReader,
-        PartitionStateStorage partitionStateStorage,
         PartitionStripeProvider partitionStripeProvider,
         StorageVersionProvider storageVersionProvider,
         BAInterner interner,
@@ -67,7 +64,6 @@ public class PartitionComposter implements RowChanges {
         this.partitionIndex = partitionIndex;
         this.partitionCreator = partitionCreator;
         this.amzaRingReader = amzaRingReader;
-        this.partitionStateStorage = partitionStateStorage;
         this.partitionStripeProvider = partitionStripeProvider;
         this.storageVersionProvider = storageVersionProvider;
         this.interner = interner;
@@ -121,7 +117,7 @@ public class PartitionComposter implements RowChanges {
         List<VersionedPartitionName> composted = new ArrayList<>();
         try {
             if (coldstart) {
-                partitionStateStorage.streamLocalAquariums((partitionName, ringMember, versionedAquarium) -> {
+                partitionStripeProvider.streamLocalAquariums((partitionName, ringMember, versionedAquarium, stripeIndex) -> {
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     if (compostIfNecessary(versionedAquarium)) {
                         composted.add(versionedPartitionName);
@@ -134,7 +130,7 @@ public class PartitionComposter implements RowChanges {
                     PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                     dirtyPartitions.remove(key);
                     try {
-                        partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                        partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
                             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                             if (compostIfNecessary(versionedAquarium)) {
                                 composted.add(versionedPartitionName);
@@ -157,23 +153,24 @@ public class PartitionComposter implements RowChanges {
 
         for (VersionedPartitionName compost : composted) {
             try {
-                partitionStateStorage.expunged(compost);
+                partitionStripeProvider.expunged(compost);
             } catch (Exception e) {
-                LOG.warn("Failed to expunge {}", new Object[] { compost }, e);
+                LOG.warn("Failed to expunge {}", new Object[]{compost}, e);
             }
         }
     }
 
     public void compostPartitionIfNecessary(PartitionName partitionName) throws Exception {
-        VersionedPartitionName compost = partitionStateStorage.tx(partitionName, versionedAquarium -> {
-            if (compostIfNecessary(versionedAquarium)) {
-                return versionedAquarium.getVersionedPartitionName();
-            } else {
-                return null;
-            }
-        });
+        VersionedPartitionName compost = partitionStripeProvider.txPartition(partitionName,
+            (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                if (compostIfNecessary(versionedAquarium)) {
+                    return versionedAquarium.getVersionedPartitionName();
+                } else {
+                    return null;
+                }
+            });
         if (compost != null) {
-            partitionStateStorage.expunged(compost);
+            partitionStripeProvider.expunged(compost);
         }
     }
 
@@ -187,34 +184,32 @@ public class PartitionComposter implements RowChanges {
                 || partitionCreator.isPartitionDisposed(partitionName)) { // Region Index
                 deletePartition(versionedPartitionName);
                 return true;
-            } else {
-                if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
-                    if (currentState == State.bootstrap || currentState == null) {
-                        LOG.info("Composting {} state:{} because we are not a member of the ring",
-                            versionedPartitionName, currentState);
-                        deletePartition(versionedPartitionName);
-                        return true;
-                    } else {
-                        LOG.info("Marking {} state:{} for disposal because we are not a member of the ring",
-                            versionedPartitionName, currentState);
-                        versionedAquarium.suggestState(State.expunged);
-                        return false;
-                    }
-                } else if (!partitionCreator.hasPartition(partitionName)) {
-                    if (currentState == State.bootstrap || currentState == null) {
-                        LOG.info("Composting {} state:{} because no partition is defined on this node",
-                            versionedPartitionName, currentState);
-                        deletePartition(versionedPartitionName);
-                        return true;
-                    } else {
-                        LOG.info("Marking {} state:{} for disposal because no partition is defined on this node",
-                            versionedPartitionName, currentState);
-                        versionedAquarium.suggestState(State.expunged);
-                        return false;
-                    }
+            } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
+                if (currentState == State.bootstrap || currentState == null) {
+                    LOG.info("Composting {} state:{} because we are not a member of the ring",
+                        versionedPartitionName, currentState);
+                    deletePartition(versionedPartitionName);
+                    return true;
                 } else {
+                    LOG.info("Marking {} state:{} for disposal because we are not a member of the ring",
+                        versionedPartitionName, currentState);
+                    versionedAquarium.suggestState(State.expunged);
                     return false;
                 }
+            } else if (!partitionCreator.hasPartition(partitionName)) {
+                if (currentState == State.bootstrap || currentState == null) {
+                    LOG.info("Composting {} state:{} because no partition is defined on this node",
+                        versionedPartitionName, currentState);
+                    deletePartition(versionedPartitionName);
+                    return true;
+                } else {
+                    LOG.info("Marking {} state:{} for disposal because no partition is defined on this node",
+                        versionedPartitionName, currentState);
+                    versionedAquarium.suggestState(State.expunged);
+                    return false;
+                }
+            } else {
+                return false;
             }
         }
     }
@@ -225,15 +220,15 @@ public class PartitionComposter implements RowChanges {
         amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         try {
             LOG.info("Expunging {} {}.", partitionName, partitionVersion);
-            partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                stripe.deleteDelta(versionedPartitionName);
+            partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                partitionStripe.deleteDelta(versionedPartitionName);
                 partitionIndex.delete(versionedPartitionName);
                 highwaterStorage.delete(versionedPartitionName);
                 return null;
             });
             LOG.info("Expunged {} {}.", partitionName, partitionVersion);
         } catch (Exception e) {
-            LOG.error("Failed to compost partition {}", new Object[] { versionedPartitionName }, e);
+            LOG.error("Failed to compost partition {}", new Object[]{versionedPartitionName}, e);
         } finally {
             amzaStats.endCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         }

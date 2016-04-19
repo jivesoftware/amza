@@ -6,7 +6,8 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader.RingNameStream;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -227,9 +228,10 @@ public class TakeCoordinator {
         }
     }
 
-    public void availableRowsStream(boolean system, TxHighestPartitionTx txHighestPartitionTx,
+    public void availableRowsStream(boolean system,
+        TxHighestPartitionTx txHighestPartitionTx,
         AmzaRingReader ringReader,
-        PartitionStateStorage partitionStateStorage,
+        PartitionStripeProvider partitionStripeProvider,
         RingMember remoteRingMember,
         long takeSessionId,
         long heartbeatIntervalMillis,
@@ -263,7 +265,7 @@ public class TakeCoordinator {
                 });
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(partitionStateStorage,
+                        ring.availableRowsStream(partitionStripeProvider,
                             txHighestPartitionTx,
                             remoteRingMember,
                             takeSessionId,
@@ -316,12 +318,13 @@ public class TakeCoordinator {
     public void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
         RingMember remoteRingMember,
         long takeSessionId,
+        PartitionStripe partitionStripe,
         VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
 
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
-        ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, versionedAquarium, localTxId);
+        ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, partitionStripe, versionedAquarium, localTxId);
     }
 
 }

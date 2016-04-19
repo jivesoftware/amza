@@ -1,13 +1,13 @@
 package com.jivesoftware.os.amza.service.take;
 
-import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.CategoryStream;
@@ -18,7 +18,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -98,7 +97,7 @@ public class TakeRingCoordinator {
                 reofferDeltaMillis));
     }
 
-    long availableRowsStream(PartitionStateStorage partitionStateStorage,
+    long availableRowsStream(PartitionStripeProvider partitionStripeProvider,
         TxHighestPartitionTx txHighestPartitionTx,
         RingMember ringMember,
         long takeSessionId,
@@ -112,7 +111,7 @@ public class TakeRingCoordinator {
                 coordinator.versionedPartitionProperties);
             PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
             if (properties.replicated) {
-                long timeout = coordinator.availableRowsStream(partitionStateStorage,
+                long timeout = coordinator.availableRowsStream(partitionStripeProvider,
                     txHighestPartitionTx,
                     takeSessionId,
                     ring,
@@ -127,6 +126,7 @@ public class TakeRingCoordinator {
     void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
         RingMember remoteRingMember,
         long takeSessionId,
+        PartitionStripe partitionStripe,
         VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(versionedAquarium.getVersionedPartitionName());
@@ -134,6 +134,7 @@ public class TakeRingCoordinator {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
             coordinator.rowsTaken(txHighestPartitionTx,
                 takeSessionId,
+                partitionStripe,
                 versionedAquarium,
                 versionedRing,
                 remoteRingMember,

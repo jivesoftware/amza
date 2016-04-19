@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
@@ -21,18 +20,18 @@ public class PartitionTombstoneCompactor {
     private ScheduledExecutorService scheduledThreadPool;
 
     private final PartitionIndex partitionIndex;
-    private final PartitionStripeFunction partitionStripeFunction;
+    private final PartitionStripeProvider partitionStripeProvider;
     private final long checkIfTombstoneCompactionIsNeededIntervalInMillis;
     private final int numberOfCompactorThreads;
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024);
 
     public PartitionTombstoneCompactor(PartitionIndex partitionIndex,
-        PartitionStripeFunction partitionStripeFunction,
+        PartitionStripeProvider partitionStripeProvider,
         long checkIfCompactionIsNeededIntervalInMillis,
         int numberOfCompactorThreads) {
 
         this.partitionIndex = partitionIndex;
-        this.partitionStripeFunction = partitionStripeFunction;
+        this.partitionStripeProvider = partitionStripeProvider;
         this.checkIfTombstoneCompactionIsNeededIntervalInMillis = checkIfCompactionIsNeededIntervalInMillis;
         this.numberOfCompactorThreads = numberOfCompactorThreads;
     }
@@ -44,11 +43,11 @@ public class PartitionTombstoneCompactor {
             new ThreadFactoryBuilder().setNameFormat("partition-tombstone-compactor-%d").build());
         for (int i = 0; i < numberOfCompactorThreads; i++) {
             int stripe = i;
-            int[] failedToCompact = { 0 };
+            int[] failedToCompact = {0};
             scheduledThreadPool.scheduleWithFixedDelay(() -> {
                 try {
                     failedToCompact[0] = 0;
-                    compactTombstone(stripe, false);
+                    compactTombstone(false, stripe);
                 } catch (Exception x) {
                     LOG.debug("Failing to compact tombstones.", x);
                     if (failedToCompact[0] % silenceBackToBackErrors == 0) {
@@ -65,11 +64,17 @@ public class PartitionTombstoneCompactor {
         this.scheduledThreadPool = null;
     }
 
-    public void compactTombstone(int stripe, boolean force) throws Exception {
-        partitionIndex.streamActivePartitions(versionedPartitionName -> {
-            if (stripe == -1 || partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripe) {
-                partitionIndex.get(versionedPartitionName).compactTombstone(force);
-            }
+    public void compactTombstone(boolean force, int compactStripe) throws Exception {
+        partitionIndex.streamActivePartitions((versionedPartitionName) -> {
+            // kinda poopy
+            partitionStripeProvider.txPartition(versionedPartitionName.getPartitionName(),
+                (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                    if (compactStripe == -1 || stripe == compactStripe) {
+                        partitionIndex.get(versionedPartitionName, stripe).compactTombstone(force, stripe);
+                    }
+                    return null;
+                });
+
             return true;
         });
     }

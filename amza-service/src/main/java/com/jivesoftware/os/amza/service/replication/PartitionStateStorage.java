@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
+import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
@@ -9,7 +10,6 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
-import com.jivesoftware.os.amza.service.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionTransactor;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Waterline;
@@ -46,20 +46,24 @@ public class PartitionStateStorage implements TxPartitionState {
         this.awaitNotify = awaitNotify;
     }
 
-    private VersionedAquarium getVersionedAquarium(PartitionName partitionName) throws Exception {
-        if (partitionName.isSystemPartition()) {
-            return new VersionedAquarium(new VersionedPartitionName(partitionName, 0), null, 0);
-        }
-
-        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-        return new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
-    }
-
     @Override
     public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-        VersionedAquarium versionedAquarium = getVersionedAquarium(partitionName);
-        return transactor.doWithOne(versionedAquarium, tx);
+
+        VersionedAquarium versionedAquarium;
+        int stripe;
+        if (partitionName.isSystemPartition()) {
+            versionedAquarium = new VersionedAquarium(new VersionedPartitionName(partitionName, 0), null, 0);
+            stripe = storageVersionProvider.getSystemStripe(partitionName);
+        } else {
+            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+            stripe = storageVersionProvider.getCurrentStripe(storageVersion);
+            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+            versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+        }
+        if (stripe == -1) {
+            throw new IllegalStateException("Failed to compute stripe for " + partitionName);
+        }
+        return transactor.doWithOne(versionedAquarium, stripe, tx);
     }
 
     public RemoteVersionedState getRemoteVersionedState(RingMember remoteRingMember, PartitionName partitionName) throws Exception {
@@ -82,7 +86,7 @@ public class PartitionStateStorage implements TxPartitionState {
         }
 
         if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-            return tx(partitionName, versionedAquarium -> {
+            return tx(partitionName, (versionedAquarium, stripe) -> {
                 Waterline leaderWaterline = versionedAquarium.awaitOnline(timeoutMillis).getLeaderWaterline();
                 if (!aquariumProvider.isOnline(leaderWaterline)) {
                     versionedAquarium.wipeTheGlass();
@@ -96,28 +100,48 @@ public class PartitionStateStorage implements TxPartitionState {
 
     public interface PartitionMemberStateStream {
 
-        boolean stream(PartitionName partitionName, RingMember ringMember, VersionedAquarium versionedAquarium) throws Exception;
+        boolean stream(PartitionName partitionName, RingMember ringMember, VersionedAquarium versionedAquarium, int stripe) throws Exception;
     }
 
     public void streamLocalAquariums(PartitionMemberStateStream stream) throws Exception {
         storageVersionProvider.streamLocal((partitionName, ringMember, storageVersion) -> {
             VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
             VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
-            return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> stream.stream(partitionName, ringMember, versionedAquarium1));
+            int stripe = stripe(partitionName, storageVersion);
+            return transactor.doWithOne(versionedAquarium, stripe,
+                (versionedAquarium1, stripe1) -> stream.stream(partitionName, ringMember, versionedAquarium1, stripe1));
         });
     }
 
     public void expunged(VersionedPartitionName versionedPartitionName) throws Exception {
-        LOG.info("Removing storage versions for composted partition: {}", versionedPartitionName);
-        transactor.doWithAll(new VersionedAquarium(versionedPartitionName, aquariumProvider, -1), versionedAquarium -> {
-            awaitNotify.notifyChange(versionedPartitionName.getPartitionName(), () -> {
-                versionedAquarium.delete();
-                storageVersionProvider.remove(rootRingMember, versionedAquarium.getVersionedPartitionName());
-                return true;
+        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, -1);
+        StorageVersion storageVersion = storageVersionProvider.lookupStorageVersion(versionedPartitionName.getPartitionName());
+        int stripe = storageVersion == null ? -1 : storageVersionProvider.getCurrentStripe(storageVersion);
+
+        if (stripe != -1) {
+            LOG.info("Removing storage versions for composted partition: {} stripe:{}", versionedPartitionName, stripe);
+            transactor.doWithAll(versionedAquarium, stripe, (versionedAquarium1, stripe1) -> {
+                awaitNotify.notifyChange(versionedPartitionName.getPartitionName(), () -> {
+                    versionedAquarium1.delete();
+                    storageVersionProvider.remove(rootRingMember, versionedAquarium1.getVersionedPartitionName());
+                    return true;
+                });
+                return null;
             });
-            return null;
-        });
-        takeCoordinator.expunged(versionedPartitionName);
+            takeCoordinator.expunged(versionedPartitionName);
+        } else {
+            LOG.warn("Failed to locate storage versions for composted partition: {}", versionedPartitionName);
+        }
+    }
+
+    private int stripe(PartitionName partitionName, StorageVersion storageVersion) {
+        int stripe = -1;
+        if (partitionName.isSystemPartition()) {
+            stripe = storageVersionProvider.getSystemStripe(partitionName);
+        } else {
+            stripe = storageVersionProvider.getCurrentStripe(storageVersion);
+        }
+        return stripe;
     }
 
 }

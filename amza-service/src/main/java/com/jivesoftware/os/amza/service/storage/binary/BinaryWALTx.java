@@ -129,12 +129,14 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider, VersionedPartitionName versionedPartitionName) throws Exception {
+    public <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider,
+        VersionedPartitionName versionedPartitionName,
+        int stripe) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
             initIO();
 
-            I walIndex = walIndexProvider.createIndex(versionedPartitionName);
+            I walIndex = walIndexProvider.createIndex(versionedPartitionName, stripe);
             if (walIndex.isEmpty()) {
                 rebuildIndex(versionedPartitionName, walIndex, true);
             }
@@ -145,11 +147,13 @@ public class BinaryWALTx implements WALTx {
         }
     }
 
-    private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName, I walIndex, boolean fsync) throws Exception {
-        LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
+    private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName,
+        I compactableWALIndex,
+        boolean fsync) throws Exception {
+        LOG.info("Rebuilding {} for {}", compactableWALIndex.getClass().getSimpleName(), versionedPartitionName);
 
         MutableLong rebuilt = new MutableLong();
-        CompactionWALIndex compactionWALIndex = walIndex.startCompaction(false);
+        CompactionWALIndex compactionWALIndex = compactableWALIndex.startCompaction(false, compactableWALIndex.getStripe());
         compactionWALIndex.merge(
             stream -> primaryRowMarshaller.fromRows(
                 txFpRowStream -> {
@@ -167,8 +171,8 @@ public class BinaryWALTx implements WALTx {
                 }));
         compactionWALIndex.commit(fsync, null);
 
-        LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
-        walIndex.commit(fsync);
+        LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), compactableWALIndex.getClass().getSimpleName(), versionedPartitionName);
+        compactableWALIndex.commit(fsync);
     }
 
     private void initIO() throws Exception {
@@ -215,12 +219,13 @@ public class BinaryWALTx implements WALTx {
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
-        I compactableWALIndex) throws Exception {
+        I compactableWALIndex,
+        int stripe) throws Exception {
 
         long start = System.currentTimeMillis();
 
         Preconditions.checkNotNull(compactableWALIndex, "If you don't have one use NoOpWALIndex.");
-        CompactionWALIndex compactionRowIndex = compactableWALIndex.startCompaction(true);
+        CompactionWALIndex compactionRowIndex = compactableWALIndex.startCompaction(true, stripe);
 
         ioProvider.delete(compactingKey, name);
         if (!ioProvider.ensureKey(compactingKey)) {
@@ -268,7 +273,7 @@ public class BinaryWALTx implements WALTx {
                     ttlVersion,
                     null);
             } catch (Exception x) {
-                LOG.error("Failure while compacting key:{} name:{} from:{} to:{}", new Object[] { key, name, prevEndOfLastRow, endOfLastRow }, x);
+                LOG.error("Failure while compacting key:{} name:{} from:{} to:{}", new Object[]{key, name, prevEndOfLastRow, endOfLastRow}, x);
                 compactionRowIndex.abort();
                 throw x;
             }
@@ -347,7 +352,7 @@ public class BinaryWALTx implements WALTx {
                     ttlCount.longValue(),
                     (System.currentTimeMillis() - start));
             } catch (Exception x) {
-                LOG.error("Failure while compacting key:{} name:{} from:{} to end of WAL", new Object[] { key, name, finalEndOfLastRow }, x);
+                LOG.error("Failure while compacting key:{} name:{} from:{} to end of WAL", new Object[]{key, name, finalEndOfLastRow}, x);
                 compactionRowIndex.abort();
                 throw x;
             } finally {
@@ -383,7 +388,7 @@ public class BinaryWALTx implements WALTx {
         List<CompactionFlushable> flushables = new ArrayList<>();
         MutableInt estimatedSizeInBytes = new MutableInt(0);
         MutableLong flushTxId = new MutableLong(-1);
-        byte[][] keepCarryingOver = { carryOverEndOfMerge };
+        byte[][] keepCarryingOver = {carryOverEndOfMerge};
         primaryRowMarshaller.fromRows(
             txFpRowStream -> io.scan(startAtRow, false,
                 (rowFP, rowTxId, rowType, row) -> {

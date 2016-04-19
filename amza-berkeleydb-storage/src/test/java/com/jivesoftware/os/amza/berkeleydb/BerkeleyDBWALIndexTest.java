@@ -4,7 +4,6 @@ import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointerStream;
@@ -181,7 +180,7 @@ public class BerkeleyDBWALIndexTest {
             });
         }
 
-        CompactionWALIndex compactionWALIndex = index.startCompaction(true);
+        CompactionWALIndex compactionWALIndex = index.startCompaction(true, 0);
         compactionWALIndex.merge((TxKeyPointerStream stream) -> {
             for (long i = 100; i < 200; i++) {
                 if (!stream.stream(i, UIO.longBytes(-i), UIO.longBytes(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
@@ -204,7 +203,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider("berkeleydb", new PartitionStripeFunction(1), new File[]{dir}).createIndex(partitionName);
+        return new BerkeleyDBWALIndexProvider("berkeleydb", 1, new File[]{dir}).createIndex(partitionName, 0);
     }
 
 }

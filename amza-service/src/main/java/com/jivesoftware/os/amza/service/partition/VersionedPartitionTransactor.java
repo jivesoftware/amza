@@ -22,18 +22,21 @@ public class VersionedPartitionTransactor {
     }
 
     public <R> R doWithOne(VersionedAquarium versionedAquarium,
+        int stripe,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedAquarium, 1, tx);
+        return doWith(versionedAquarium, stripe, 1, tx);
     }
 
     public <R> R doWithAll(VersionedAquarium versionedAquarium,
+        int stripe,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedAquarium, numPermits, tx);
+        return doWith(versionedAquarium, stripe, numPermits, tx);
     }
 
     private <R> R doWith(VersionedAquarium versionedAquarium,
+        int stripe,
         int count,
         PartitionTx<R> tx) throws Exception {
 
@@ -41,7 +44,7 @@ public class VersionedPartitionTransactor {
         Semaphore semaphore = semaphore(versionedPartitionName);
         semaphore.acquire(count);
         try {
-            return tx.tx(versionedAquarium);
+            return tx.tx(versionedAquarium, stripe);
         } finally {
             semaphore.release(count);
         }

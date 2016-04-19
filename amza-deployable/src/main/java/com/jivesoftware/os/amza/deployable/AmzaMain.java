@@ -217,15 +217,18 @@ public class AmzaMain {
                 orderIdProvider,
                 idPacker,
                 partitionPropertyMarshaller,
-                (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+                (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, numberOfStripes) -> {
                     indexProviderRegistry.register(
-                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
+                            numberOfStripes,
+                            workingIndexDirectories),
                         persistentRowIOProvider);
 
-                    indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
-                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                        partitionStripeFunction,
-                        workingIndexDirectories),
+                    indexProviderRegistry.register(
+                        new LABPointerIndexWALIndexProvider(labConfig,
+                            LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                            numberOfStripes,
+                            workingIndexDirectories),
                         persistentRowIOProvider);
 
                 },

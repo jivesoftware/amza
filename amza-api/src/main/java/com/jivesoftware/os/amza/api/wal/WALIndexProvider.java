@@ -21,9 +21,9 @@ public interface WALIndexProvider<T> {
 
     String getName();
 
-    T createIndex(VersionedPartitionName versionedPartitionName) throws Exception;
+    T createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception;
 
-    void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception;
+    void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception;
 
     void flush(Iterable<T> indexes, boolean fsync) throws Exception;
 }

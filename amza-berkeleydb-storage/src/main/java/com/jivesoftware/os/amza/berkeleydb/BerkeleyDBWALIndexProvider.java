@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.berkeleydb;
 
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -12,7 +11,6 @@ import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 import java.io.File;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -24,18 +22,13 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     public static final String INDEX_CLASS_NAME = "berkeleydb";
 
     private final String name;
-    private final PartitionStripeFunction partitionStripeFunction;
     private final Environment[] environments;
 
-    public BerkeleyDBWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, File[] baseDirs) {
+    public BerkeleyDBWALIndexProvider(String name, int numberOfStripes, File[] baseDirs) {
         this.name = name;
-        this.partitionStripeFunction = partitionStripeFunction;
-        this.environments = new Environment[partitionStripeFunction.getNumberOfStripes()];
+        this.environments = new Environment[numberOfStripes];
         for (int i = 0; i < environments.length; i++) {
-            File active = new File(
-                new File(
-                    new File(baseDirs[i % baseDirs.length], AmzaVersionConstants.LATEST_VERSION), INDEX_CLASS_NAME),
-                String.valueOf(i));
+            File active = new File(new File(new File(baseDirs[i % baseDirs.length], AmzaVersionConstants.LATEST_VERSION), INDEX_CLASS_NAME), String.valueOf(i));
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
@@ -50,25 +43,21 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
         }
     }
 
-    private Environment getEnvironment(VersionedPartitionName versionedPartitionName) {
-        return environments[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())];
-    }
-
     @Override
     public String getName() {
         return name;
     }
 
     @Override
-    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         BerkeleyDBWALIndexName indexName = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
-        return new BerkeleyDBWALIndex(name, versionedPartitionName, getEnvironment(versionedPartitionName), indexName);
+        return new BerkeleyDBWALIndex(name, versionedPartitionName, environments, indexName, stripe);
     }
 
     @Override
-    public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
-        Environment env = getEnvironment(versionedPartitionName);
+        Environment env = environments[stripe];
         for (BerkeleyDBWALIndexName n : name.all()) {
             try {
                 env.removeDatabase(null, n.getPrimaryName());
@@ -89,7 +78,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     public void flush(Iterable<BerkeleyDBWALIndex> indexes, boolean fsync) throws Exception {
         Set<Integer> stripes = Sets.newHashSet();
         for (BerkeleyDBWALIndex index : indexes) {
-            stripes.add(partitionStripeFunction.stripe(index.getVersionedPartitionName().getPartitionName()));
+            stripes.add(index.getStripe());
         }
         for (int stripe : stripes) {
             environments[stripe].flushLog(fsync);

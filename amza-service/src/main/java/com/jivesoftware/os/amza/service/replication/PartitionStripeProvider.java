@@ -1,15 +1,16 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Durability;
-import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
-import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
+import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
+import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -31,75 +32,84 @@ public class PartitionStripeProvider {
 
     private final ExecutorService compactDeltasThreadPool;
     private final ExecutorService flusherExecutor;
-    private final PartitionStripeFunction partitionStripeFunction;
-    private final PartitionStripe[] deltaStripes;
+    private final PartitionStateStorage partitionStateStorage;
+    private final PartitionStripe[] partitionStripes;
     private final HighwaterStorage[] highwaterStorages;
     private final ExecutorService[] rowTakerThreadPools;
     private final RowsTaker[] rowsTakers;
     private final AsyncStripeFlusher[] flushers;
     private final long deltaStripeCompactionIntervalInMillis;
 
-    public PartitionStripeProvider(PartitionStripeFunction partitionStripeFunction,
-        PartitionStripe[] deltaStripes,
+    public PartitionStripeProvider(PartitionStateStorage partitionStateStorage,
+        PartitionStripe[] partitionStripes,
         HighwaterStorage[] highwaterStorages,
         ExecutorService[] rowTakerThreadPools,
         RowsTaker[] rowsTakers,
         long asyncFlushIntervalMillis,
         long deltaStripeCompactionIntervalInMillis) {
 
-        this.partitionStripeFunction = partitionStripeFunction;
+        this.partitionStateStorage = partitionStateStorage;
         this.deltaStripeCompactionIntervalInMillis = deltaStripeCompactionIntervalInMillis;
-        this.deltaStripes = Arrays.copyOf(deltaStripes, deltaStripes.length);
+        this.partitionStripes = Arrays.copyOf(partitionStripes, partitionStripes.length);
         this.highwaterStorages = Arrays.copyOf(highwaterStorages, highwaterStorages.length);
         this.rowTakerThreadPools = Arrays.copyOf(rowTakerThreadPools, rowTakerThreadPools.length);
         this.rowsTakers = Arrays.copyOf(rowsTakers, rowsTakers.length);
 
-        this.compactDeltasThreadPool = Executors.newFixedThreadPool(deltaStripes.length,
+        this.compactDeltasThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-        this.flusherExecutor = Executors.newFixedThreadPool(deltaStripes.length,
+        this.flusherExecutor = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("stripe-flusher-%d").build());
 
-        this.flushers = new AsyncStripeFlusher[deltaStripes.length];
-        for (int i = 0; i < deltaStripes.length; i++) {
-            this.flushers[i] = new AsyncStripeFlusher(this.deltaStripes[i], this.highwaterStorages[i], asyncFlushIntervalMillis);
+        this.flushers = new AsyncStripeFlusher[partitionStripes.length];
+        for (int i = 0; i < partitionStripes.length; i++) {
+            this.flushers[i] = new AsyncStripeFlusher(this.partitionStripes[i], this.highwaterStorages[i], asyncFlushIntervalMillis);
         }
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
-        Preconditions.checkArgument(!partitionName.isSystemPartition(), "No systems allowed.");
-        int stripeIndex = partitionStripeFunction.stripe(partitionName);
-        return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
+        return partitionStateStorage.tx(partitionName,
+            (versionedAquarium, stripeIndex) -> tx.tx(stripeIndex, partitionStripes[stripeIndex], highwaterStorages[stripeIndex], versionedAquarium));
+
     }
 
     public void flush(PartitionName partitionName, Durability durability, long waitForFlushInMillis) throws Exception {
-        int stripeIndex = partitionStripeFunction.stripe(partitionName);
-        flushers[stripeIndex].forceFlush(durability, waitForFlushInMillis);
+        partitionStateStorage.tx(partitionName,
+            (versionedAquarium, stripeIndex) -> {
+                flushers[stripeIndex].forceFlush(durability, waitForFlushInMillis);
+                return null;
+            });
     }
 
-    ExecutorService getRowTakerThreadPool(PartitionName partitionName) {
-        int stripeIndex = partitionStripeFunction.stripe(partitionName);
-        return rowTakerThreadPools[stripeIndex];
+    ExecutorService getRowTakerThreadPool(PartitionName partitionName) throws Exception {
+        return partitionStateStorage.tx(partitionName,
+            (versionedAquarium, stripeIndex) -> {
+                return rowTakerThreadPools[stripeIndex];
+            });
+
     }
 
-    RowsTaker getRowsTaker(PartitionName partitionName) {
-        int stripeIndex = partitionStripeFunction.stripe(partitionName);
-        return rowsTakers[stripeIndex];
+    RowsTaker getRowsTaker(PartitionName partitionName) throws Exception {
+        return partitionStateStorage.tx(partitionName,
+            (versionedAquarium, stripeIndex) -> {
+                return rowsTakers[stripeIndex];
+            });
+
     }
 
     public void mergeAll(boolean force) {
-        for (PartitionStripe stripe : deltaStripes) {
+        for (PartitionStripe stripe : partitionStripes) {
             stripe.merge(force);
         }
     }
 
     public void load() throws Exception {
-        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(deltaStripes.length,
+        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
-        for (PartitionStripe partitionStripe : deltaStripes) {
+        for (PartitionStripe partitionStripe : partitionStripes) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    partitionStripe.load();
+                    partitionStripe.load(partitionStateStorage);
                 } catch (Exception x) {
                     LOG.error("Failed while loading " + partitionStripe, x);
                     throw new RuntimeException(x);
@@ -108,21 +118,21 @@ public class PartitionStripeProvider {
         }
         int index = 0;
         for (Future future : futures) {
-            LOG.info("Waiting for stripe:{} to load...", deltaStripes[index]);
+            LOG.info("Waiting for stripe:{} to load...", partitionStripes[index]);
             try {
                 future.get();
                 index++;
             } catch (InterruptedException | ExecutionException x) {
-                LOG.error("Failed to load stripe:{}.", deltaStripes[index], x);
+                LOG.error("Failed to load stripe:{}.", partitionStripes[index], x);
                 throw x;
             }
         }
         stripeLoaderThreadPool.shutdown();
-        LOG.info("All stripes {} have been loaded.", deltaStripes.length);
+        LOG.info("All stripes {} have been loaded.", partitionStripes.length);
     }
 
     public void start() {
-        for (PartitionStripe partitionStripe : deltaStripes) {
+        for (PartitionStripe partitionStripe : partitionStripes) {
             compactDeltasThreadPool.submit(() -> {
                 while (true) {
                     try {
@@ -157,9 +167,27 @@ public class PartitionStripeProvider {
         }
     }
 
+    // TODO - begin factor out 'Later'
+    public void streamLocalAquariums(PartitionStateStorage.PartitionMemberStateStream stream) throws Exception {
+        partitionStateStorage.streamLocalAquariums(stream);
+    }
+
+    public RemoteVersionedState getRemoteVersionedState(RingMember ringMember, PartitionName partitionName) throws Exception {
+        return partitionStateStorage.getRemoteVersionedState(ringMember, partitionName);
+    }
+
+    public Waterline awaitLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception {
+        return partitionStateStorage.awaitLeader(partitionName, waitForLeaderElection);
+    }
+
+    void expunged(VersionedPartitionName expunged) throws Exception {
+        partitionStateStorage.expunged(expunged);
+    }
+    // TODO - end factor out 'Later'
+
     public interface StripeTx<R> {
 
-        R tx(PartitionStripe stripe, HighwaterStorage highwaterStorage) throws Exception;
+        R tx(int stripe, PartitionStripe partitionStripe, HighwaterStorage highwaterStorage, VersionedAquarium versionedAquarium) throws Exception;
     }
 
     private final static class AsyncStripeFlusher implements Runnable {

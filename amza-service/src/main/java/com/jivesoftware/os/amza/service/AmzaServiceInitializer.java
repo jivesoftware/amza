@@ -30,7 +30,6 @@ import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
@@ -299,13 +298,7 @@ public class AmzaServiceInitializer {
             awaitOnline, sickThreads);
         amzaSystemPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
-        PartitionStateStorage partitionStateStorage = new PartitionStateStorage(ringMember,
-            ringStoreReader,
-            aquariumProvider,
-            storageVersionProvider,
-            takeCoordinator,
-            awaitOnline);
-
+        
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
@@ -356,9 +349,14 @@ public class AmzaServiceInitializer {
             config.flushHighwatersAfterNUpdates);
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
-            partitionStateStorage,
             partitionStripes,
             highwaterStorage,
+            ringMember,
+            ringStoreReader,
+            aquariumProvider,
+            storageVersionProvider,
+            takeCoordinator,
+            awaitOnline,
             config.asyncFsyncIntervalMillis,
             config.deltaStripeCompactionIntervalInMillis);
 

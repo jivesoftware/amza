@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -37,6 +38,7 @@ public class PartitionStripe {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats stats;
     private final String name;
     private final int stripe;
     private final PartitionIndex partitionIndex;
@@ -46,7 +48,8 @@ public class PartitionStripe {
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
 
-    public PartitionStripe(String name,
+    public PartitionStripe(AmzaStats stats,
+        String name,
         int stripe,
         PartitionIndex partitionIndex,
         StorageVersionProvider storageVersionProvider,
@@ -54,6 +57,8 @@ public class PartitionStripe {
         RowChanges allRowChanges,
         PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller) {
+
+        this.stats = stats;
         this.name = name;
         this.stripe = stripe;
         this.partitionIndex = partitionIndex;
@@ -162,7 +167,10 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, (stream) -> stream.stream(key), keyValueStream);
+            long start = System.currentTimeMillis();
+            boolean got = storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, (stream) -> stream.stream(key), keyValueStream);
+            stats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            return got;
         }
     }
 
@@ -176,7 +184,10 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys, stream);
+            long start = System.currentTimeMillis();
+            boolean got = storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys, stream);
+            stats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            return got;
         }
 
     }
@@ -190,7 +201,9 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
+            long start = System.currentTimeMillis();
             storage.rowScan(versionedPartitionName, partitionStore, keyValueStream);
+            stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
         }
 
     }
@@ -211,7 +224,9 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
+            long start = System.currentTimeMillis();
             storage.rangeScan(versionedPartitionName, partitionStore, fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
+            stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
         }
 
     }
@@ -352,7 +367,10 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return storage.containsKeys(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys, stream);
+            long start = System.currentTimeMillis();
+            boolean contained = storage.containsKeys(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys, stream);
+            stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            return contained;
         }
 
     }

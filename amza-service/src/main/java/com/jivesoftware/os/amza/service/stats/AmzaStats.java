@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -110,9 +109,9 @@ public class AmzaStats {
     static public class Totals {
 
         public final AtomicLong gets = new AtomicLong();
-        public final AtomicLong getsLag = new AtomicLong();
+        public final AtomicLong getsLatency = new AtomicLong();
         public final AtomicLong scans = new AtomicLong();
-        public final AtomicLong scansLag = new AtomicLong();
+        public final AtomicLong scansLatency = new AtomicLong();
         public final AtomicLong updates = new AtomicLong();
         public final AtomicLong updatesLag = new AtomicLong();
         public final AtomicLong offers = new AtomicLong();
@@ -240,6 +239,22 @@ public class AmzaStats {
         long lag = lag(smallestTxId);
         totals.directAppliesLag.set(lag);
         grandTotals.directAppliesLag.set((grandTotals.directAppliesLag.get() + lag) / 2);
+    }
+
+    public void gets(PartitionName partitionName, int count, long lag) {
+        grandTotals.gets.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.gets.addAndGet(count);
+        totals.getsLatency.set(lag);
+        grandTotals.getsLatency.set((grandTotals.getsLatency.get() + lag) / 2);
+    }
+
+    public void scans(PartitionName partitionName, int count, long lag) {
+        grandTotals.scans.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.scans.addAndGet(count);
+        totals.scansLatency.set(lag);
+        grandTotals.scansLatency.set((grandTotals.scansLatency.get() + lag) / 2);
     }
 
     private Totals partitionTotals(PartitionName versionedPartitionName) {

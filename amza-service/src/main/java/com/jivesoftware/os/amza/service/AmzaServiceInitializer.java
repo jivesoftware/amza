@@ -350,7 +350,8 @@ public class AmzaServiceInitializer {
                 numProc);
 
             int stripeId = i;
-            partitionStripes[i] = new PartitionStripe("stripe-" + i,
+            partitionStripes[i] = new PartitionStripe(amzaStats,
+                "stripe-" + i,
                 i,
                 partitionIndex,
                 storageVersionProvider,

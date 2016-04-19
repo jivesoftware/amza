@@ -58,6 +58,12 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
         Map<String, Object> data = Maps.newHashMap();
 
         try {
+            if (input.action.equals("rebalanceStripes")) {
+                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("rebalanceStripes-%d").build()).submit(() -> {
+                    amzaService.rebalanceStripes();
+                });
+            }
+
             if (input.action.equals("forceCompactionDeltas")) {
                 Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceCompactionDeltas-%d").build()).submit(() -> {
                     amzaService.mergeAllDeltas(true);

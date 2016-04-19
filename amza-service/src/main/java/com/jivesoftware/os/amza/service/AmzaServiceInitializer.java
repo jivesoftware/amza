@@ -58,7 +58,6 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
-import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.RowsTakerFactory;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Liveliness;
@@ -79,7 +78,6 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -207,8 +205,6 @@ public class AmzaServiceInitializer {
             config.takeSystemReofferDeltaMillis,
             config.takeReofferDeltaMillis);
 
-      
-
         File[] walDirs = new File[numberOfStripes];
         long[] stripeVersions = new long[numberOfStripes];
         for (int i = 0; i < numberOfStripes; i++) {
@@ -237,8 +233,6 @@ public class AmzaServiceInitializer {
             }
         }
 
-
-        
         ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, numProc);
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, numProc);
 
@@ -248,7 +242,6 @@ public class AmzaServiceInitializer {
             ringsCache,
             ringMemberRingNamesCache,
             nodeCacheId);
-
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -272,8 +265,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             awaitOnline);
 
-
-         PartitionCreator partitionCreator = new PartitionCreator(
+        PartitionCreator partitionCreator = new PartitionCreator(
             orderIdProvider,
             partitionPropertyMarshaller,
             partitionIndex,
@@ -319,20 +311,14 @@ public class AmzaServiceInitializer {
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
 
-        ExecutorService[] rowTakerThreadPools = new ExecutorService[numberOfStripes];
-        RowsTaker[] rowsTakers = new RowsTaker[numberOfStripes];
         PartitionStripe[] partitionStripes = new PartitionStripe[numberOfStripes];
-        HighwaterStorage[] highwaterStorages = new HighwaterStorage[numberOfStripes];
+
         BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
             amzaStats.ioStats,
             -1,
             0,
             config.useMemMap);
         for (int i = 0; i < numberOfStripes; i++) {
-            rowTakerThreadPools[i] = Executors.newFixedThreadPool(config.numberOfTakerThreads,
-                new ThreadFactoryBuilder().setNameFormat("stripe-" + i + "-rowTakerThreadPool-%d").build());
-
-            rowsTakers[i] = rowsTakerFactory.create();
 
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], deltaRowIOProvider, primaryRowMarshaller,
                 highwaterRowMarshaller, config.corruptionParanoiaFactor);
@@ -349,7 +335,6 @@ public class AmzaServiceInitializer {
                 maxUpdatesBeforeCompaction,
                 numProc);
 
-            int stripeId = i;
             partitionStripes[i] = new PartitionStripe(amzaStats,
                 "stripe-" + i,
                 i,
@@ -359,21 +344,20 @@ public class AmzaServiceInitializer {
                 amzaStripedPartitionWatcher,
                 primaryRowMarshaller,
                 highwaterRowMarshaller);
-            highwaterStorages[i] = new PartitionBackedHighwaterStorage(interner,
-                orderIdProvider,
-                ringMember,
-                partitionIndex,
-                systemWALStorage,
-                walUpdated,
-                config.flushHighwatersAfterNUpdates);
         }
+
+        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(interner,
+            orderIdProvider,
+            ringMember,
+            partitionIndex,
+            systemWALStorage,
+            walUpdated,
+            config.flushHighwatersAfterNUpdates);
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
             partitionStateStorage,
             partitionStripes,
-            highwaterStorages,
-            rowTakerThreadPools,
-            rowsTakers,
+            highwaterStorage,
             config.asyncFsyncIntervalMillis,
             config.deltaStripeCompactionIntervalInMillis);
 
@@ -399,7 +383,7 @@ public class AmzaServiceInitializer {
             int count = 0;
             for (PartitionName partitionName : partitionIndex.getMemberPartitions(ringStoreReader)) {
                 count++;
-                partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage1, versionedAquarium) -> {
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripe);
                     if (partitionStore != null) {
@@ -429,9 +413,10 @@ public class AmzaServiceInitializer {
             ringHost,
             systemHighwaterStorage,
             rowsTakerFactory.create(),
-            partitionIndex,
             partitionStripeProvider,
             availableRowsTaker,
+            Executors.newFixedThreadPool(config.numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),
+            rowsTakerFactory.create(),
             new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, systemHighwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),

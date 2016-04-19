@@ -26,7 +26,6 @@ import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
@@ -73,7 +72,6 @@ public class RowChangeTaker implements RowChanges {
     private final RingHost ringHost;
     private final HighwaterStorage systemHighwaterStorage;
     private final RowsTaker systemRowsTaker;
-    private final PartitionIndex partitionIndex;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AvailableRowsTaker availableRowsTaker;
     private final SystemPartitionCommitChanges systemPartitionCommitChanges;
@@ -87,6 +85,9 @@ public class RowChangeTaker implements RowChanges {
     private final ExecutorService systemRowTakerThreadPool;
     private final ExecutorService availableRowsReceiverThreadPool;
     private final ExecutorService consumerThreadPool;
+
+    private final ExecutorService stripedRowTakerThreadPool;
+    private final RowsTaker stripedRowsTaker;
 
     private final Object[] stripedConsumerLocks;
     private final Object systemConsumerLock = new Object();
@@ -103,9 +104,10 @@ public class RowChangeTaker implements RowChanges {
         RingHost ringHost,
         HighwaterStorage systemHighwaterStorage,
         RowsTaker systemRowsTaker,
-        PartitionIndex partitionIndex,
         PartitionStripeProvider partitionStripeProvider,
         AvailableRowsTaker availableRowsTaker,
+        ExecutorService rowTakerThreadPool,
+        RowsTaker rowsTaker,
         SystemPartitionCommitChanges systemPartitionCommitChanges,
         StripedPartitionCommitChanges stripedPartitionCommitChanges,
         OrderIdProvider sessionIdProvider,
@@ -122,9 +124,10 @@ public class RowChangeTaker implements RowChanges {
         this.ringHost = ringHost;
         this.systemHighwaterStorage = systemHighwaterStorage;
         this.systemRowsTaker = systemRowsTaker;
-        this.partitionIndex = partitionIndex;
         this.partitionStripeProvider = partitionStripeProvider;
         this.availableRowsTaker = availableRowsTaker;
+        this.stripedRowTakerThreadPool = rowTakerThreadPool;
+        this.stripedRowsTaker = rowsTaker;
         this.systemPartitionCommitChanges = systemPartitionCommitChanges;
         this.stripedPartitionCommitChanges = stripedPartitionCommitChanges;
         this.sessionIdProvider = sessionIdProvider;
@@ -285,6 +288,7 @@ public class RowChangeTaker implements RowChanges {
         availableRowsReceiverThreadPool.shutdownNow();
         systemRowTakerThreadPool.shutdownNow();
         consumerThreadPool.shutdownNow();
+        stripedRowTakerThreadPool.shutdownNow();
     }
 
     private static class SessionedTxId {
@@ -419,8 +423,8 @@ public class RowChangeTaker implements RowChanges {
                 rowTakerThreadPool = systemRowTakerThreadPool;
                 rowsTaker = systemRowsTaker;
             } else {
-                rowTakerThreadPool = partitionStripeProvider.getRowTakerThreadPool(partitionName);
-                rowsTaker = partitionStripeProvider.getRowsTaker(partitionName);
+                rowTakerThreadPool = stripedRowTakerThreadPool;
+                rowsTaker = stripedRowsTaker;
             }
 
             /*partitionStateStorage.remoteVersion(remoteRingMember,

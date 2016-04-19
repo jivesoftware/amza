@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
-import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -70,6 +69,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import com.jivesoftware.os.amza.api.partition.TxPartition;
 
 /**
  * @author jonathan.colt
@@ -174,7 +174,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public void load(TxPartitionState txPartitionState,
+    public void load(TxPartition txPartitionState,
         PartitionIndex partitionIndex,
         CurrentVersionProvider currentVersionProvider,
         PrimaryRowMarshaller primaryRowMarshaller) throws Exception {

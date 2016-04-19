@@ -81,7 +81,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final AmzaRingStoreWriter ringStoreWriter;
     private final AckWaters ackWaters;
     private final SystemWALStorage systemWALStorage;
-    private final HighwaterStorage systemHighwaterStorage;
+    private final HighwaterStorage highwaterStorage;
     private final TakeCoordinator takeCoordinator;
     private final RowChangeTaker changeTaker;
     private final PartitionTombstoneCompactor partitionTombstoneCompactor;
@@ -105,7 +105,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         AmzaRingStoreWriter amzaHostRing,
         AckWaters ackWaters,
         SystemWALStorage systemWALStorage,
-        HighwaterStorage systemHighwaterStorage,
+        HighwaterStorage highwaterStorage,
         TakeCoordinator takeCoordinator,
         RowChangeTaker changeTaker,
         PartitionTombstoneCompactor partitionTombstoneCompactor,
@@ -128,7 +128,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.ringStoreWriter = amzaHostRing;
         this.ackWaters = ackWaters;
         this.systemWALStorage = systemWALStorage;
-        this.systemHighwaterStorage = systemHighwaterStorage;
+        this.highwaterStorage = highwaterStorage;
         this.takeCoordinator = takeCoordinator;
         this.changeTaker = changeTaker;
         this.partitionTombstoneCompactor = partitionTombstoneCompactor;
@@ -178,7 +178,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     public HighwaterStorage getSystemHighwaterStorage() {
-        return systemHighwaterStorage;
+        return highwaterStorage;
     }
 
     public AmzaAquariumProvider getAquariumProvider() {
@@ -360,7 +360,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 ringStoreReader.getRingMember(),
                 partitionName,
                 systemWALStorage,
-                systemHighwaterStorage,
+                highwaterStorage,
                 ackWaters,
                 ringStoreReader);
         } else {
@@ -546,7 +546,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                             localLeadershipToken,
                             dos,
                             bytes,
-                            systemHighwaterStorage,
+                            this.highwaterStorage,
                             rowStreamer);
                     });
             } else {

@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
-import com.jivesoftware.os.amza.api.partition.TxPartitionState;
+import com.jivesoftware.os.amza.api.partition.TxPartition;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * @author jonathan.colt
  */
-public class PartitionStripeProvider implements TxPartitionState {
+public class PartitionStripeProvider implements TxPartition {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -181,14 +181,17 @@ public class PartitionStripeProvider implements TxPartitionState {
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
-
         return tx(partitionName,
             (versionedAquarium1) -> {
                 return storageVersionProvider.tx(partitionName, false,
                     (deltaIndex, stripeIndex, storageVersion) -> {
-                        return tx.tx(stripeIndex, partitionStripes[deltaIndex == -1 ? stripeIndex : deltaIndex][stripeIndex], highwaterStorage, versionedAquarium1);
+                        return tx.tx(stripeIndex,
+                            deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex],
+                            highwaterStorage,
+                            versionedAquarium1);
                     });
             });
+
     }
 
     @Override

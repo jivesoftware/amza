@@ -69,7 +69,7 @@ public class RowChangeTaker implements RowChanges {
     private final AmzaRingStoreReader amzaRingReader;
     private final AmzaSystemReady systemReady;
     private final RingHost ringHost;
-    private final HighwaterStorage systemHighwaterStorage;
+    private final HighwaterStorage highwaterStorage;
     private final RowsTaker systemRowsTaker;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AvailableRowsTaker availableRowsTaker;
@@ -101,7 +101,7 @@ public class RowChangeTaker implements RowChanges {
         AmzaRingStoreReader amzaRingReader,
         AmzaSystemReady systemReady,
         RingHost ringHost,
-        HighwaterStorage systemHighwaterStorage,
+        HighwaterStorage highwaterStorage,
         RowsTaker systemRowsTaker,
         PartitionStripeProvider partitionStripeProvider,
         AvailableRowsTaker availableRowsTaker,
@@ -121,7 +121,7 @@ public class RowChangeTaker implements RowChanges {
         this.amzaRingReader = amzaRingReader;
         this.systemReady = systemReady;
         this.ringHost = ringHost;
-        this.systemHighwaterStorage = systemHighwaterStorage;
+        this.highwaterStorage = highwaterStorage;
         this.systemRowsTaker = systemRowsTaker;
         this.partitionStripeProvider = partitionStripeProvider;
         this.availableRowsTaker = availableRowsTaker;
@@ -423,9 +423,6 @@ public class RowChangeTaker implements RowChanges {
                 rowsTaker = stripedRowsTaker;
             }
 
-            /*partitionStateStorage.remoteVersion(remoteRingMember,
-             partitionName,
-             remoteVersionedPartitionName.getPartitionVersion());*/
             long[] highwater = new long[1];
 
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStripeProvider.txPartition(partitionName,
@@ -433,8 +430,8 @@ public class RowChangeTaker implements RowChanges {
 
                     VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-                    highwater[0] = systemHighwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-                    if (!partitionStripe.exists(localVersionedPartitionName)) {
+                    highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
+                    if (partitionStripe != null && !partitionStripe.exists(localVersionedPartitionName)) {
                         //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} state:{}",
                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                         return null;

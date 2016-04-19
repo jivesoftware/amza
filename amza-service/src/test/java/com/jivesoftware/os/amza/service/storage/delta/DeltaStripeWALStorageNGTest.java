@@ -11,7 +11,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
-import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -63,6 +62,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
+import com.jivesoftware.os.amza.api.partition.TxPartition;
 
 /**
  * @author jonathan.colt
@@ -91,7 +91,7 @@ public class DeltaStripeWALStorageNGTest {
     private CurrentVersionProvider currentVersionProvider;
     private PartitionStore partitionStore1;
     private PartitionStore partitionStore2;
-    private TxPartitionState txPartitionState;
+    private TxPartition txPartitionState;
     private DeltaWALFactory deltaWALFactory;
     private WALIndexProviderRegistry walIndexProviderRegistry;
     private DeltaStripeWALStorage deltaStripeWALStorage;
@@ -141,7 +141,7 @@ public class DeltaStripeWALStorageNGTest {
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
         LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
 
-        txPartitionState = new TxPartitionState() {
+        txPartitionState = new TxPartition() {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {

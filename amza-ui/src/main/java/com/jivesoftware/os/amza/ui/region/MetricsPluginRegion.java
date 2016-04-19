@@ -313,7 +313,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             partitionStripeProvider.txPartition(name, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
                 if (includeCount) {
-                    map.put("count", numberFormat.format(partitionStripe.count(versionedAquarium)));
+                    map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
                 } else {
                     map.put("count", "(requires watch)");
                 }
@@ -331,7 +331,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
-                map.put("highestTxId", String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium, (versionedAquarium1, highestTxId) -> highestTxId)));
+                map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium,
+                    (versionedAquarium1, highestTxId) -> highestTxId)));
 
                 int category = categories.getOrDefault(versionedPartitionName, -1);
                 long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);

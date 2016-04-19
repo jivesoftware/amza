@@ -338,6 +338,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             config.flushHighwatersAfterNUpdates);
 
+       
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
             amzaStats,
             partitionIndex,
@@ -391,13 +392,7 @@ public class AmzaServiceInitializer {
             LOG.info("Finished loading {} highest txIds after system ready!", count);
             return null;
         });
-        PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(interner,
-            orderIdProvider,
-            ringMember,
-            partitionIndex,
-            systemWALStorage,
-            walUpdated,
-            config.flushHighwatersAfterNUpdates);
+        
 
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             numberOfStripes,
@@ -405,13 +400,13 @@ public class AmzaServiceInitializer {
             ringStoreReader,
             systemReady,
             ringHost,
-            systemHighwaterStorage,
+            highwaterStorage,
             rowsTakerFactory.create(),
             partitionStripeProvider,
             availableRowsTaker,
             Executors.newFixedThreadPool(config.numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),
             rowsTakerFactory.create(),
-            new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, systemHighwaterStorage, walUpdated),
+            new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, highwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),
             takeFailureListener,
@@ -432,7 +427,7 @@ public class AmzaServiceInitializer {
             amzaRingWriter,
             ackWaters,
             systemWALStorage,
-            systemHighwaterStorage,
+            highwaterStorage,
             takeCoordinator,
             changeTaker,
             partitionCompactor,

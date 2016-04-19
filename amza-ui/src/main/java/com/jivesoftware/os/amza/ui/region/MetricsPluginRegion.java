@@ -331,7 +331,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
-                map.put("highestTxId", partitionStripe.highestAquariumTxId(versionedAquarium, (versionedAquarium1, highestTxId) -> highestTxId));
+                map.put("highestTxId", String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium, (versionedAquarium1, highestTxId) -> highestTxId)));
 
                 int category = categories.getOrDefault(versionedPartitionName, -1);
                 long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);

@@ -38,6 +38,7 @@ import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionStriper;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
@@ -84,6 +85,7 @@ public class DeltaStripeWALStorage {
     private final AckWaters ackWaters;
     private final SickThreads sickThreads;
     private final AmzaRingReader ringReader;
+    private final PartitionStriper partitionStriper;
     private final DeltaWALFactory deltaWALFactory;
     private final WALIndexProviderRegistry walIndexProviderRegistry;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
@@ -116,6 +118,7 @@ public class DeltaStripeWALStorage {
         AckWaters ackWaters,
         SickThreads sickThreads,
         AmzaRingReader ringReader,
+        PartitionStriper partitionStriper,
         DeltaWALFactory deltaWALFactory,
         WALIndexProviderRegistry walIndexProviderRegistry,
         long mergeAfterNUpdates,
@@ -127,6 +130,7 @@ public class DeltaStripeWALStorage {
         this.ackWaters = ackWaters;
         this.sickThreads = sickThreads;
         this.ringReader = ringReader;
+        this.partitionStriper = partitionStriper;
         this.deltaWALFactory = deltaWALFactory;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
@@ -175,7 +179,6 @@ public class DeltaStripeWALStorage {
 
     public void load(TxPartitionState txPartitionState,
         PartitionIndex partitionIndex,
-        int stripe,
         CurrentVersionProvider currentVersionProvider,
         PrimaryRowMarshaller primaryRowMarshaller) throws Exception {
 
@@ -191,7 +194,7 @@ public class DeltaStripeWALStorage {
                     DeltaWAL currentWAL = deltaWALs.get(i);
                     if (prevWAL != null) {
                         Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(), "Delta WALs were not contiguous");
-                        mergeDelta(partitionIndex, stripe, currentVersionProvider, prevWAL, true, () -> currentWAL);
+                        mergeDelta(partitionIndex, currentVersionProvider, prevWAL, true, () -> currentWAL);
                     }
                     deltaWAL.set(currentWAL);
                     Set<VersionedPartitionName> accepted = Sets.newHashSet();
@@ -302,7 +305,7 @@ public class DeltaStripeWALStorage {
         return updateSinceLastMerge.get() > mergeAfterNUpdates;
     }
 
-    public void merge(PartitionIndex partitionIndex, int stripe, CurrentVersionProvider currentVersionProvider, boolean force) throws Exception {
+    public void merge(PartitionIndex partitionIndex, CurrentVersionProvider currentVersionProvider, boolean force) throws Exception {
         if (!force && !mergeable()) {
             return;
         }
@@ -315,7 +318,7 @@ public class DeltaStripeWALStorage {
         amzaStats.beginCompaction(CompactionFamily.merge, "Delta Stripe:" + index);
         try {
             DeltaWAL wal = deltaWAL.get();
-            if (mergeDelta(partitionIndex, stripe, currentVersionProvider, wal, false, () -> deltaWALFactory.create(wal.getId()))) {
+            if (mergeDelta(partitionIndex, currentVersionProvider, wal, false, () -> deltaWALFactory.create(wal.getId()))) {
                 merging.set(0);
             }
         } finally {
@@ -324,7 +327,6 @@ public class DeltaStripeWALStorage {
     }
 
     private boolean mergeDelta(PartitionIndex partitionIndex,
-        int stripe,
         CurrentVersionProvider currentVersionProvider,
         DeltaWAL wal,
         boolean validate,
@@ -365,6 +367,7 @@ public class DeltaStripeWALStorage {
                         try {
                             while (true) {
                                 try {
+                                    int stripe = partitionStriper.getStripe(versionedPartitionName.getPartitionName());
                                     result = currentDelta.merge(partitionIndex, stripe, validate);
                                     sickThreads.recovered();
                                     break;
@@ -418,7 +421,9 @@ public class DeltaStripeWALStorage {
         }
         ListMultimap<String, WALIndex> providerIndexes = ArrayListMultimap.create();
         for (MergeResult result : results) {
-            partitionIndex.get(result.versionedPartitionName, stripe).flush(true);
+            if (result.partitionStore != null) {
+                result.partitionStore.flush(true);
+            }
             if (result.walIndex != null) {
                 providerIndexes.put(result.walIndex.getProviderName(), result.walIndex);
             }
@@ -444,8 +449,7 @@ public class DeltaStripeWALStorage {
         RowType rowType,
         HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
-        int stripe,
-        WALStorage storage,
+        PartitionStore partitionStore,
         byte[] prefix,
         Commitable updates,
         WALUpdated updated) throws Exception {
@@ -457,7 +461,6 @@ public class DeltaStripeWALStorage {
         }
 
         if (directApply && mergeDebt > 0) {
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripe);
             long highestTxId = partitionStore.mergedTxId();
             int takeFromFactor = ringReader.getTakeFromFactor(versionedPartitionName.getPartitionName().getRingName());
             int[] taken = {0};
@@ -496,7 +499,7 @@ public class DeltaStripeWALStorage {
             RowsChanged rowsChanged;
 
             getPointers(versionedPartitionName,
-                storage,
+                partitionStore.getWalStorage(),
                 (stream) -> {
                     for (int i = 0; i < keys.size(); i++) {
                         byte[] key = keys.get(i);

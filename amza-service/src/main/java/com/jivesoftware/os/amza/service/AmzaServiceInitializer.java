@@ -330,6 +330,7 @@ public class AmzaServiceInitializer {
                 ackWaters,
                 sickThreads,
                 ringStoreReader,
+                storageVersionProvider,
                 deltaWALFactory,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction,

@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  *
  */
-public class StorageVersionProvider implements CurrentVersionProvider, RowChanges, SystemStriper {
+public class StorageVersionProvider implements CurrentVersionProvider, RowChanges, SystemStriper, PartitionStriper {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final Random rand = new Random();
@@ -111,7 +111,12 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             return storageVersion;
         }
     }
-    
+
+    @Override
+    public int getStripe(PartitionName partitionName) {
+        return getCurrentStripe(lookupStorageVersion(partitionName));
+    }
+
     // Sucks but its our legacy
     @Override
     public int getSystemStripe(PartitionName partitionName) {

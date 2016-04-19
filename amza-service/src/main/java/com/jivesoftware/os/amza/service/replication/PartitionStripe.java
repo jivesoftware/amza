@@ -86,7 +86,7 @@ public class PartitionStripe {
     }
 
     public void load(TxPartitionState txPartitionState) throws Exception {
-        storage.load(txPartitionState, partitionIndex, stripe, storageVersionProvider, primaryRowMarshaller);
+        storage.load(txPartitionState, partitionIndex, storageVersionProvider, primaryRowMarshaller);
     }
 
     public long highestAquariumTxId(VersionedAquarium versionedAquarium, HighestPartitionTx tx) throws Exception {
@@ -139,8 +139,7 @@ public class PartitionStripe {
                 partitionStore.getProperties().rowType,
                 highwaterStorage,
                 versionedPartitionName,
-                stripe,
-                partitionStore.getWalStorage(),
+                partitionStore,
                 prefix,
                 updates,
                 updated);
@@ -381,7 +380,7 @@ public class PartitionStripe {
 
     public void merge(boolean force) {
         try {
-            storage.merge(partitionIndex, stripe, storageVersionProvider, force);
+            storage.merge(partitionIndex, storageVersionProvider, force);
         } catch (Throwable x) {
             LOG.error("Compactor failed.", x);
         }

@@ -336,6 +336,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         });
     }
 
+    public void rebalanceStripes() {
+
+    }
+
     public static class AmzaPartitionRoute {
 
         public final List<RingMemberAndHost> orderedMembers;

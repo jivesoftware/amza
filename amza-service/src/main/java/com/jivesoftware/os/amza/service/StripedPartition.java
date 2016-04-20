@@ -19,7 +19,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Consistency;
-import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -109,42 +108,44 @@ public class StripedPartition implements Partition {
 
         long currentTime = System.currentTimeMillis();
         long version = orderIdProvider.nextId();
-        partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
-            RowsChanged commit = partitionStripe.commit(highwaterStorage,
-                versionedAquarium,
-                true,
-                Optional.absent(),
-                true,
-                prefix,
-                (versionedAquarium1) -> {
-                    if (takeQuorum > 0) {
-                        LivelyEndState livelyEndState = versionedAquarium1.getLivelyEndState();
-                        if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
-                            throw new FailedToAchieveQuorumException("Leader has changed.");
-                        }
-                    }
-                    return -1;
-                },
-                (highwaters, stream) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
-                    return stream.row(-1L, key, value, timestamp, valueTombstone, version);
-                }),
-                (versionedPartitionName, leadershipToken, largestCommittedTxId) -> {
-                    if (takeQuorum > 0) {
-                        LOG.debug("Awaiting quorum for {} ms", remainingTimeInMillis);
-                        int takenBy = ackWaters.await(versionedPartitionName,
-                            largestCommittedTxId,
-                            neighbors,
-                            takeQuorum,
-                            remainingTimeInMillis,
-                            leadershipToken);
-                        if (takenBy < takeQuorum) {
-                            throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
-                        }
-                    }
-                    //TODO necessary? aquarium.tapTheGlass();
-                },
-                walUpdated);
+        partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            long leadershipToken = -1;
+            if (takeQuorum > 0) {
+                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
+                    throw new FailedToAchieveQuorumException("Leader has changed.");
+                }
+                leadershipToken = livelyEndState.getLeaderWaterline().getTimestamp();
+            }
+
+            RowsChanged commit = partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                return partitionStripe.commit(highwaterStorage,
+                    versionedAquarium,
+                    true,
+                    Optional.absent(),
+                    true,
+                    prefix,
+                    (highwaters, stream) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
+                        long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                        return stream.row(-1L, key, value, timestamp, valueTombstone, version);
+                    }),
+                    walUpdated);
+            });
+
+            if (takeQuorum > 0) {
+                LOG.debug("Awaiting quorum for {} ms", remainingTimeInMillis);
+                int takenBy = ackWaters.await(versionedAquarium.getVersionedPartitionName(),
+                    commit.getLargestCommittedTxId(),
+                    neighbors,
+                    takeQuorum,
+                    remainingTimeInMillis,
+                    leadershipToken);
+                if (takenBy < takeQuorum) {
+                    throw new FailedToAchieveQuorumException(
+                        "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
+                }
+            }
+            //TODO necessary? aquarium.tapTheGlass();
 
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getSmallestCommittedTxId());
 
@@ -168,31 +169,36 @@ public class StripedPartition implements Partition {
     public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         systemReady.await(0);
         checkReadConsistencySupport(consistency);
-        return partitionStripeProvider.txPartition(partitionName,
-            (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> partitionStripe.get(versionedAquarium, prefix, keys, stream));
+        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                return partitionStripe.get(versionedAquarium, prefix, keys, stream);
+            });
+        });
     }
 
     @Override
     public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception {
 
         systemReady.await(0);
-        return partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
-            for (ScanRange range : ranges) {
-                if (range.fromKey == null && range.toKey == null) {
-                    partitionStripe.rowScan(versionedAquarium, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
-                } else {
-                    partitionStripe.rangeScan(versionedAquarium,
-                        range.fromPrefix,
-                        range.fromKey,
-                        range.toPrefix,
-                        range.toKey,
-                        (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                for (ScanRange range : ranges) {
+                    if (range.fromKey == null && range.toKey == null) {
+                        partitionStripe.rowScan(versionedAquarium, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                            -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                    } else {
+                        partitionStripe.rangeScan(versionedAquarium,
+                            range.fromPrefix,
+                            range.fromKey,
+                            range.toPrefix,
+                            range.toKey,
+                            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                    }
                 }
-            }
 
-            return true;
+                return true;
+            });
         });
     }
 
@@ -222,9 +228,9 @@ public class StripedPartition implements Partition {
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
-        return partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
-            long[] lastTxId = {-1};
-            boolean[] done = {false};
+        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            long[] lastTxId = { -1 };
+            boolean[] done = { false };
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;
@@ -237,26 +243,39 @@ public class StripedPartition implements Partition {
                 return true;
             };
 
-            WALHighwater highwater;
-            if (usePrefix) {
-                highwater = partitionStripe.takeFromTransactionId(versionedAquarium, takePrefix, txId, highwaterStorage, highwaters, txKeyValueStream);
-            } else {
-                highwater = partitionStripe.takeFromTransactionId(versionedAquarium, txId, highwaterStorage, highwaters, txKeyValueStream);
-            }
+            WALHighwater highwater = partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                if (usePrefix) {
+                    return partitionStripe.takeFromTransactionId(versionedAquarium, takePrefix, txId, highwaterStorage, highwaters, txKeyValueStream);
+                } else {
+                    return partitionStripe.takeFromTransactionId(versionedAquarium, txId, highwaterStorage, highwaters, txKeyValueStream);
+                }
+            });
             return new TakeResult(ringMember, lastTxId[0], highwater);
         });
     }
 
     @Override
     public long count() throws Exception {
-        return partitionStripeProvider.txPartition(partitionName,
-            (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> partitionStripe.count(versionedAquarium));
+        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                return partitionStripe.count(versionedAquarium);
+            });
+        });
     }
 
     @Override
-    public long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
-        return partitionStripeProvider.txPartition(partitionName,
-            (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> partitionStripe.highestAquariumTxId(versionedAquarium, highestPartitionTx));
+    public long highestTxId() throws Exception {
+        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                return partitionStripe.highestAquariumTxId(versionedAquarium);
+            });
+        });
     }
 
+    @Override
+    public LivelyEndState livelyEndState() throws Exception {
+        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            return versionedAquarium.getLivelyEndState();
+        });
+    }
 }

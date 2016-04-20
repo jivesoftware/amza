@@ -121,7 +121,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         .put(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, AQUARIUM_PROPERTIES)
         .build();
 
-    public void open(SystemStriper systemStriper) throws Exception {
+    public void init(SystemStriper systemStriper) throws Exception {
         for (VersionedPartitionName versionedPartitionName : SYSTEM_PARTITIONS.keySet()) {
             int systemStripe = systemStriper.getSystemStripe(versionedPartitionName.getPartitionName());
             get(versionedPartitionName, systemStripe);
@@ -193,7 +193,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (properties == null) {
             return null;
         }
-        return open(deltaWALId, prevDeltaWALId, versionedPartitionName, stripe, properties);
+        return init(deltaWALId, prevDeltaWALId, versionedPartitionName, stripe, properties);
 
     }
 
@@ -218,7 +218,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
     }
 
-    private PartitionStore open(long deltaWALId,
+    private PartitionStore init(long deltaWALId,
         long prevDeltaWALId,
         VersionedPartitionName versionedPartitionName,
         int stripe,

@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.api.partition.Consistency;
-import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
@@ -9,6 +8,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**
  * @author jonathan.colt
@@ -36,7 +36,9 @@ public interface Partition {
     // TODO fix or deprecate: Currently know to be broken. Only accurate if you never delete.
     long count() throws Exception;
 
-    long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception;
+    long highestTxId() throws Exception;
+
+    LivelyEndState livelyEndState() throws Exception;
 
     class ScanRange {
         public static final ScanRange ROW_SCAN = new ScanRange(null, null, null, null);

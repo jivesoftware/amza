@@ -310,6 +310,9 @@ public class AmzaServiceTest {
                                 Thread.sleep(delayBetweenUpdates);
                                 node.get(readConsistency, partitionName, indexPrefix, indexKey);
                                 break;
+                            } catch (FailedToAchieveQuorumException x) {
+                                System.out.println("Failed to achieve quorum, waiting... " + x.getMessage());
+                                Thread.sleep(100);
                             } catch (IllegalStateException x) {
                                 System.out.println("Illegal state, waiting...");
                                 x.printStackTrace();

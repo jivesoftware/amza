@@ -187,16 +187,14 @@ public class SystemWALStorage {
         }
     }
 
-    public long highestPartitionTxId(VersionedPartitionName versionedPartitionName, HighestPartitionTx tx) throws Exception {
+    public long highestPartitionTxId(VersionedPartitionName versionedPartitionName) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         if (partitionStore != null) {
-            long highestTxId = partitionStore.getWalStorage().highestTxId();
-            return tx.tx(new VersionedAquarium(versionedPartitionName, null, 0), highestTxId);
+            return partitionStore.getWalStorage().highestTxId();
         } else {
-            return tx.tx(null, -1);
+            return -1;
         }
-
     }
 
     public long count(VersionedPartitionName versionedPartitionName) throws Exception {

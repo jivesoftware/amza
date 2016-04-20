@@ -160,8 +160,9 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                         try {
                             if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
 
-                                VersionedPartitionName versionedPartitionName = storageVersionProvider.tx(partitionName, true,
-                                    (deltaIndex, stripeIndex, storageVersion) -> new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
+                                StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+                                VersionedPartitionName versionedPartitionName = storageVersionProvider.tx(partitionName, storageVersion,
+                                    (deltaIndex, stripeIndex, storageVersion1) -> new VersionedPartitionName(partitionName, storageVersion1.partitionVersion));
 
                                 Aquarium aquarium = getAquarium(versionedPartitionName);
                                 aquarium.acknowledgeOther();

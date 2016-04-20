@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -98,39 +99,55 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
     private final StripingLocksProvider<PartitionName> versionStripingLocks = new StripingLocksProvider<>(1024);
 
+    public StorageVersion createIfAbsent(PartitionName partitionName) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            return new StorageVersion(0, 0);
+        }
+        StorageVersion storageVersion = lookupStorageVersion(partitionName);
+        int stripeIndex = getCurrentStripe(storageVersion);
+        if (stripeIndex == -1) {
+            synchronized (versionStripingLocks.lock(partitionName, 0)) {
+                storageVersion = lookupStorageVersion(partitionName);
+                stripeIndex = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
+                if (stripeIndex == -1) {
+                    stripeIndex = rand.nextInt(stripeVersions.length);
+                    if (versionedPartitionProvider.getProperties(partitionName) == null) {
+                        throw new PropertiesNotPresentException("Properties missing for " + partitionName);
+                    }
+                    if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                        throw new NotARingMemberException("Not a member of ring for " + partitionName);
+                    }
+                    storageVersion = set(partitionName, orderIdProvider.nextId(), stripeIndex);
+                }
+            }
+        }
+        return storageVersion;
+    }
+
     @Override
-    public <R> R tx(PartitionName partitionName,
-        boolean createIfAbsent,
-        StripeIndexs<R> tx) throws Exception {
+    public <R> R tx(PartitionName partitionName, StorageVersion storageVersion, StripeIndexs<R> tx) throws Exception {
 
         if (partitionName.isSystemPartition()) {
             return tx.tx(-1, getSystemStripe(partitionName), new StorageVersion(0, 0));
         }
         return callableTransactor.doWithOne(partitionName, () -> {
-            StorageVersion storageVersion = lookupStorageVersion(partitionName);
-            int stripeIndex = getCurrentStripe(storageVersion);
-            if (stripeIndex == -1 && createIfAbsent) {
-                synchronized (versionStripingLocks.lock(partitionName, 0)) {
-                    storageVersion = lookupStorageVersion(partitionName);
-                    stripeIndex = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
-                    if (stripeIndex == -1) {
-                        stripeIndex = rand.nextInt(stripeVersions.length);
-                        if (versionedPartitionProvider.getProperties(partitionName) == null) {
-                            throw new PropertiesNotPresentException("Properties missing for " + partitionName);
-                        }
-                        if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
-                            throw new NotARingMemberException("Not a member of ring for " + partitionName);
-                        }
-                        storageVersion = set(partitionName, orderIdProvider.nextId(), stripeIndex);
-                    }
-                }
-            }
-            if (storageVersion == null) {
+            StorageVersion currentStorageVersion = lookupStorageVersion(partitionName);
+            if (currentStorageVersion == null && storageVersion == null) {
                 return tx.tx(-1, -1, null);
-            } else {
-                int deltaIndex = getAndCacheDeltaIndexIfNeeded(stripeIndex, new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
-                return tx.tx(deltaIndex, stripeIndex, storageVersion);
             }
+
+            Preconditions.checkNotNull(currentStorageVersion, "Storage version was null for %s", partitionName);
+            if (storageVersion != null) {
+                Preconditions.checkArgument(currentStorageVersion.partitionVersion == storageVersion.partitionVersion,
+                    "Partition version has changed: %s != %s", currentStorageVersion.partitionVersion, storageVersion.partitionVersion);
+                Preconditions.checkArgument(currentStorageVersion.stripeVersion == storageVersion.stripeVersion,
+                    "Stripe version has changed: %s != %s", currentStorageVersion.stripeVersion, storageVersion.stripeVersion);
+            }
+            int stripeIndex = getCurrentStripe(currentStorageVersion);
+            Preconditions.checkArgument(stripeIndex != -1,
+                "Missing stripe index for %s with stripe version %s", partitionName, currentStorageVersion.stripeVersion);
+            int deltaIndex = getAndCacheDeltaIndexIfNeeded(stripeIndex, new VersionedPartitionName(partitionName, currentStorageVersion.partitionVersion));
+            return tx.tx(deltaIndex, stripeIndex, currentStorageVersion);
         });
     }
 
@@ -138,6 +155,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
         callableTransactor.doWithAll(versionedPartitionName.getPartitionName(), () -> {
             if (invalidatable.call()) {
+                LOG.info("Invalidated delta index cache for {}", versionedPartitionName);
                 localDeltaIndexCache.remove(versionedPartitionName);
             }
             return null;

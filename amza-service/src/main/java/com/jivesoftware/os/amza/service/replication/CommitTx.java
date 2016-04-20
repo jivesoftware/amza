@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.scan.CommitTo;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 
 /**
@@ -11,7 +12,6 @@ import com.jivesoftware.os.amza.service.take.HighwaterStorage;
  */
 interface CommitTx {
 
-    RowsChanged tx(int stripe, PartitionStripe partitionStripe, HighwaterStorage highwaterStorage, VersionedAquarium versionedAquarium, CommitTo commitTo)
-        throws Exception;
+    RowsChanged tx(HighwaterStorage highwaterStorage, VersionedAquarium versionedAquarium, CommitTo commitTo) throws Exception;
 
 }

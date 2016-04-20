@@ -157,7 +157,7 @@ public class RowChangeTaker implements RowChanges {
 
                     PartitionName partitionName = versionedPartitionName.getPartitionName();
                     try {
-                        return storageVersionProvider.tx(partitionName, false, (deltaIndex, stripeIndex, storageVersion) -> stripeIndex == consumerForStripe);
+                        return storageVersionProvider.tx(partitionName, null, (deltaIndex, stripeIndex, storageVersion) -> stripeIndex == consumerForStripe);
                     } catch (Exception x) {
                         throw new RuntimeException(x);
                     }
@@ -219,7 +219,7 @@ public class RowChangeTaker implements RowChanges {
         if (partitionName.isSystemPartition()) {
             return systemConsumerLock;
         } else {
-            return storageVersionProvider.tx(partitionName, false, (deltaIndex, stripeIndex, storageVersion) -> {
+            return storageVersionProvider.tx(partitionName, null, (deltaIndex, stripeIndex, storageVersion) -> {
                 if (stripeIndex == -1) {
                     return null;
                 } else {
@@ -426,12 +426,15 @@ public class RowChangeTaker implements RowChanges {
             long[] highwater = new long[1];
 
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStripeProvider.txPartition(partitionName,
-                (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
 
                     VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                     highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-                    if (partitionStripe != null && !partitionStripe.exists(localVersionedPartitionName)) {
+                    boolean exists = partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                        return partitionStripe == null || partitionStripe.exists(localVersionedPartitionName);
+                    });
+                    if (!exists) {
                         //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} state:{}",
                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                         return null;
@@ -468,7 +471,7 @@ public class RowChangeTaker implements RowChanges {
             }*/
             if (currentLocalVersionedPartitionName == null) {
                 partitionStripeProvider.txPartition(partitionName,
-                    (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                    (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
                         Waterline leader = versionedAquarium.getLeader();
                         long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
                         tookFully(versionedAquarium, remoteRingMember, leadershipToken);
@@ -611,7 +614,7 @@ public class RowChangeTaker implements RowChanges {
                 //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition())
                 //LOG.info("TAKE: local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                 CommitChanges commitChanges = partitionName.isSystemPartition() ? systemPartitionCommitChanges : stripedPartitionCommitChanges;
-                commitChanges.commit(localVersionedPartitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium, commitTo) -> {
+                commitChanges.commit(localVersionedPartitionName, (highwaterStorage, versionedAquarium, commitTo) -> {
 
                     boolean flushed = false;
                     try {

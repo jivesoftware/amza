@@ -311,12 +311,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
 
-            partitionStripeProvider.txPartition(name, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
-                if (includeCount) {
-                    map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
-                } else {
-                    map.put("count", "(requires watch)");
-                }
+            partitionStripeProvider.txPartition(name, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
 
                 VersionedPartitionName versionedPartitionName = versionedAquarium == null ? null : versionedAquarium.getVersionedPartitionName();
                 LivelyEndState livelyEndState = versionedAquarium == null ? null : versionedAquarium.getLivelyEndState();
@@ -331,8 +326,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
-                map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium,
-                    (versionedAquarium1, highestTxId) -> highestTxId)));
+                txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                    if (includeCount) {
+                        map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
+                    } else {
+                        map.put("count", "(requires watch)");
+                    }
+
+                    map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium)));
+                    return null;
+                });
 
                 int category = categories.getOrDefault(versionedPartitionName, -1);
                 long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);
@@ -359,12 +362,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                             }
                             String latency = ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(latencyInMillis));
                             builder
-                            .put("latency", (lastOfferedTxId == -1) ? "never" : latency)
-                            .put("category", String.valueOf(category1))
-                            .put("tooSlow", (lastOfferedTxId == -1) ? "never" : getDurationBreakdown(tooSlowTimestamp))
-                            .put("takeSessionId", String.valueOf(takeSessionId))
-                            .put("online", online)
-                            .put("steadyState", steadyState);
+                                .put("latency", (lastOfferedTxId == -1) ? "never" : latency)
+                                .put("category", String.valueOf(category1))
+                                .put("tooSlow", (lastOfferedTxId == -1) ? "never" : getDurationBreakdown(tooSlowTimestamp))
+                                .put("takeSessionId", String.valueOf(takeSessionId))
+                                .put("online", online)
+                                .put("steadyState", steadyState);
                             tookLatencies.add(builder.build());
                             return true;
                         });
@@ -462,7 +465,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -571,7 +574,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

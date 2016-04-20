@@ -6,7 +6,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
+import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader.RingNameStream;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -332,13 +332,13 @@ public class TakeCoordinator {
 
     public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
-        PartitionStripePromise partitionStripePromise,
+        TxPartitionStripe txPartitionStripe,
         VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
 
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
-        ring.rowsTaken(remoteRingMember, takeSessionId, partitionStripePromise, versionedAquarium, localTxId);
+        ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
     }
 
 }

@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
-import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 

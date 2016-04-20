@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
+import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
@@ -86,13 +86,13 @@ public class TakeVersionedPartitionCoordinator {
 
         try {
             return partitionStripeProvider.txPartition(versionedPartitionName.getPartitionName(),
-                (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+                (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                     VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     Stable stable = stableTaker(ringMember, takeSessionId, versionedAquarium);
                     if (stable.isDormant()) {
                         return Long.MAX_VALUE;
                     } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                        long highestTxId = highestPartitionTx(partitionStripePromise, versionedAquarium);
+                        long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
                         return streamHighestTxId(versionedAquarium,
                             highestTxId,
                             takeSessionId,
@@ -114,7 +114,7 @@ public class TakeVersionedPartitionCoordinator {
         }
     }
 
-    private long highestPartitionTx(PartitionStripePromise partitionStripePromise,
+    private long highestPartitionTx(TxPartitionStripe txPartitionStripe,
         VersionedAquarium versionedAquarium) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
@@ -122,7 +122,7 @@ public class TakeVersionedPartitionCoordinator {
         if (partitionName.isSystemPartition()) {
             return systemWALStorage.highestPartitionTxId(versionedPartitionName);
         } else {
-            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+            return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 return partitionStripe.highestAquariumTxId(versionedAquarium);
             });
         }
@@ -253,7 +253,7 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     void rowsTaken(long takeSessionId,
-        PartitionStripePromise partitionStripePromise,
+        TxPartitionStripe txPartitionStripe,
         VersionedAquarium versionedAquarium,
         VersionedRing versionedRing,
         RingMember remoteRingMember,
@@ -266,7 +266,7 @@ public class TakeVersionedPartitionCoordinator {
             return;
         }
 
-        long highestTxId = highestPartitionTx(partitionStripePromise, versionedAquarium);
+        long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
         Session session = sessions.get(remoteRingMember);
         if (session != null) {
             synchronized (session) {

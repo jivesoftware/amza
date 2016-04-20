@@ -14,7 +14,7 @@ import com.jivesoftware.os.amza.service.AmzaPartitionWatcher;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionTransactor;
-import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
+import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -185,9 +185,9 @@ public class PartitionStripeProvider {
         VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
         return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
             return tx.tx(
-                new PartitionStripePromise() {
+                new TxPartitionStripe() {
                     @Override
-                    public <S> S get(PartitionStripeTx<S> partitionStripeTx) throws Exception {
+                    public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
                         return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
                             PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
                             return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
@@ -239,7 +239,7 @@ public class PartitionStripeProvider {
         }
 
         if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-            return txPartition(partitionName, (partitionStripePromise, highwaterStorage1, versionedAquarium) -> {
+            return txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
                 Waterline leaderWaterline = versionedAquarium.awaitOnline(timeoutMillis).getLeaderWaterline();
                 if (!aquariumProvider.isOnline(leaderWaterline)) {
                     versionedAquarium.wipeTheGlass();

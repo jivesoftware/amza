@@ -108,7 +108,7 @@ public class StripedPartition implements Partition {
 
         long currentTime = System.currentTimeMillis();
         long version = orderIdProvider.nextId();
-        partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+        partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             long leadershipToken = -1;
             if (takeQuorum > 0) {
                 LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
@@ -118,7 +118,7 @@ public class StripedPartition implements Partition {
                 leadershipToken = livelyEndState.getLeaderWaterline().getTimestamp();
             }
 
-            RowsChanged commit = partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+            RowsChanged commit = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 return partitionStripe.commit(highwaterStorage,
                     versionedAquarium,
                     true,
@@ -169,8 +169,8 @@ public class StripedPartition implements Partition {
     public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         systemReady.await(0);
         checkReadConsistencySupport(consistency);
-        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
-            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+            return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 return partitionStripe.get(versionedAquarium, prefix, keys, stream);
             });
         });
@@ -180,8 +180,8 @@ public class StripedPartition implements Partition {
     public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception {
 
         systemReady.await(0);
-        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
-            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+            return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 for (ScanRange range : ranges) {
                     if (range.fromKey == null && range.toKey == null) {
                         partitionStripe.rowScan(versionedAquarium, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
@@ -228,7 +228,7 @@ public class StripedPartition implements Partition {
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
-        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             long[] lastTxId = { -1 };
             boolean[] done = { false };
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
@@ -243,7 +243,7 @@ public class StripedPartition implements Partition {
                 return true;
             };
 
-            WALHighwater highwater = partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+            WALHighwater highwater = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 if (usePrefix) {
                     return partitionStripe.takeFromTransactionId(versionedAquarium, takePrefix, txId, highwaterStorage, highwaters, txKeyValueStream);
                 } else {
@@ -256,8 +256,8 @@ public class StripedPartition implements Partition {
 
     @Override
     public long count() throws Exception {
-        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
-            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+            return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 return partitionStripe.count(versionedAquarium);
             });
         });
@@ -265,8 +265,8 @@ public class StripedPartition implements Partition {
 
     @Override
     public long highestTxId() throws Exception {
-        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
-            return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+            return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 return partitionStripe.highestAquariumTxId(versionedAquarium);
             });
         });
@@ -274,7 +274,7 @@ public class StripedPartition implements Partition {
 
     @Override
     public LivelyEndState livelyEndState() throws Exception {
-        return partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return versionedAquarium.getLivelyEndState();
         });
     }

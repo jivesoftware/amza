@@ -379,8 +379,8 @@ public class AmzaServiceInitializer {
             int count = 0;
             for (PartitionName partitionName : partitionIndex.getMemberPartitions(ringStoreReader)) {
                 count++;
-                partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage1, versionedAquarium) -> {
-                    return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
+                    return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
                         if (partitionStore != null) {

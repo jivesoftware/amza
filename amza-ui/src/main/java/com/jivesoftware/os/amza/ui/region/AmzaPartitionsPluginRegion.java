@@ -148,7 +148,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
-                partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
 
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
 

@@ -9,9 +9,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PartitionTx;
-import com.jivesoftware.os.amza.api.partition.TxPartitionState;
-import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
+import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
@@ -26,7 +24,6 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AckWaters;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
-import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
@@ -57,6 +54,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -89,7 +87,6 @@ public class DeltaStripeWALStorageNGTest {
     private CurrentVersionProvider currentVersionProvider;
     private PartitionStore partitionStore1;
     private PartitionStore partitionStore2;
-    private TxPartitionState txPartitionState;
     private DeltaWALFactory deltaWALFactory;
     private WALIndexProviderRegistry walIndexProviderRegistry;
     private DeltaStripeWALStorage deltaStripeWALStorage;
@@ -106,7 +103,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = {partitionTmpDir};
+        File[] workingDirectories = { partitionTmpDir };
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
@@ -139,14 +136,6 @@ public class DeltaStripeWALStorageNGTest {
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
         LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
 
-        txPartitionState = new TxPartitionState() {
-
-            @Override
-            public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0), 0);
-            }
-        };
-
         partitionIndex.open((partitionName) -> 0);
 
         currentVersionProvider = new CurrentVersionProvider() {
@@ -158,6 +147,16 @@ public class DeltaStripeWALStorageNGTest {
             @Override
             public void abandonVersion(VersionedPartitionName versionedPartitionName) throws Exception {
                 throw new UnsupportedOperationException("Stop it");
+            }
+
+            @Override
+            public <R> R tx(PartitionName partitionName, boolean createIfAbsent, CurrentVersionProvider.StripeIndexs<R> tx) throws Exception {
+                return tx.tx(0, 0, new StorageVersion(0, 0));
+            }
+
+            @Override
+            public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception {
+                invalidatable.call();
             }
         };
 
@@ -202,7 +201,7 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(interner, ids, member, partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        workingDirectories = new File[]{tmp};
+        workingDirectories = new File[] { tmp };
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
@@ -216,6 +215,7 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
+
         DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner,
             1,
             new AmzaStats(),
@@ -225,7 +225,7 @@ public class DeltaStripeWALStorageNGTest {
             deltaWALFactory,
             walIndexProviderRegistry,
             20_000, 8);
-        delta.load(txPartitionState, partitionIndex, 0, currentVersionProvider, primaryRowMarshaller);
+        delta.load(partitionIndex, currentVersionProvider, primaryRowMarshaller);
         return delta;
     }
 
@@ -241,7 +241,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage1, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 2, false),
             updated);
 
@@ -259,7 +259,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
 
-        deltaStripeWALStorage.merge(partitionIndex, 0, currentVersionProvider, true);
+        deltaStripeWALStorage.merge(partitionIndex, currentVersionProvider, true);
 
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key),
             new WALValue(testRowType1, UIO.intBytes(1), 2, false, 2));
@@ -267,7 +267,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(2, 2, UIO.intBytes(1)));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage1, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 1, false),
             updated);
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key),
@@ -276,9 +276,9 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(2, 2, UIO.intBytes(1)));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        deltaStripeWALStorage.merge(partitionIndex, 0, currentVersionProvider, true);
+        deltaStripeWALStorage.merge(partitionIndex, currentVersionProvider, true);
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage1, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 3, true),
             updated);
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key).getTombstoned());
@@ -286,7 +286,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(2, 2, UIO.intBytes(1)));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        deltaStripeWALStorage.merge(partitionIndex, 0, currentVersionProvider, true);
+        deltaStripeWALStorage.merge(partitionIndex, currentVersionProvider, true);
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key).getTombstoned());
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(false));
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
@@ -298,10 +298,10 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
 
         for (int i = 2; i <= 10; i++) {
-            deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage1, prefix,
+            deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
                 new IntUpdate(testRowType1, i, i, 4, false),
                 updated);
-            deltaStripeWALStorage.update(partitionIndex, true, testRowType2, highwaterStorage, versionedPartitionName2, 0, storage2, prefix,
+            deltaStripeWALStorage.update(partitionIndex, true, testRowType2, highwaterStorage, versionedPartitionName2, partitionStore2, prefix,
                 new IntUpdate(testRowType2, i, i, 4, false),
                 updated);
         }
@@ -347,10 +347,10 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage.getTimestampedValue(prefix, key1));
         Assert.assertNull(storage.getTimestampedValue(prefix, key2));
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 1, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 2, 2, 1, false),
             updated);
 
@@ -374,12 +374,12 @@ public class DeltaStripeWALStorageNGTest {
             return true;
         });
 
-        deltaStripeWALStorage.merge(partitionIndex, 0, currentVersionProvider, false);
+        deltaStripeWALStorage.merge(partitionIndex, currentVersionProvider, false);
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 2, true),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefix,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 2, 2, 2, true),
             updated);
 
@@ -410,28 +410,28 @@ public class DeltaStripeWALStorageNGTest {
         byte[] prefixA = "a".getBytes();
         byte[] prefixB = "b".getBytes();
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixA,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixA,
             new IntUpdate(testRowType1, 1, 101, 1001, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixB,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixB,
             new IntUpdate(testRowType1, 1, 201, 2001, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixA,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixA,
             new IntUpdate(testRowType1, 2, 102, 1002, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixB,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixB,
             new IntUpdate(testRowType1, 2, 202, 2002, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixA,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixA,
             new IntUpdate(testRowType1, 3, 103, 1003, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixB,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixB,
             new IntUpdate(testRowType1, 3, 203, 2003, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixA,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixA,
             new IntUpdate(testRowType1, 4, 104, 1004, false),
             updated);
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage, prefixB,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefixB,
             new IntUpdate(testRowType1, 4, 204, 2004, false),
             updated);
 
@@ -461,7 +461,7 @@ public class DeltaStripeWALStorageNGTest {
         });
         Assert.assertEquals(index[0], 4);
 
-        deltaStripeWALStorage.merge(partitionIndex, 0, currentVersionProvider, false);
+        deltaStripeWALStorage.merge(partitionIndex, currentVersionProvider, false);
 
         index[0] = 0;
         deltaStripeWALStorage.takeRowsFromTransactionId(versionedPartitionName1, storage, prefixA, 0, (rowFP, rowTxId, rowType, row) -> {
@@ -494,7 +494,7 @@ public class DeltaStripeWALStorageNGTest {
     public void testCorrectness() throws Exception {
         WALStorage storage1 = partitionStore1.getWalStorage();
 
-        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, 0, storage1, null,
+        deltaStripeWALStorage.update(partitionIndex, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, null,
             (highwaters, txKeyValueStream) -> {
                 for (int i = 0; i < 10_000; i++) {
                     txKeyValueStream.row(-1, UIO.longBytes(i), UIO.longBytes(i), System.currentTimeMillis(), false, orderIdProvider.nextId());
@@ -503,7 +503,7 @@ public class DeltaStripeWALStorageNGTest {
             },
             updated);
 
-        deltaStripeWALStorage.merge(partitionIndex, 0, currentVersionProvider, true);
+        deltaStripeWALStorage.merge(partitionIndex, currentVersionProvider, true);
 
         partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider, partitionPropertyMarshaller, 4);
         partitionIndex.open((partitionName) -> 0);

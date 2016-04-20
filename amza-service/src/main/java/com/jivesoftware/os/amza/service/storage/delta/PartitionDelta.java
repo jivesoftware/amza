@@ -193,7 +193,7 @@ class PartitionDelta {
                 return true;
             },
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry)
-                -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
+            -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
@@ -288,7 +288,7 @@ class PartitionDelta {
 
     void onLoadAppendTxFp(byte[] prefix, long rowTxId, long rowFP) {
         if (txIdWAL.isEmpty() || txIdWAL.last().txId != rowTxId) {
-            txIdWAL.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+            txIdWAL.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
         } else {
             txIdWAL.onLoadAddFpToTail(rowFP);
         }
@@ -296,7 +296,7 @@ class PartitionDelta {
             AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.computeIfAbsent(new WALPrefix(prefix),
                 walPrefix -> new AppendOnlyConcurrentArrayList(8));
             if (prefixTxFps.isEmpty() || prefixTxFps.last().txId != rowTxId) {
-                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
             } else {
                 prefixTxFps.onLoadAddFpToTail(rowFP);
             }
@@ -348,30 +348,38 @@ class PartitionDelta {
 
     public static class MergeResult {
 
+        public final PartitionStore partitionStore;
         public final VersionedPartitionName versionedPartitionName;
         public final WALIndex walIndex;
         public final long count;
         public final long lastTxId;
 
-        public MergeResult(VersionedPartitionName versionedPartitionName, WALIndex walIndex, long count, long lastTxId) {
+        public MergeResult(PartitionStore partitionStore,
+            VersionedPartitionName versionedPartitionName,
+            WALIndex walIndex,
+            long count,
+            long lastTxId) {
+
+            this.partitionStore = partitionStore;
             this.versionedPartitionName = versionedPartitionName;
-             this.walIndex = walIndex;
+            this.walIndex = walIndex;
             this.count = count;
             this.lastTxId = lastTxId;
         }
     }
 
-    MergeResult merge(PartitionIndex partitionIndex,int stripe, boolean validate) throws Exception {
+    MergeResult merge(PartitionIndex partitionIndex, int stripe, boolean validate) throws Exception {
         final PartitionDelta merge = merging.get();
         long merged = 0;
         long lastTxId = 0;
         WALIndex walIndex = null;
+        PartitionStore partitionStore = null;
         if (merge != null) {
             if (!merge.txIdWAL.isEmpty()) {
                 merged = merge.size();
                 lastTxId = merge.highestTxId();
 
-                PartitionStore partitionStore = validate
+                partitionStore = validate
                     ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName, stripe)
                     : partitionIndex.get(merge.versionedPartitionName, stripe);
                 PartitionProperties properties = partitionIndex.getProperties(merge.versionedPartitionName.getPartitionName());
@@ -379,10 +387,12 @@ class PartitionDelta {
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);
                 LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());
                 MutableBoolean eos = new MutableBoolean(false);
+
+                PartitionStore mergeToStore = partitionStore;
                 merge.txIdWAL.streamFromTxId(highestTxId, true, txFps -> {
                     long txId = txFps.txId;
 
-                    partitionStore.merge(false,
+                    mergeToStore.merge(false,
                         properties,
                         txId,
                         txFps.prefix,
@@ -431,7 +441,7 @@ class PartitionDelta {
             }
         }
         merging.set(null);
-        return new MergeResult(versionedPartitionName, walIndex, merged, lastTxId);
+        return new MergeResult(partitionStore, versionedPartitionName, walIndex, merged, lastTxId);
     }
 
     private static final Comparator<TxFps> txFpsComparator = (o1, o2) -> Longs.compare(o1.txId, o2.txId);

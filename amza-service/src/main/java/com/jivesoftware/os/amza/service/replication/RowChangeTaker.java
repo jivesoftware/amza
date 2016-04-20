@@ -5,7 +5,6 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -26,7 +25,6 @@ import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
@@ -71,9 +69,8 @@ public class RowChangeTaker implements RowChanges {
     private final AmzaRingStoreReader amzaRingReader;
     private final AmzaSystemReady systemReady;
     private final RingHost ringHost;
-    private final HighwaterStorage systemHighwaterStorage;
+    private final HighwaterStorage highwaterStorage;
     private final RowsTaker systemRowsTaker;
-    private final PartitionIndex partitionIndex;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AvailableRowsTaker availableRowsTaker;
     private final SystemPartitionCommitChanges systemPartitionCommitChanges;
@@ -88,6 +85,9 @@ public class RowChangeTaker implements RowChanges {
     private final ExecutorService availableRowsReceiverThreadPool;
     private final ExecutorService consumerThreadPool;
 
+    private final ExecutorService stripedRowTakerThreadPool;
+    private final RowsTaker stripedRowsTaker;
+
     private final Object[] stripedConsumerLocks;
     private final Object systemConsumerLock = new Object();
     private final Object realignmentLock = new Object();
@@ -101,11 +101,12 @@ public class RowChangeTaker implements RowChanges {
         AmzaRingStoreReader amzaRingReader,
         AmzaSystemReady systemReady,
         RingHost ringHost,
-        HighwaterStorage systemHighwaterStorage,
+        HighwaterStorage highwaterStorage,
         RowsTaker systemRowsTaker,
-        PartitionIndex partitionIndex,
         PartitionStripeProvider partitionStripeProvider,
         AvailableRowsTaker availableRowsTaker,
+        ExecutorService rowTakerThreadPool,
+        RowsTaker rowsTaker,
         SystemPartitionCommitChanges systemPartitionCommitChanges,
         StripedPartitionCommitChanges stripedPartitionCommitChanges,
         OrderIdProvider sessionIdProvider,
@@ -120,11 +121,12 @@ public class RowChangeTaker implements RowChanges {
         this.amzaRingReader = amzaRingReader;
         this.systemReady = systemReady;
         this.ringHost = ringHost;
-        this.systemHighwaterStorage = systemHighwaterStorage;
+        this.highwaterStorage = highwaterStorage;
         this.systemRowsTaker = systemRowsTaker;
-        this.partitionIndex = partitionIndex;
         this.partitionStripeProvider = partitionStripeProvider;
         this.availableRowsTaker = availableRowsTaker;
+        this.stripedRowTakerThreadPool = rowTakerThreadPool;
+        this.stripedRowsTaker = rowsTaker;
         this.systemPartitionCommitChanges = systemPartitionCommitChanges;
         this.stripedPartitionCommitChanges = stripedPartitionCommitChanges;
         this.sessionIdProvider = sessionIdProvider;
@@ -154,14 +156,11 @@ public class RowChangeTaker implements RowChanges {
                 versionedPartitionName -> {
 
                     PartitionName partitionName = versionedPartitionName.getPartitionName();
-                    int stripe = 0;
-                    if (partitionName.isSystemPartition()) {
-                        stripe = storageVersionProvider.getSystemStripe(partitionName);
-                    } else {
-                        StorageVersion storageVersion = storageVersionProvider.lookupStorageVersion(partitionName);
-                        stripe = storageVersion == null ? -1 : storageVersionProvider.getCurrentStripe(storageVersion);
+                    try {
+                        return storageVersionProvider.tx(partitionName, false, (deltaIndex, stripeIndex, storageVersion) -> stripeIndex == consumerForStripe);
+                    } catch (Exception x) {
+                        throw new RuntimeException(x);
                     }
-                    return stripe == consumerForStripe;
                 }
             );
         }
@@ -216,17 +215,17 @@ public class RowChangeTaker implements RowChanges {
 
     }
 
-    private Object consumerLock(PartitionName partitionName) {
+    private Object consumerLock(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return systemConsumerLock;
         } else {
-            StorageVersion storageVersion = storageVersionProvider.lookupStorageVersion(partitionName);
-            int stripe = storageVersion == null ? -1 : storageVersionProvider.getCurrentStripe(storageVersion);
-            if (stripe == -1) {
-                return null;
-            } else {
-                return stripedConsumerLocks[stripe];
-            }
+            return storageVersionProvider.tx(partitionName, false, (deltaIndex, stripeIndex, storageVersion) -> {
+                if (stripeIndex == -1) {
+                    return null;
+                } else {
+                    return stripedConsumerLocks[stripeIndex];
+                }
+            });
         }
     }
 
@@ -285,6 +284,7 @@ public class RowChangeTaker implements RowChanges {
         availableRowsReceiverThreadPool.shutdownNow();
         systemRowTakerThreadPool.shutdownNow();
         consumerThreadPool.shutdownNow();
+        stripedRowTakerThreadPool.shutdownNow();
     }
 
     private static class SessionedTxId {
@@ -419,13 +419,10 @@ public class RowChangeTaker implements RowChanges {
                 rowTakerThreadPool = systemRowTakerThreadPool;
                 rowsTaker = systemRowsTaker;
             } else {
-                rowTakerThreadPool = partitionStripeProvider.getRowTakerThreadPool(partitionName);
-                rowsTaker = partitionStripeProvider.getRowsTaker(partitionName);
+                rowTakerThreadPool = stripedRowTakerThreadPool;
+                rowsTaker = stripedRowsTaker;
             }
 
-            /*partitionStateStorage.remoteVersion(remoteRingMember,
-             partitionName,
-             remoteVersionedPartitionName.getPartitionVersion());*/
             long[] highwater = new long[1];
 
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStripeProvider.txPartition(partitionName,
@@ -433,8 +430,8 @@ public class RowChangeTaker implements RowChanges {
 
                     VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-                    highwater[0] = systemHighwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-                    if (!partitionStripe.exists(localVersionedPartitionName)) {
+                    highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
+                    if (partitionStripe != null && !partitionStripe.exists(localVersionedPartitionName)) {
                         //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} state:{}",
                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                         return null;

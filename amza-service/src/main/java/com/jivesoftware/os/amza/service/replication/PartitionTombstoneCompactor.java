@@ -74,7 +74,6 @@ public class PartitionTombstoneCompactor {
                     }
                     return null;
                 });
-
             return true;
         });
     }

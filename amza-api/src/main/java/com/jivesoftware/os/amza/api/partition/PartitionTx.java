@@ -6,5 +6,5 @@ package com.jivesoftware.os.amza.api.partition;
  */
 public interface PartitionTx<R> {
 
-    R tx(VersionedAquarium versionedAquarium, int stripe) throws Exception;
+    R tx(VersionedAquarium versionedAquarium) throws Exception;
 }

@@ -313,7 +313,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             partitionStripeProvider.txPartition(name, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
                 if (includeCount) {
-                    map.put("count", numberFormat.format(partitionStripe.count(versionedAquarium)));
+                    map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
                 } else {
                     map.put("count", "(requires watch)");
                 }
@@ -331,7 +331,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
-                map.put("highestTxId", String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium, (versionedAquarium1, highestTxId) -> highestTxId)));
+                map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium,
+                    (versionedAquarium1, highestTxId) -> highestTxId)));
 
                 int category = categories.getOrDefault(versionedPartitionName, -1);
                 long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);
@@ -407,9 +408,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         }
         map.put("gets", numberFormat.format(totals.gets.get()));
-        map.put("getsLag", getDurationBreakdown(totals.getsLag.get()));
+        map.put("getsLag", getDurationBreakdown(totals.getsLatency.get()));
         map.put("scans", numberFormat.format(totals.scans.get()));
-        map.put("scansLag", getDurationBreakdown(totals.scansLag.get()));
+        map.put("scansLag", getDurationBreakdown(totals.scansLatency.get()));
         map.put("directApplies", numberFormat.format(totals.directApplies.get()));
         map.put("directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()));
         map.put("updates", numberFormat.format(totals.updates.get()));
@@ -475,12 +476,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         Totals grandTotal = amzaStats.getGrandTotal();
 
         sb.append(progress("Gets (" + numberFormat.format(grandTotal.gets.get()) + ")",
-            (int) (((double) grandTotal.getsLag.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.getsLag.longValue()) + " lag"));
+            (int) (((double) grandTotal.getsLatency.longValue() / 1000d) * 100),
+            getDurationBreakdown(grandTotal.getsLatency.longValue()) + " lag"));
 
         sb.append(progress("Scans (" + numberFormat.format(grandTotal.scans.get()) + ")",
-            (int) (((double) grandTotal.scansLag.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scansLag.longValue()) + " lag"));
+            (int) (((double) grandTotal.scansLatency.longValue() / 1000d) * 100),
+            getDurationBreakdown(grandTotal.scansLatency.longValue()) + " lag"));
 
         sb.append(progress("Direct Applied (" + numberFormat.format(grandTotal.directApplies.get()) + ")",
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),

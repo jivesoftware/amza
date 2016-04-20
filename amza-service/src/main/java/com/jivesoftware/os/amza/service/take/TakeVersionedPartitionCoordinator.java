@@ -2,15 +2,17 @@ package com.jivesoftware.os.amza.service.take;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
-import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
 import com.jivesoftware.os.amza.service.take.TakeRingCoordinator.VersionedRing;
@@ -30,6 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class TakeVersionedPartitionCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
+    final SystemWALStorage systemWALStorage;
     final RingMember rootMember;
     final VersionedPartitionName versionedPartitionName;
     final TimestampedOrderIdProvider timestampedOrderIdProvider;
@@ -48,7 +52,8 @@ public class TakeVersionedPartitionCoordinator {
     private long lastTakenMillis = -1; // approximate is good enough
     private long lastCategoryCheckMillis = -1; // approximate is good enough
 
-    public TakeVersionedPartitionCoordinator(RingMember rootMember,
+    public TakeVersionedPartitionCoordinator(SystemWALStorage systemWALStorage,
+        RingMember rootMember,
         VersionedPartitionName versionedPartitionName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         long slowTakeMillis,
@@ -56,6 +61,7 @@ public class TakeVersionedPartitionCoordinator {
         long systemReofferDeltaMillis,
         long reofferDeltaMillis) {
 
+        this.systemWALStorage = systemWALStorage;
         this.rootMember = rootMember;
         this.versionedPartitionName = versionedPartitionName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
@@ -67,7 +73,6 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     long availableRowsStream(PartitionStripeProvider partitionStripeProvider,
-        TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
@@ -88,7 +93,7 @@ public class TakeVersionedPartitionCoordinator {
                     if (stable.isDormant()) {
                         return Long.MAX_VALUE;
                     } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                        return txHighestPartitionTx.tx(partitionStripe, versionedAquarium, (versionedAquarium1, highestTxId) -> {
+                        return highestPartitionTx(partitionStripe, versionedAquarium, (versionedAquarium1, highestTxId) -> {
                             if (versionedAquarium1 != null) {
                                 return streamHighestTxId(versionedAquarium1,
                                     highestTxId,
@@ -113,6 +118,19 @@ public class TakeVersionedPartitionCoordinator {
         } catch (NotARingMemberException e) {
             LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
             return Long.MAX_VALUE;
+        }
+    }
+
+    private long highestPartitionTx(PartitionStripe partitionStripe,
+        VersionedAquarium versionedAquarium,
+        HighestPartitionTx highestPartitionTx) throws Exception {
+
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        if (partitionName.isSystemPartition()) {
+            return systemWALStorage.highestPartitionTxId(versionedPartitionName, highestPartitionTx);
+        } else {
+            return partitionStripe.highestAquariumTxId(versionedAquarium, highestPartitionTx);
         }
     }
 
@@ -219,7 +237,8 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     private boolean shouldOffer(Session session, long highestTxId) {
-        return highestTxId > -1 && (highestTxId > session.offeredTxId || (highestTxId > session.tookTxId && System.currentTimeMillis() > session.reofferAtTimeInMillis));
+        return highestTxId > -1 && (highestTxId > session.offeredTxId || (highestTxId > session.tookTxId && System.currentTimeMillis() > session
+            .reofferAtTimeInMillis));
     }
 
     void updateTxId(VersionedRing versionedRing, boolean replicated, long updateTxId, boolean invalidateOnline) throws Exception {
@@ -239,8 +258,7 @@ public class TakeVersionedPartitionCoordinator {
         }
     }
 
-    void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
-        long takeSessionId,
+    void rowsTaken(long takeSessionId,
         PartitionStripe partitionStripe,
         VersionedAquarium versionedAquarium,
         VersionedRing versionedRing,
@@ -254,7 +272,7 @@ public class TakeVersionedPartitionCoordinator {
             return;
         }
 
-        long highestTxId = txHighestPartitionTx.tx(partitionStripe, versionedAquarium, (versionedAquarium1, _highestTxId) -> _highestTxId);
+        long highestTxId = highestPartitionTx(partitionStripe, versionedAquarium, (versionedAquarium1, _highestTxId) -> _highestTxId);
         Session session = sessions.get(remoteRingMember);
         if (session != null) {
             synchronized (session) {
@@ -283,7 +301,7 @@ public class TakeVersionedPartitionCoordinator {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (replicated) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
-            int[] fastEnough = {0};
+            int[] fastEnough = { 0 };
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
                 if (fastEnough[0] < versionedRing.takeFromFactor) {

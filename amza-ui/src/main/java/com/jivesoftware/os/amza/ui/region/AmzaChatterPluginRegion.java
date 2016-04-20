@@ -161,10 +161,10 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 if (totals != null) {
                     cells[partitionInteractionIndex] = new Element[]{
                         totals.gets.get() < 1 ? null : new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null),
-                        totals.getsLag.get() < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLag.get()),
+                        totals.getsLatency.get() < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLatency.get()),
                         null),
                         totals.scans.get() < 1 ? null : new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null),
-                        totals.scansLag.get() < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLag.get()),
+                        totals.scansLatency.get() < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLatency.get()),
                         null),
                         totals.directApplies.get() < 1 ? null : new Element("interactions", "interactions", "directApplies", numberFormat.format(
                         totals.directApplies.get()), null),
@@ -346,14 +346,14 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 if (totals.gets.get() > 0) {
                     headerCell.add(new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null));
                 }
-                if (totals.getsLag.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLag.get()), null));
+                if (totals.getsLatency.get() > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "getsLatency", getDurationBreakdown(totals.getsLatency.get()), null));
                 }
                 if (totals.scans.get() > 0) {
                     headerCell.add(new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null));
                 }
-                if (totals.scansLag.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLag.get()), null));
+                if (totals.scansLatency.get() > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "scansLatency", getDurationBreakdown(totals.scansLatency.get()), null));
                 }
                 if (totals.directApplies.get() > 0) {
                     headerCell.add(new Element("interactions", "interactions", "directApplies", numberFormat.format(totals.directApplies.get()), null));

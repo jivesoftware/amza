@@ -4,7 +4,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
@@ -12,6 +11,7 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader.RingNameStream;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
@@ -35,6 +35,7 @@ public class TakeCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final SystemWALStorage systemWALStorage;
     private final RingMember rootMember;
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
@@ -50,7 +51,8 @@ public class TakeCoordinator {
     private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
 
-    public TakeCoordinator(RingMember rootMember,
+    public TakeCoordinator(SystemWALStorage systemWALStorage,
+        RingMember rootMember,
         AmzaStats amzaStats,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
@@ -59,6 +61,7 @@ public class TakeCoordinator {
         long slowTakeInMillis,
         long systemReofferDeltaMillis,
         long reofferDeltaMillis) {
+        this.systemWALStorage = systemWALStorage;
         this.rootMember = rootMember;
         this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
@@ -204,7 +207,8 @@ public class TakeCoordinator {
 
     private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, RingSupplier ringSupplier) {
         return takeRingCoordinators.computeIfAbsent(ringName,
-            key -> new TakeRingCoordinator(rootMember,
+            key -> new TakeRingCoordinator(systemWALStorage,
+                rootMember,
                 key,
                 timestampedOrderIdProvider,
                 idPacker,
@@ -229,7 +233,6 @@ public class TakeCoordinator {
     }
 
     public void availableRowsStream(boolean system,
-        TxHighestPartitionTx txHighestPartitionTx,
         AmzaRingReader ringReader,
         PartitionStripeProvider partitionStripeProvider,
         RingMember remoteRingMember,
@@ -249,7 +252,7 @@ public class TakeCoordinator {
         while (true) {
             long start = updates.get();
 
-            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
 
             RingNameStream ringNameStream = (ringName) -> {
                 if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
@@ -266,7 +269,6 @@ public class TakeCoordinator {
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
                         ring.availableRowsStream(partitionStripeProvider,
-                            txHighestPartitionTx,
                             remoteRingMember,
                             takeSessionId,
                             watchAvailableStream));
@@ -280,7 +282,7 @@ public class TakeCoordinator {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }
 
-            if (offered.longValue()== 0) {
+            if (offered.longValue() == 0) {
                 pingCallback.call(); // Ping aka keep the socket alive
             } else {
                 offered.setValue(0);
@@ -299,7 +301,7 @@ public class TakeCoordinator {
                     long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
                     //LOG.info("PARKED:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());
-                    if (offered.longValue()== 0) {
+                    if (offered.longValue() == 0) {
                         pingCallback.call(); // Ping aka keep the socket alive
                     } else {
                         offered.setValue(0);
@@ -315,8 +317,7 @@ public class TakeCoordinator {
         }
     }
 
-    public void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
-        RingMember remoteRingMember,
+    public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
         PartitionStripe partitionStripe,
         VersionedAquarium versionedAquarium,
@@ -324,7 +325,7 @@ public class TakeCoordinator {
 
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
-        ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, partitionStripe, versionedAquarium, localTxId);
+        ring.rowsTaken(remoteRingMember, takeSessionId, partitionStripe, versionedAquarium, localTxId);
     }
 
 }

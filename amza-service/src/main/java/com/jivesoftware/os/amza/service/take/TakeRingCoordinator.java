@@ -4,11 +4,11 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.CategoryStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
@@ -26,6 +26,7 @@ public class TakeRingCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final SystemWALStorage systemWALStorage;
     private final RingMember rootMember;
     private final byte[] ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
@@ -40,7 +41,8 @@ public class TakeRingCoordinator {
     private volatile long callCount;
     private volatile VersionedRing versionedRing;
 
-    public TakeRingCoordinator(RingMember rootMember,
+    public TakeRingCoordinator(SystemWALStorage systemWALStorage,
+        RingMember rootMember,
         byte[] ringName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
@@ -50,6 +52,7 @@ public class TakeRingCoordinator {
         long reofferDeltaMillis,
         RingTopology ring) {
 
+        this.systemWALStorage = systemWALStorage;
         this.rootMember = rootMember;
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
@@ -88,7 +91,8 @@ public class TakeRingCoordinator {
 
     private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName) {
         return partitionCoordinators.computeIfAbsent(versionedPartitionName,
-            key -> new TakeVersionedPartitionCoordinator(rootMember,
+            key -> new TakeVersionedPartitionCoordinator(systemWALStorage,
+                rootMember,
                 versionedPartitionName,
                 timestampedOrderIdProvider,
                 slowTakeInMillis,
@@ -98,7 +102,6 @@ public class TakeRingCoordinator {
     }
 
     long availableRowsStream(PartitionStripeProvider partitionStripeProvider,
-        TxHighestPartitionTx txHighestPartitionTx,
         RingMember ringMember,
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
@@ -112,7 +115,6 @@ public class TakeRingCoordinator {
             PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
             if (properties.replicated) {
                 long timeout = coordinator.availableRowsStream(partitionStripeProvider,
-                    txHighestPartitionTx,
                     takeSessionId,
                     ring,
                     ringMember,
@@ -123,8 +125,7 @@ public class TakeRingCoordinator {
         return suggestedWaitInMillis;
     }
 
-    void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
-        RingMember remoteRingMember,
+    void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
         PartitionStripe partitionStripe,
         VersionedAquarium versionedAquarium,
@@ -132,8 +133,7 @@ public class TakeRingCoordinator {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(versionedAquarium.getVersionedPartitionName());
         if (coordinator != null) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            coordinator.rowsTaken(txHighestPartitionTx,
-                takeSessionId,
+            coordinator.rowsTaken(takeSessionId,
                 partitionStripe,
                 versionedAquarium,
                 versionedRing,

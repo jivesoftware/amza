@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.scan.CommitTo;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 
 /**

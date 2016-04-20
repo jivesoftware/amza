@@ -28,11 +28,11 @@ public class StripedPartitionCommitChanges implements CommitChanges {
     public void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         partitionStripeProvider.txPartition(partitionName,
-            (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                 return commitTx.tx(highwaterStorage,
                     versionedAquarium,
                     (prefix, commitable) -> {
-                        return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                        return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                             return partitionStripe.commit(highwaterStorage,
                                 versionedAquarium,
                                 false,

@@ -426,12 +426,12 @@ public class RowChangeTaker implements RowChanges {
             long[] highwater = new long[1];
 
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStripeProvider.txPartition(partitionName,
-                (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+                (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
 
                     VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                     highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-                    boolean exists = partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                    boolean exists = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                         return partitionStripe == null || partitionStripe.exists(localVersionedPartitionName);
                     });
                     if (!exists) {
@@ -471,7 +471,7 @@ public class RowChangeTaker implements RowChanges {
             }*/
             if (currentLocalVersionedPartitionName == null) {
                 partitionStripeProvider.txPartition(partitionName,
-                    (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+                    (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                         Waterline leader = versionedAquarium.getLeader();
                         long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
                         tookFully(versionedAquarium, remoteRingMember, leadershipToken);

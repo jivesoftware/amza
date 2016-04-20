@@ -9,10 +9,10 @@ import com.jivesoftware.os.amza.service.take.HighwaterStorage;
  */
 public interface StripeTx<R> {
 
-    R tx(PartitionStripePromise partitionStripePromise, HighwaterStorage highwaterStorage, VersionedAquarium versionedAquarium) throws Exception;
+    R tx(TxPartitionStripe txPartitionStripe, HighwaterStorage highwaterStorage, VersionedAquarium versionedAquarium) throws Exception;
 
-    interface PartitionStripePromise {
+    interface TxPartitionStripe {
 
-        <S> S get(PartitionStripeTx<S> partitionStripeTx) throws Exception;
+        <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception;
     }
 }

@@ -130,7 +130,7 @@ public class PartitionComposter implements RowChanges {
                     PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                     dirtyPartitions.remove(key);
                     try {
-                        partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+                        partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                             if (compostIfNecessary(versionedAquarium)) {
                                 composted.add(versionedPartitionName);
@@ -162,7 +162,7 @@ public class PartitionComposter implements RowChanges {
 
     public void compostPartitionIfNecessary(PartitionName partitionName) throws Exception {
         VersionedPartitionName compost = partitionStripeProvider.txPartition(partitionName,
-            (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+            (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                 if (compostIfNecessary(versionedAquarium)) {
                     return versionedAquarium.getVersionedPartitionName();
                 } else {
@@ -220,8 +220,8 @@ public class PartitionComposter implements RowChanges {
         amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         try {
             LOG.info("Expunging {} {}.", partitionName, partitionVersion);
-            partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
-                partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+            partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+                txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                     partitionStripe.deleteDelta(versionedPartitionName);
                     return null;
                 });

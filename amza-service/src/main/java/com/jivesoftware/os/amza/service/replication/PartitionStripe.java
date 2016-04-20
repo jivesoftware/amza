@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -77,26 +76,15 @@ public class PartitionStripe {
     boolean exists(VersionedPartitionName localVersionedPartitionName) throws Exception {
         return partitionIndex.exists(localVersionedPartitionName, stripeIndex);
     }
-    
-    public long highestAquariumTxId(VersionedAquarium versionedAquarium, HighestPartitionTx tx) throws Exception {
+
+    public long highestAquariumTxId(VersionedAquarium versionedAquarium) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
         if (partitionStore != null) {
-            long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
-            return tx.tx(versionedAquarium, highestTxId);
+            return storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
         } else {
-            return tx.tx(null, -1);
+            return -1;
         }
-    }
-
-    public interface PartitionLeadershipToken {
-
-        long getLeadershipToken(VersionedAquarium versionedAquarium) throws Exception;
-    }
-
-    public interface PostCommit {
-
-        void committed(VersionedPartitionName versionedPartitionName, long leadershipToken, long largestCommittedTxId) throws Exception;
     }
 
     public RowsChanged commit(HighwaterStorage highwaterStorage,
@@ -105,14 +93,11 @@ public class PartitionStripe {
         Optional<Long> specificVersion,
         boolean requiresOnline,
         byte[] prefix,
-        PartitionLeadershipToken partitionLeadershipToken,
         Commitable updates,
-        PostCommit postCommit,
         WALUpdated updated) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        long leadershipToken = partitionLeadershipToken.getLeadershipToken(versionedAquarium);
         Preconditions.checkState(!requiresOnline || livelyEndState.isOnline(), "Partition:%s state:%s is not online.",
             versionedPartitionName,
             livelyEndState);
@@ -123,8 +108,7 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            RowsChanged changes = storage.update(partitionIndex,
-                directApply,
+            RowsChanged changes = storage.update(directApply,
                 partitionStore.getProperties().rowType,
                 highwaterStorage,
                 versionedPartitionName,
@@ -135,7 +119,6 @@ public class PartitionStripe {
             if (allRowChanges != null && !changes.isEmpty()) {
                 allRowChanges.changes(changes);
             }
-            postCommit.committed(versionedPartitionName, leadershipToken, changes.getLargestCommittedTxId());
             return changes;
         }
 

@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 
@@ -30,9 +31,7 @@ public class SystemPartitionCommitChanges implements CommitChanges {
 
     @Override
     public void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception {
-        commitTx.tx(storageVersionProvider.getSystemStripe(versionedPartitionName.getPartitionName()),
-            null,
-            highwaterStorage,
+        commitTx.tx(highwaterStorage,
             new VersionedAquarium(versionedPartitionName, null, 0),
             (prefix, commitable) -> systemWALStorage.update(versionedPartitionName, prefix, commitable, walUpdated));
         highwaterStorage.flush(null);

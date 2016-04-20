@@ -9,7 +9,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
-import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -269,7 +268,7 @@ public class DeltaStripeWALStorage {
     }
 
     public boolean hasChangesFor(VersionedPartitionName versionedPartitionName) {
-        return partitionDeltas.contains(versionedPartitionName);
+        return partitionDeltas.containsKey(versionedPartitionName);
     }
 
     public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
@@ -363,9 +362,16 @@ public class DeltaStripeWALStorage {
                         try {
                             while (true) {
                                 try {
-                                    result = currentVersionProvider.tx(versionedPartitionName.getPartitionName(), false,
-                                        (int deltaIndex, int stripeIndex, StorageVersion storageVersion) -> {
-                                            MergeResult r = currentDelta.merge(partitionIndex, stripeIndex, validate);
+                                    result = currentVersionProvider.tx(versionedPartitionName.getPartitionName(),
+                                        null,
+                                        (deltaIndex, stripeIndex, storageVersion) -> {
+                                            MergeResult r;
+                                            if (stripeIndex == -1) {
+                                                LOG.warn("Ignored merge for partition {} with nonexistent storage", versionedPartitionName);
+                                                r = null;
+                                            } else {
+                                                r = currentDelta.merge(partitionIndex, stripeIndex, validate);
+                                            }
                                             sickThreads.recovered();
                                             return r;
                                         });
@@ -442,23 +448,17 @@ public class DeltaStripeWALStorage {
             releaseAll();
         }
 
-
         for (MergeResult result : results) {
             VersionedPartitionName versionedPartitionName = result.versionedPartitionName;
             currentVersionProvider.invalidateDeltaIndexCache(versionedPartitionName, () -> {
-                if (!hasChangesFor(versionedPartitionName)) {
-                    partitionDeltas.remove(versionedPartitionName);
-                    return true;
-                } else {
-                    return false;
-                }
+                PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
+                return partitionDelta == null || partitionDelta.mergedSize() == 0;
             });
         }
         return true;
     }
 
-    public RowsChanged update(PartitionIndex partitionIndex,
-        boolean directApply,
+    public RowsChanged update(boolean directApply,
         RowType rowType,
         HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,

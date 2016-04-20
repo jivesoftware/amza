@@ -5,8 +5,8 @@ import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader.RingNameStream;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -24,6 +24,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -50,6 +51,9 @@ public class TakeCoordinator {
     private final long slowTakeInMillis;
     private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
+
+    private final AtomicBoolean running = new AtomicBoolean();
+    private ExecutorService cya;
 
     public TakeCoordinator(SystemWALStorage systemWALStorage,
         RingMember rootMember,
@@ -92,34 +96,43 @@ public class TakeCoordinator {
     }
 
     public void start(AmzaRingReader ringReader, BootstrapPartitions bootstrapPartitions) {
-        ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
-        cya.submit(() -> {
-            while (true) {
-                long updates = cyaLock.get();
-                try {
-                    takeRingCoordinators.stream((ringName, takeRingCoordinator) -> {
-                        RingTopology ring = ringReader.getRing(ringName);
-                        if (takeRingCoordinator.cya(ring)) {
-                            awakeRemoteTakers(ring);
-                        }
-                        return true;
-                    });
+        if (running.compareAndSet(false, true)) {
+            cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
+            cya.submit(() -> {
+                while (running.get()) {
+                    long updates = cyaLock.get();
+                    try {
+                        takeRingCoordinators.stream((ringName, takeRingCoordinator) -> {
+                            RingTopology ring = ringReader.getRing(ringName);
+                            if (takeRingCoordinator.cya(ring)) {
+                                awakeRemoteTakers(ring);
+                            }
+                            return true;
+                        });
 
-                } catch (Exception x) {
-                    LOG.error("Failed while ensuring alignment.", x);
-                }
-                try {
-                    synchronized (cyaLock) {
-                        if (cyaLock.get() == updates) {
-                            cyaLock.wait(cyaIntervalMillis);
-                        }
+                    } catch (Exception x) {
+                        LOG.error("Failed while ensuring alignment.", x);
                     }
-                } catch (InterruptedException x) {
-                    Thread.currentThread().interrupt();
+                    try {
+                        synchronized (cyaLock) {
+                            if (cyaLock.get() == updates) {
+                                cyaLock.wait(cyaIntervalMillis);
+                            }
+                        }
+                    } catch (Exception x) {
+                        LOG.warn("Exception while awaiting cya.", x);
+                    }
                 }
-            }
+                return null;
+            });
+        }
+    }
 
-        });
+    public void stop() {
+        if (running.compareAndSet(true, false)) {
+            cya.shutdownNow();
+            cya = null;
+        }
     }
 
     public void expunged(VersionedPartitionName versionedPartitionName) {
@@ -319,13 +332,13 @@ public class TakeCoordinator {
 
     public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
-        PartitionStripe partitionStripe,
+        PartitionStripePromise partitionStripePromise,
         VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
 
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
-        ring.rowsTaken(remoteRingMember, takeSessionId, partitionStripe, versionedAquarium, localTxId);
+        ring.rowsTaken(remoteRingMember, takeSessionId, partitionStripePromise, versionedAquarium, localTxId);
     }
 
 }

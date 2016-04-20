@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Consistency;
-import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -36,6 +35,7 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -195,8 +195,12 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
-        return systemWALStorage.highestPartitionTxId(versionedPartitionName, highestPartitionTx);
+    public long highestTxId() throws Exception {
+        return systemWALStorage.highestPartitionTxId(versionedPartitionName);
     }
 
+    @Override
+    public LivelyEndState livelyEndState() throws Exception {
+        return LivelyEndState.ALWAYS_ONLINE;
+    }
 }

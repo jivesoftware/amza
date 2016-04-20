@@ -102,7 +102,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     public TimestampedRingHost getRingHost() throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
         TimestampedValue registeredHost = nodeIndex.getTimestampedValue(null, rootRingMember.toBytes());
@@ -121,7 +121,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     @Override
     public RingTopology getRing(byte[] ringName) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
         CacheId<RingTopology> cacheIdRingTopology = ringsCache.computeIfAbsent(ringName, key -> new CacheId<>(null));
@@ -170,7 +170,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     public void streamRingMembersAndHosts(RingMemberAndHostStream stream) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
         nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
@@ -194,7 +194,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
         TimestampedValue rawRingHost = nodeIndex.getTimestampedValue(null, ringMember.toBytes());
@@ -203,7 +203,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     public Set<RingMember> getNeighboringRingMembers(byte[] ringName) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
         byte[] from = key(ringName, null);
@@ -227,7 +227,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     @Override
     public void getRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
         CacheId<RingSet> cacheIdRingSet = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember.leakBytes(), key -> new CacheId<>(null));
@@ -280,7 +280,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     @Override
     public void allRings(RingStream ringStream) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
-            throw new IllegalStateException("Ring store reader was't opened or has already bee closed.");
+            throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
         nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {

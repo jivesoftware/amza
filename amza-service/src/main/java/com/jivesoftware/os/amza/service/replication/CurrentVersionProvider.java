@@ -15,7 +15,7 @@ public interface CurrentVersionProvider {
         R tx(int deltaIndex, int stripeIndex, StorageVersion storageVersion) throws Exception;
     }
 
-    <R> R tx(PartitionName partitionName, boolean createIfAbsent, StripeIndexs<R> tx) throws Exception;
+    <R> R tx(PartitionName partitionName, StorageVersion storageVersion, StripeIndexs<R> tx) throws Exception;
 
     void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception;
 

@@ -143,10 +143,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                 Partition partition = amzaService.getPartition(versionedPartitionName.getPartitionName());
                 LivelyEndState[] livelyEndState = new LivelyEndState[1];
-                partition.highestTxId((versionedAquarium, highestTxId) -> {
-                    livelyEndState[0] = versionedAquarium.getLivelyEndState();
-                    return highestTxId;
-                });
+                livelyEndState[0] = partition.livelyEndState();
 
                 cells[partitionNameIndex] = new Element[]{
                     new Element("ring", "ring", new String(versionedPartitionName.getPartitionName().getRingName(), StandardCharsets.UTF_8), null,

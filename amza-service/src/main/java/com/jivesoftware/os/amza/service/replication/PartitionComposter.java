@@ -130,7 +130,7 @@ public class PartitionComposter implements RowChanges {
                     PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                     dirtyPartitions.remove(key);
                     try {
-                        partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+                        partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
                             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                             if (compostIfNecessary(versionedAquarium)) {
                                 composted.add(versionedPartitionName);
@@ -155,14 +155,14 @@ public class PartitionComposter implements RowChanges {
             try {
                 partitionStripeProvider.expunged(compost);
             } catch (Exception e) {
-                LOG.warn("Failed to expunge {}", new Object[]{compost}, e);
+                LOG.warn("Failed to expunge {}", new Object[] { compost }, e);
             }
         }
     }
 
     public void compostPartitionIfNecessary(PartitionName partitionName) throws Exception {
         VersionedPartitionName compost = partitionStripeProvider.txPartition(partitionName,
-            (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
+            (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
                 if (compostIfNecessary(versionedAquarium)) {
                     return versionedAquarium.getVersionedPartitionName();
                 } else {
@@ -220,15 +220,18 @@ public class PartitionComposter implements RowChanges {
         amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         try {
             LOG.info("Expunging {} {}.", partitionName, partitionVersion);
-            partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
-                partitionStripe.deleteDelta(versionedPartitionName);
+            partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+                partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                    partitionStripe.deleteDelta(versionedPartitionName);
+                    return null;
+                });
                 partitionIndex.delete(versionedPartitionName);
                 highwaterStorage.delete(versionedPartitionName);
                 return null;
             });
             LOG.info("Expunged {} {}.", partitionName, partitionVersion);
         } catch (Exception e) {
-            LOG.error("Failed to compost partition {}", new Object[]{versionedPartitionName}, e);
+            LOG.error("Failed to compost partition {}", new Object[] { versionedPartitionName }, e);
         } finally {
             amzaStats.endCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         }

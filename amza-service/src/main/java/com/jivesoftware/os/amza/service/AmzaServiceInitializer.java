@@ -339,7 +339,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             config.flushHighwatersAfterNUpdates);
 
-       
+
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
             amzaStats,
             partitionIndex,
@@ -379,21 +379,23 @@ public class AmzaServiceInitializer {
             int count = 0;
             for (PartitionName partitionName : partitionIndex.getMemberPartitions(ringStoreReader)) {
                 count++;
-                partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage1, versionedAquarium) -> {
-                    VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                    PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripe);
-                    if (partitionStore != null) {
-                        takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
-                    } else {
-                        LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}", versionedPartitionName);
-                    }
-                    return null;
+                partitionStripeProvider.txPartition(partitionName, (partitionStripePromise, highwaterStorage1, versionedAquarium) -> {
+                    return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+                        if (partitionStore != null) {
+                            takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
+                        } else {
+                            LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}", versionedPartitionName);
+                        }
+                        return null;
+                    });
                 });
             }
             LOG.info("Finished loading {} highest txIds after system ready!", count);
             return null;
         });
-        
+
 
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             numberOfStripes,
@@ -416,7 +418,7 @@ public class AmzaServiceInitializer {
             highwaterRowMarshaller);
 
         PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(partitionIndex,
-            partitionStripeProvider,
+            storageVersionProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.numberOfCompactorThreads);
 

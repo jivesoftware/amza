@@ -74,7 +74,7 @@ public class AmzaStateStorageNGTest {
             partitionPropertyMarshaller,
             4);
 
-        partitionIndex.open((partitionName) -> 0);
+        partitionIndex.init((partitionName) -> 0);
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,

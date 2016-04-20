@@ -27,20 +27,23 @@ public class StripedPartitionCommitChanges implements CommitChanges {
     @Override
     public void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
-        partitionStripeProvider.txPartition(partitionName, (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
-            return commitTx.tx(stripe, partitionStripe, highwaterStorage, versionedAquarium,
-                (prefix, commitable) -> partitionStripe.commit(highwaterStorage,
+        partitionStripeProvider.txPartition(partitionName,
+            (partitionStripePromise, highwaterStorage, versionedAquarium) -> {
+                return commitTx.tx(highwaterStorage,
                     versionedAquarium,
-                    false,
-                    Optional.of(versionedPartitionName.getPartitionVersion()),
-                    false,
-                    prefix,
-                    versionedAquarium1 -> -1,
-                    commitable,
-                    (versionedPartitionName1, leadershipToken, largestCommittedTxId) -> {
-                    },
-                    walUpdated));
-        });
+                    (prefix, commitable) -> {
+                        return partitionStripePromise.get((deltaIndex, stripeIndex, partitionStripe) -> {
+                            return partitionStripe.commit(highwaterStorage,
+                                versionedAquarium,
+                                false,
+                                Optional.of(versionedPartitionName.getPartitionVersion()),
+                                false,
+                                prefix,
+                                commitable,
+                                walUpdated);
+                        });
+                    });
+            });
         partitionStripeProvider.flush(partitionName, hardFlush ? Durability.fsync_always : Durability.fsync_async, 0);
     }
 

@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.service.AmzaPartitionWatcher;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionTransactor;
+import com.jivesoftware.os.amza.service.replication.StripeTx.PartitionStripePromise;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -179,23 +180,30 @@ public class PartitionStripeProvider {
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
-        return storageVersionProvider.tx(partitionName,
-            true,
-            (deltaIndex, stripeIndex, storageVersion) -> {
-                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-                VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
-                return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
-                    return tx.tx(stripeIndex,
-                        deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex],
-                        highwaterStorage,
-                        versionedAquarium1);
-                });
-            });
+        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+        return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
+            return tx.tx(
+                new PartitionStripePromise() {
+                    @Override
+                    public <S> S get(PartitionStripeTx<S> partitionStripeTx) throws Exception {
+                        return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
+                            PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
+                            return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
+                        });
+                    }
+                },
+                highwaterStorage,
+                versionedAquarium1);
+        });
     }
 
     public void flush(PartitionName partitionName, Durability durability, long waitForFlushInMillis) throws Exception {
-        storageVersionProvider.tx(partitionName, false,
-            (deltaIndex, stripeIndex, storageVersion) -> {
+        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+        storageVersionProvider.tx(partitionName,
+            storageVersion,
+            (deltaIndex, stripeIndex, storageVersion1) -> {
                 flushers[deltaIndex].forceFlush(durability, waitForFlushInMillis);
                 return null;
             });
@@ -231,7 +239,7 @@ public class PartitionStripeProvider {
         }
 
         if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-            return txPartition(partitionName, (stripe, partitionStripe, highwaterStorage1, versionedAquarium) -> {
+            return txPartition(partitionName, (partitionStripePromise, highwaterStorage1, versionedAquarium) -> {
                 Waterline leaderWaterline = versionedAquarium.awaitOnline(timeoutMillis).getLeaderWaterline();
                 if (!aquariumProvider.isOnline(leaderWaterline)) {
                     versionedAquarium.wipeTheGlass();

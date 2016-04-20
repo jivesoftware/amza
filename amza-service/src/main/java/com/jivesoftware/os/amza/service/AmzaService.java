@@ -29,7 +29,6 @@ import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
-import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
@@ -95,7 +94,6 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final AmzaAquariumProvider aquariumProvider;
     private final AmzaSystemReady systemReady;
     private final Liveliness liveliness;
-    private final TxHighestPartitionTx txHighestPartitionTx;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaStats amzaStats,
@@ -142,15 +140,6 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.aquariumProvider = aquariumProvider;
         this.systemReady = systemReady;
         this.liveliness = liveliness;
-        this.txHighestPartitionTx = (partitionStripe, versionedAquarium, highestPartitionTx) -> {
-            VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-            PartitionName partitionName = versionedPartitionName.getPartitionName();
-            if (partitionName.isSystemPartition()) {
-                return systemWALStorage.highestPartitionTxId(versionedPartitionName, highestPartitionTx);
-            } else {
-                return partitionStripe.highestAquariumTxId(versionedAquarium, highestPartitionTx);
-            }
-        };
     }
 
     public PartitionIndex getPartitionIndex() {
@@ -277,7 +266,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 LOG.warn("Awaiting online for expunged partition {}, we will compost and retry", partitionName);
                 partitionComposter.compostPartitionIfNecessary(partitionName);
             }
-        } while (System.currentTimeMillis() < endAfterTimestamp);
+        }
+        while (System.currentTimeMillis() < endAfterTimestamp);
     }
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName, long waitForLeaderInMillis) throws Exception {
@@ -304,7 +294,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Getting route for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 }
-            } while (System.currentTimeMillis() < endAfterTimestamp);
+            }
+            while (System.currentTimeMillis() < endAfterTimestamp);
         }
 
         RingMember currentLeader = awaitLeader(partitionName, Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
@@ -391,7 +382,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Awaiting leader for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 }
-            } while (System.currentTimeMillis() < endAfterTimestamp);
+            }
+            while (System.currentTimeMillis() < endAfterTimestamp);
         }
         throw new TimeoutException("Timed out awaiting leader for " + partitionName);
     }
@@ -459,7 +451,6 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(out));
 
         takeCoordinator.availableRowsStream(system,
-            txHighestPartitionTx,
             ringStoreReader,
             partitionStripeProvider,
             remoteRingMember,
@@ -504,7 +495,6 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         Callable<Void> pingCallback) throws Exception {
         ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId);
         takeCoordinator.availableRowsStream(system,
-            txHighestPartitionTx,
             ringStoreReader,
             partitionStripeProvider,
             remoteRingMember,
@@ -573,7 +563,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 try {
                     versionedAquarium.wipeTheGlass();
                 } catch (Exception x) {
-                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
                 }
             }
             return null;
@@ -660,7 +650,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(), (stripe, partitionStripe, highwaterStorage, versionedAquarium) -> {
             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
             if (versionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, partitionStripe, versionedAquarium, localTxId);
+                takeCoordinator.rowsTaken(remoteRingMember, takeSessionId, partitionStripe, versionedAquarium, localTxId);
             }
             return null;
         });

@@ -9,9 +9,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
-import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
@@ -26,7 +24,6 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AckWaters;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
-import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
@@ -62,7 +59,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import com.jivesoftware.os.amza.api.partition.TxPartition;
 
 /**
  * @author jonathan.colt
@@ -91,7 +87,6 @@ public class DeltaStripeWALStorageNGTest {
     private CurrentVersionProvider currentVersionProvider;
     private PartitionStore partitionStore1;
     private PartitionStore partitionStore2;
-    private TxPartition txPartitionState;
     private DeltaWALFactory deltaWALFactory;
     private WALIndexProviderRegistry walIndexProviderRegistry;
     private DeltaStripeWALStorage deltaStripeWALStorage;
@@ -108,7 +103,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = {partitionTmpDir};
+        File[] workingDirectories = { partitionTmpDir };
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
@@ -140,14 +135,6 @@ public class DeltaStripeWALStorageNGTest {
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
         LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
-
-        txPartitionState = new TxPartition() {
-
-            @Override
-            public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0));
-            }
-        };
 
         partitionIndex.open((partitionName) -> 0);
 
@@ -214,7 +201,7 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(interner, ids, member, partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        workingDirectories = new File[]{tmp};
+        workingDirectories = new File[] { tmp };
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
@@ -228,7 +215,7 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
-       
+
         DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner,
             1,
             new AmzaStats(),
@@ -238,7 +225,7 @@ public class DeltaStripeWALStorageNGTest {
             deltaWALFactory,
             walIndexProviderRegistry,
             20_000, 8);
-        delta.load(txPartitionState, partitionIndex, currentVersionProvider, primaryRowMarshaller);
+        delta.load(partitionIndex, currentVersionProvider, primaryRowMarshaller);
         return delta;
     }
 

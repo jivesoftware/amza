@@ -10,7 +10,7 @@ import java.util.concurrent.Callable;
  */
 public interface CurrentVersionProvider {
 
-    public static interface StripeIndexs<R> {
+    interface StripeIndexs<R> {
 
         R tx(int deltaIndex, int stripeIndex, StorageVersion storageVersion) throws Exception;
     }

@@ -126,7 +126,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 }
             }
             if (storageVersion == null) {
-                throw new IllegalStateException("No storage version for " + partitionName);
+                return tx.tx(-1, -1, null);
             } else {
                 int deltaIndex = getAndCacheDeltaIndexIfNeeded(stripeIndex, new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
                 return tx.tx(deltaIndex, stripeIndex, storageVersion);

@@ -4,10 +4,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
-import com.jivesoftware.os.amza.api.partition.TxPartition;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -37,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * @author jonathan.colt
  */
-public class PartitionStripeProvider implements TxPartition {
+public class PartitionStripeProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -122,9 +120,9 @@ public class PartitionStripeProvider implements TxPartition {
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    deltaStripeWALStorage.load(this, partitionIndex, storageVersionProvider, primaryRowMarshaller);
+                    deltaStripeWALStorage.load(partitionIndex, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
-                    LOG.error("Failed while loading {} ", new Object[]{deltaStripeWALStorage}, x);
+                    LOG.error("Failed while loading {} ", new Object[] { deltaStripeWALStorage }, x);
                     throw new RuntimeException(x);
                 }
             }));
@@ -181,31 +179,18 @@ public class PartitionStripeProvider implements TxPartition {
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
-        return tx(partitionName,
-            (versionedAquarium1) -> {
-                return storageVersionProvider.tx(partitionName, false,
-                    (deltaIndex, stripeIndex, storageVersion) -> {
-                        return tx.tx(stripeIndex,
-                            deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex],
-                            highwaterStorage,
-                            versionedAquarium1);
-                    });
-            });
-
-    }
-
-    @Override
-    public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-        if (partitionName.isSystemPartition()) {
-            return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), null, 0));
-        } else {
-            return storageVersionProvider.tx(partitionName, false,
-                (deltaIndex, stripeIndex, storageVersion) -> {
-                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-                    VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
-                    return transactor.doWithOne(versionedAquarium, tx);
+        return storageVersionProvider.tx(partitionName,
+            true,
+            (deltaIndex, stripeIndex, storageVersion) -> {
+                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+                VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+                return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
+                    return tx.tx(stripeIndex,
+                        deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex],
+                        highwaterStorage,
+                        versionedAquarium1);
                 });
-        }
+            });
     }
 
     public void flush(PartitionName partitionName, Durability durability, long waitForFlushInMillis) throws Exception {
@@ -246,7 +231,7 @@ public class PartitionStripeProvider implements TxPartition {
         }
 
         if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-            return tx(partitionName, (versionedAquarium) -> {
+            return txPartition(partitionName, (stripe, partitionStripe, highwaterStorage1, versionedAquarium) -> {
                 Waterline leaderWaterline = versionedAquarium.awaitOnline(timeoutMillis).getLeaderWaterline();
                 if (!aquariumProvider.isOnline(leaderWaterline)) {
                     versionedAquarium.wipeTheGlass();

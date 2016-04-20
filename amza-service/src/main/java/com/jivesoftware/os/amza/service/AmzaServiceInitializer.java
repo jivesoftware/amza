@@ -193,7 +193,14 @@ public class AmzaServiceInitializer {
         PartitionIndex partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, walStorageProvider, partitionPropertyMarshaller, numProc);
         amzaSystemPartitionWatcher.watch(PartitionCreator.REGION_PROPERTIES.getPartitionName(), partitionIndex);
 
-        TakeCoordinator takeCoordinator = new TakeCoordinator(ringMember,
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            amzaSystemPartitionWatcher,
+            config.hardFsync);
+
+        TakeCoordinator takeCoordinator = new TakeCoordinator(systemWALStorage,
+            ringMember,
             amzaStats,
             orderIdProvider,
             idPacker,
@@ -240,12 +247,6 @@ public class AmzaServiceInitializer {
             ringsCache,
             ringMemberRingNamesCache,
             nodeCacheId);
-
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
-            primaryRowMarshaller,
-            highwaterRowMarshaller,
-            amzaSystemPartitionWatcher,
-            config.hardFsync);
 
         WALUpdated walUpdated = (versionedPartitionName, txId) -> {
             takeCoordinator.update(ringStoreReader, Preconditions.checkNotNull(versionedPartitionName), txId);

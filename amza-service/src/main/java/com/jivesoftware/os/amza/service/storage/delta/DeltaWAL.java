@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import java.io.File;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableInt;
@@ -268,9 +269,9 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
             });
     }
 
-    void destroy() throws Exception {
+    void destroy(File baseKey) throws Exception {
         synchronized (oneTxAtATimeLock) {
-            wal.delete();
+            wal.delete(baseKey);
         }
     }
 

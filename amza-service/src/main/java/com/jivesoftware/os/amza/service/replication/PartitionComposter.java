@@ -155,7 +155,7 @@ public class PartitionComposter implements RowChanges {
             try {
                 partitionStripeProvider.expunged(compost);
             } catch (Exception e) {
-                LOG.warn("Failed to expunge {}", new Object[] { compost }, e);
+                LOG.warn("Failed to expunge {}", new Object[]{compost}, e);
             }
         }
     }
@@ -223,15 +223,15 @@ public class PartitionComposter implements RowChanges {
             partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                 txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                     partitionStripe.deleteDelta(versionedPartitionName);
+                    partitionIndex.delete(versionedPartitionName, stripeIndex);
                     return null;
                 });
-                partitionIndex.delete(versionedPartitionName);
                 highwaterStorage.delete(versionedPartitionName);
                 return null;
             });
             LOG.info("Expunged {} {}.", partitionName, partitionVersion);
         } catch (Exception e) {
-            LOG.error("Failed to compost partition {}", new Object[] { versionedPartitionName }, e);
+            LOG.error("Failed to compost partition {}", new Object[]{versionedPartitionName}, e);
         } finally {
             amzaStats.endCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         }

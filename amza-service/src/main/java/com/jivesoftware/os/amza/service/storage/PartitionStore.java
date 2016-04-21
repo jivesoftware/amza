@@ -30,6 +30,7 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.File;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -65,7 +66,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage;
     }
 
-    public void load(long deltaWALId, long prevDeltaWALId, int stripe) throws Exception {
+    public void load(File baseKey, long deltaWALId, long prevDeltaWALId, int stripe) throws Exception {
         long loaded = loadedAtDeltaWALId.get();
         if (deltaWALId > -1) {
             if (loaded == -1) {
@@ -80,9 +81,9 @@ public class PartitionStore implements RangeScannable {
         }
         boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
-        walStorage.load(deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stripe);
+        walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stripe);
         if (properties.forceCompactionOnStartup) {
-            compactTombstone(true, stripe, () -> {
+            compactTombstone(true, baseKey, baseKey, stripe, () -> {
                 return null;
             });
         }
@@ -107,7 +108,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream);
     }
 
-    public void compactTombstone(boolean force, int stripe, Callable<Void> completedCompactCommit) {
+    public void compactTombstone(boolean force, File fromBaseKey, File toBaseKey, int stripe, Callable<Void> completedCompactCommit) {
         // ageInMillis: 180 days
         // intervalMillis: 10 days
         // Do I have anything older than (180+10) days?
@@ -147,7 +148,9 @@ public class PartitionStore implements RangeScannable {
                         LOG.info("Compacting tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
                             tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
                         boolean expectedEndOfMerge = !versionedPartitionName.getPartitionName().isSystemPartition();
-                        walStorage.compactTombstone(properties.rowType,
+                        walStorage.compactTombstone(fromBaseKey,
+                            toBaseKey,
+                            properties.rowType,
                             tombstoneCompactTimestamp,
                             tombstoneCompactVersion,
                             ttlCompactTimestamp,
@@ -223,7 +226,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage.mergedTxId();
     }
 
-    public void delete() throws Exception {
-        walStorage.delete();
+    public void delete(File baseKey) throws Exception {
+        walStorage.delete(baseKey);
     }
 }

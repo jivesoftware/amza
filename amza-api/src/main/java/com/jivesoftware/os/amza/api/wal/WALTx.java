@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.api.wal;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import java.io.File;
 import java.util.concurrent.Callable;
 
 /**
@@ -14,17 +15,22 @@ public interface WALTx {
 
     <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception;
 
-    <R> R open(Tx<R> tx) throws Exception;
+    <R> R open(File baseKey, Tx<R> tx) throws Exception;
 
-    <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider, VersionedPartitionName partitionName, int stripe) throws Exception;
+    <I extends CompactableWALIndex> I openIndex(File baseKey,
+        WALIndexProvider<I> walIndexProvider,
+        VersionedPartitionName partitionName,
+        int stripe) throws Exception;
 
     long length() throws Exception;
 
     void flush(boolean fsync) throws Exception;
 
-    void delete() throws Exception;
+    void delete(File baseKey) throws Exception;
 
-    <I extends CompactableWALIndex> Compacted<I> compact(RowType compactToRowType,
+    <I extends CompactableWALIndex> Compacted<I> compact(File fromBaseKey,
+        File toBaseKey,
+        RowType compactToRowType,
         long tombstoneTimestampId,
         long tombstoneVersion,
         long ttlTimestampId,

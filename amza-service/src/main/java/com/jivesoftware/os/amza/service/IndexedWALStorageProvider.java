@@ -96,10 +96,10 @@ public class IndexedWALStorageProvider {
     }
 
     public WALStorage<?> create(VersionedPartitionName versionedPartitionName, int stripe, PartitionProperties partitionProperties) throws Exception {
-        return create(baseKey(versionedPartitionName, stripe), versionedPartitionName, partitionProperties);
+        return create(versionedPartitionName, partitionProperties);
     }
 
-    public <I extends WALIndex> WALStorage<I> create(File baseKey,
+    public <I extends WALIndex> WALStorage<I> create(
         VersionedPartitionName versionedPartitionName,
         PartitionProperties partitionProperties) throws Exception {
 
@@ -113,7 +113,7 @@ public class IndexedWALStorageProvider {
             ? versionedPartitionName.toBase64()
             : String.valueOf(versionedPartitionName.getPartitionVersion());
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(baseKey,
+        BinaryWALTx binaryWALTx = new BinaryWALTx(
             name,
             rowIOProvider,
             primaryRowMarshaller,

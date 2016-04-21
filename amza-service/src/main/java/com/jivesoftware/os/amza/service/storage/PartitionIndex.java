@@ -26,6 +26,7 @@ import com.jivesoftware.os.jive.utils.collections.lh.ConcurrentLHash;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -179,7 +180,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (versionedStores != null) {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
-                partitionStore.load(deltaWALId, prevDeltaWALId, stripe);
+                File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
+                partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe);
                 return partitionStore;
             }
         }
@@ -207,12 +209,13 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         return store;
     }
 
-    public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
+    public void delete(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         ConcurrentLHash<PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
         if (versionedStores != null) {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
-                partitionStore.delete();
+                File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
+                partitionStore.delete(baseKey);
                 versionedStores.remove(versionedPartitionName.getPartitionVersion());
             }
         }
@@ -232,9 +235,10 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 return partitionStore;
             }
 
+            File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
             WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, stripe, properties);
             partitionStore = new PartitionStore(amzaStats, orderIdProvider, versionedPartitionName, walStorage, properties);
-            partitionStore.load(deltaWALId, prevDeltaWALId, stripe);
+            partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe);
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);

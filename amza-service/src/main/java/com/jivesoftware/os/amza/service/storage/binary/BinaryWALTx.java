@@ -37,10 +37,8 @@ public class BinaryWALTx implements WALTx {
     private static final int NUM_PERMITS = 1024;
 
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
-    private final File key;
+    //private final File key;
     private final String name;
-    private final File compactingKey;
-    private final File backupKey;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final int updatesBetweenLeaps;
     private final int maxLeaps;
@@ -48,16 +46,14 @@ public class BinaryWALTx implements WALTx {
     private final RowIOProvider ioProvider;
     private RowIO io;
 
-    public BinaryWALTx(File baseKey,
+    public BinaryWALTx(//File baseKey,
         String name,
         RowIOProvider ioProvider,
         PrimaryRowMarshaller rowMarshaller,
         int updatesBetweenLeaps,
         int maxLeaps) throws Exception {
-        this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
+        //this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         this.name = name + SUFFIX;
-        this.compactingKey = ioProvider.buildKey(key, "compacting");
-        this.backupKey = ioProvider.buildKey(key, "backup");
         this.primaryRowMarshaller = rowMarshaller;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
         this.maxLeaps = maxLeaps;
@@ -118,10 +114,10 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <R> R open(Tx<R> tx) throws Exception {
+    public <R> R open(File baseKey, Tx<R> tx) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
-            initIO();
+            initIO(baseKey);
             return tx.tx(io);
         } finally {
             compactionLock.release(NUM_PERMITS);
@@ -129,12 +125,12 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider,
+    public <I extends CompactableWALIndex> I openIndex(File baseKey, WALIndexProvider<I> walIndexProvider,
         VersionedPartitionName versionedPartitionName,
         int stripe) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
-            initIO();
+            initIO(baseKey);
 
             I walIndex = walIndexProvider.createIndex(versionedPartitionName, stripe);
             if (walIndex.isEmpty()) {
@@ -175,10 +171,12 @@ public class BinaryWALTx implements WALTx {
         compactableWALIndex.commit(fsync);
     }
 
-    private void initIO() throws Exception {
+    private void initIO(File baseKey) throws Exception {
         if (io == null) {
+            File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
             io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
             if (io == null) {
+                File backupKey = ioProvider.buildKey(key, "backup");
                 if (ioProvider.exists(backupKey, name)) {
                     ioProvider.moveTo(backupKey, name, key, name);
                     io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
@@ -196,10 +194,13 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public void delete() throws Exception {
+    public void delete(File baseKey) throws Exception {
+        File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         compactionLock.acquire(NUM_PERMITS);
         try {
             io.close();
+            File compactingKey = ioProvider.buildKey(key, "compacting");
+            File backupKey = ioProvider.buildKey(key, "backup");
             ioProvider.delete(key, name);
             ioProvider.delete(backupKey, name);
             ioProvider.delete(compactingKey, name);
@@ -214,7 +215,9 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> Compacted<I> compact(RowType compactToRowType,
+    public <I extends CompactableWALIndex> Compacted<I> compact(File fromBaseKey,
+        File toBaseKey,
+        RowType compactToRowType,
         long tombstoneTimestampId,
         long tombstoneVersion,
         long ttlTimestampId,
@@ -223,10 +226,16 @@ public class BinaryWALTx implements WALTx {
         int stripe,
         Callable<Void> completedCompactCommit) throws Exception {
 
+        File fromKey = ioProvider.versionedKey(fromBaseKey, AmzaVersionConstants.LATEST_VERSION);
+        File toKey = ioProvider.versionedKey(toBaseKey, AmzaVersionConstants.LATEST_VERSION);
+
         long start = System.currentTimeMillis();
 
         Preconditions.checkNotNull(compactableWALIndex, "If you don't have one use NoOpWALIndex.");
         CompactionWALIndex compactionRowIndex = compactableWALIndex.startCompaction(true, stripe);
+
+        File compactingKey = ioProvider.buildKey(toKey, "compacting");
+        File backupKey = ioProvider.buildKey(fromKey, "backup");
 
         ioProvider.delete(compactingKey, name);
         if (!ioProvider.ensureKey(compactingKey)) {
@@ -274,7 +283,8 @@ public class BinaryWALTx implements WALTx {
                     ttlVersion,
                     null);
             } catch (Exception x) {
-                LOG.error("Failure while compacting key:{} name:{} from:{} to:{}", new Object[]{key, name, prevEndOfLastRow, endOfLastRow}, x);
+                LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to:{}",
+                    new Object[]{fromKey, toKey, name, prevEndOfLastRow, endOfLastRow}, x);
                 compactionRowIndex.abort();
                 throw x;
             }
@@ -324,24 +334,24 @@ public class BinaryWALTx implements WALTx {
 
                 Callable<Void> commit = () -> {
                     io.close();
-                    ioProvider.moveTo(key, name, backupKey, name);
-                    if (!ioProvider.ensureKey(key)) {
-                        throw new IOException("Failed trying to ensure " + key);
+                    ioProvider.moveTo(fromKey, name, backupKey, name);
+                    if (!ioProvider.ensureKey(toKey)) {
+                        throw new IOException("Failed trying to ensure " + toKey);
                     }
-                    ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), key, name);
+                    ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
                     // Reopen the world
-                    io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
+                    io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
                     if (io == null) {
-                        throw new IOException("Failed to reopen " + key);
+                        throw new IOException("Failed to reopen " + toKey);
                     }
                     io.flush(true);
                     io.initLeaps(fpOfLastLeap, updatesSinceLeap);
 
-
                     completedCompactCommit.call();
-                    
+
                     ioProvider.delete(backupKey, name);
-                    LOG.info("Compacted partition {}/{} was:{} bytes isNow:{} bytes.", key, name, sizeBeforeCompaction, sizeAfterCompaction);
+                    LOG.info("Compacted partition fromKey:{} -> toKey:{} named:{} was:{} bytes isNow:{} bytes.",
+                        fromKey, toKey, name, sizeBeforeCompaction, sizeAfterCompaction);
                     return null;
                 };
 
@@ -356,7 +366,8 @@ public class BinaryWALTx implements WALTx {
                     ttlCount.longValue(),
                     (System.currentTimeMillis() - start));
             } catch (Exception x) {
-                LOG.error("Failure while compacting key:{} name:{} from:{} to end of WAL", new Object[]{key, name, finalEndOfLastRow}, x);
+                LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to end of WAL",
+                    new Object[]{fromKey, toKey, name, finalEndOfLastRow}, x);
                 compactionRowIndex.abort();
                 throw x;
             } finally {

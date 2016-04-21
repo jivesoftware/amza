@@ -47,23 +47,24 @@ public class DeltaWALFactory {
     }
 
     private DeltaWAL createOrOpen(long id, long prevId) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx(walDir,
+        WALTx deltaWALRowsTx = new BinaryWALTx(
             String.valueOf(prevId) + "_" + String.valueOf(id),
             ioProvider,
             primaryRowMarshaller,
             Integer.MAX_VALUE,
             64);
         MutableLong rows = new MutableLong();
-        deltaWALRowsTx.open(io -> {
-            io.validate(true, false,
-                (rowFP, rowTxId, rowType, row) -> {
-                    rows.increment();
-                    return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;
-                },
-                (rowFP, rowTxId, rowType, row) -> -1,
-                null);
-            return null;
-        });
+        deltaWALRowsTx.open(walDir,
+            io -> {
+                io.validate(true, false,
+                    (rowFP, rowTxId, rowType, row) -> {
+                        rows.increment();
+                        return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;
+                    },
+                    (rowFP, rowTxId, rowType, row) -> -1,
+                    null);
+                return null;
+            });
         return new DeltaWAL(id, prevId, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }
 
@@ -81,5 +82,9 @@ public class DeltaWALFactory {
         }
         Collections.sort(deltaWALs);
         return deltaWALs;
+    }
+
+    void destroy(DeltaWAL wal) throws Exception {
+        wal.destroy(walDir);
     }
 }

@@ -442,7 +442,7 @@ public class DeltaStripeWALStorage {
         }
         acquireAll();
         try {
-            wal.destroy();
+            deltaWALFactory.destroy(wal);
             LOG.info("Compacted delta partitions.");
         } finally {
             releaseAll();

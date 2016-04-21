@@ -49,7 +49,7 @@ public class RowPartitionNGTest {
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, 4096, 64);
+        BinaryWALTx binaryWALTx = new BinaryWALTx("booya", binaryRowIOProvider, primaryRowMarshaller, 4096, 64);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         WALStorage<MemoryWALIndex> indexedWAL = new WALStorage<>(
@@ -64,14 +64,14 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, -1, false, false, 0);
+        indexedWAL.load(walDir, -1, -1, false, false, 0);
 
         final Random r = new Random();
 
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
         compact.scheduleAtFixedRate(() -> {
             try {
-                indexedWAL.compactTombstone(RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, 0, false, () -> {
+                indexedWAL.compactTombstone(walDir, walDir, RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, 0, false, () -> {
                     return null;
                 });
             } catch (Exception x) {
@@ -139,10 +139,10 @@ public class RowPartitionNGTest {
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, 4096, 64);
+        BinaryWALTx binaryWALTx = new BinaryWALTx("booya", binaryRowIOProvider, primaryRowMarshaller, 4096, 64);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsistency(versionedPartitionName, idProvider, binaryWALTx, indexProvider);
+        testEventualConsistency(walDir, versionedPartitionName, idProvider, binaryWALTx, indexProvider);
     }
 
     @Test
@@ -155,13 +155,13 @@ public class RowPartitionNGTest {
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(null, "booya", binaryRowIOProvider, primaryRowMarshaller, 4096, 64);
+        BinaryWALTx binaryWALTx = new BinaryWALTx("booya", binaryRowIOProvider, primaryRowMarshaller, 4096, 64);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsistency(versionedPartitionName, idProvider, binaryWALTx, indexProvider);
+        testEventualConsistency(null, versionedPartitionName, idProvider, binaryWALTx, indexProvider);
     }
 
-    private void testEventualConsistency(VersionedPartitionName versionedPartitionName,
+    private void testEventualConsistency(File baseKey, VersionedPartitionName versionedPartitionName,
         OrderIdProviderImpl idProvider,
         BinaryWALTx binaryWALTx,
         WALIndexProvider<MemoryWALIndex> walIndexProvider)
@@ -178,7 +178,7 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, -1, false, false, 0);
+        indexedWAL.load(baseKey, -1, -1, false, false, 0);
         WALKey walKey = k(1);
         TimestampedValue value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertNull(value);

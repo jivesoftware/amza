@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.File;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -89,6 +90,9 @@ public class PartitionTombstoneCompactor {
 
                         boolean forced = force;
                         int compactToStripe = stripeIndex;
+                        File fromBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, stripeIndex);
+                        File toBaseKey = fromBaseKey;
+
 
                         int rebalanceToStripe = -1;
                         if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
@@ -96,11 +100,17 @@ public class PartitionTombstoneCompactor {
                             if (rebalanceToStripe > -1) {
                                 forced = true;
                                 compactToStripe = rebalanceToStripe;
-                                LOG.info("Rebalancing by compacting {} from {} to {}", partitionName, stripeIndex, compactToStripe);
+                                toBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, compactToStripe);
+                                LOG.info("Rebalancing by compacting {} from {}:{} to {}:{}",
+                                    partitionName,
+                                    stripeIndex,
+                                    fromBaseKey,
+                                    compactToStripe,
+                                    toBaseKey);
                             }
                         }
                         int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
-                        partitionStore.compactTombstone(forced, compactToStripe, () -> {
+                        partitionStore.compactTombstone(forced,  fromBaseKey,  toBaseKey, compactToStripe, () -> {
                             if (effectivelyFinalRebalanceToStripe != -1) {
                                 rebalanced[0]++;
                                 storageVersionProvider.transitionStripe(versionedPartitionName, storageVersion, effectivelyFinalRebalanceToStripe);

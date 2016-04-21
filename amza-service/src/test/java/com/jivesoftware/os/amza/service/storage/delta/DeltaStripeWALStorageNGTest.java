@@ -43,8 +43,6 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
-import com.jivesoftware.os.aquarium.State;
-import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -130,12 +128,15 @@ public class DeltaStripeWALStorageNGTest {
             new SickPartitions(),
             -1,
             TimeUnit.DAYS.toMillis(1));
+
         orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
-        partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider,
-            partitionPropertyMarshaller, 4);
-
-        Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
+        partitionIndex = new PartitionIndex(interner,
+            amzaStats,
+            orderIdProvider,
+            indexedWALStorageProvider,
+            partitionPropertyMarshaller,
+            4);
 
         partitionIndex.init((partitionName) -> 0);
 
@@ -168,7 +169,11 @@ public class DeltaStripeWALStorageNGTest {
             false);
 
         PartitionCreator partitionProvider = new PartitionCreator(ids,
-            partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);
+            partitionPropertyMarshaller,
+            partitionIndex,
+            systemWALStorage,
+            updated,
+            partitionIndex);
 
         partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName1, 0, new PartitionProperties(Durability.fsync_never,
             0, 0, 0, 0, 0, 0, 0, 0,
@@ -293,10 +298,11 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
+        File baseKey = indexedWALStorageProvider.baseKey(versionedPartitionName1, 0);
+        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
             return null;
         });
-        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
+        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
             return null;
         }); // Bla
 

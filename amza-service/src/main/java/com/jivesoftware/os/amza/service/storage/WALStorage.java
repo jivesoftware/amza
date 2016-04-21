@@ -53,6 +53,7 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -182,10 +183,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         return versionedPartitionName;
     }
 
-    public void delete() throws Exception {
+    public void delete(File baseKey) throws Exception {
         acquireAll();
         try {
-            walTx.delete();
+            walTx.delete(baseKey);
             I wali = walIndex.get();
             if (wali != null) {
                 wali.delete();
@@ -213,7 +214,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             || ((clobberCount.get() + 1) / (keyCount.get() + 1) > tombstoneCompactionFactor);
     }
 
-    public long compactTombstone(RowType rowType,
+    public long compactTombstone(File fromBaseKey,
+        File toBaseKey,
+        RowType rowType,
         long tombstoneTimestampId,
         long tombstoneVersion,
         long ttlTimestampId,
@@ -226,7 +229,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             return 0;
         }
         I got = walIndex.get();
-        WALTx.Compacted<I> compact = walTx.compact(rowType,
+        WALTx.Compacted<I> compact = walTx.compact(fromBaseKey,
+            toBaseKey,
+            rowType,
             tombstoneTimestampId,
             tombstoneVersion,
             ttlTimestampId,
@@ -266,7 +271,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (Exception e) {
                 LOG.inc("failedCompaction");
                 LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
-                loadInternal(-1, -1, true, false, false, stripe);
+                loadInternal(fromBaseKey, -1, -1, true, false, false, stripe);
                 return -1;
             }
             walIndex.set(compacted.index);
@@ -280,16 +285,17 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public void load(long deltaWALId, long prevDeltaWALId, boolean backwardScan, boolean truncateToEndOfMergeMarker, int stripe) throws Exception {
+    public void load(File baseKey, long deltaWALId, long prevDeltaWALId, boolean backwardScan, boolean truncateToEndOfMergeMarker, int stripe) throws Exception {
         acquireAll();
         try {
-            loadInternal(deltaWALId, prevDeltaWALId, false, backwardScan, truncateToEndOfMergeMarker, stripe);
+            loadInternal(baseKey, deltaWALId, prevDeltaWALId, false, backwardScan, truncateToEndOfMergeMarker, stripe);
         } finally {
             releaseAll();
         }
     }
 
-    private void loadInternal(long deltaWALId,
+    private void loadInternal(File baseKey,
+        long deltaWALId,
         long prevDeltaWALId,
         boolean recovery,
         boolean backwardScan,
@@ -302,7 +308,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 throw new IllegalStateException("Load should have completed before highestTxId:" + initialHighestTxId + " is modified.");
             }
 
-            walTx.open(io -> {
+            walTx.open(baseKey, io -> {
                 boolean[] endOfMergeMarker = { false };
                 long[] lastTxId = { -1 };
                 long[] fpOfLastLeap = { -1 };
@@ -448,7 +454,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 return null;
             });
 
-            I index = walTx.openIndex(walIndexProvider, versionedPartitionName, stripe);
+            I index = walTx.openIndex(baseKey, walIndexProvider, versionedPartitionName, stripe);
             walIndex.compareAndSet(null, index);
 
         } catch (Exception e) {

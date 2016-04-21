@@ -32,6 +32,20 @@ public class CallableTransactor {
         return doWith(partitionName, numPermits, tx);
     }
 
+    public <R> R replaceOneWithAll(PartitionName partitionName,
+        Callable<R> tx) throws Exception {
+
+        Semaphore semaphore = semaphore(partitionName);
+        semaphore.release();
+        semaphore.acquire(numPermits);
+        try {
+            return tx.call();
+        } finally {
+            semaphore.release(numPermits);
+            semaphore.acquire();
+        }
+    }
+
     private <R> R doWith(PartitionName partitionName,
         int count,
         Callable<R> tx) throws Exception {
@@ -48,6 +62,5 @@ public class CallableTransactor {
     private Semaphore semaphore(PartitionName partitionName) {
         return semaphores[Math.abs(partitionName.hashCode() % semaphores.length)];
     }
-
 
 }

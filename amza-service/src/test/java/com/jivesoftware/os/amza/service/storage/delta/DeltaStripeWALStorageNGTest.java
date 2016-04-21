@@ -43,7 +43,6 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
-import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
@@ -55,6 +54,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -103,7 +103,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = { partitionTmpDir };
+        File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
@@ -122,12 +122,14 @@ public class DeltaStripeWALStorageNGTest {
         amzaStats = new AmzaStats();
         indexedWALStorageProvider = new IndexedWALStorageProvider(amzaStats,
             workingDirectories,
+            workingDirectories.length,
             walIndexProviderRegistry,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             ids,
             new SickPartitions(),
-            -1);
+            -1,
+            TimeUnit.DAYS.toMillis(1));
         orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
         partitionIndex = new PartitionIndex(interner, amzaStats, orderIdProvider, indexedWALStorageProvider,
@@ -200,7 +202,7 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(interner, ids, member, partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        workingDirectories = new File[] { tmp };
+        workingDirectories = new File[]{tmp};
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
@@ -291,8 +293,12 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true);
-        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true); // Bla
+        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
+            return null;
+        });
+        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
+            return null;
+        }); // Bla
 
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
 

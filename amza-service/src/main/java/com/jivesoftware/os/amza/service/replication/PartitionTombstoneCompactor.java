@@ -1,13 +1,15 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.filer.io.StripingLocksProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -19,31 +21,38 @@ public class PartitionTombstoneCompactor {
 
     private ScheduledExecutorService scheduledThreadPool;
 
+    private final IndexedWALStorageProvider indexedWALStorageProvider;
     private final PartitionIndex partitionIndex;
     private final StorageVersionProvider storageVersionProvider;
     private final long checkIfTombstoneCompactionIsNeededIntervalInMillis;
-    private final int numberOfCompactorThreads;
-    private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024);
+    private final long rebalanceableEveryNMillis;
+    private final int numberOfStripes;
+    private final long[] rebalanceableAfterTimestamp;
 
-    public PartitionTombstoneCompactor(PartitionIndex partitionIndex,
+    public PartitionTombstoneCompactor(IndexedWALStorageProvider indexedWALStorageProvider,
+        PartitionIndex partitionIndex,
         StorageVersionProvider storageVersionProvider,
         long checkIfCompactionIsNeededIntervalInMillis,
-        int numberOfCompactorThreads) {
+        long rebalanceableEveryNMillis,
+        int numberOfStripes) {
 
+        this.indexedWALStorageProvider = indexedWALStorageProvider;
         this.partitionIndex = partitionIndex;
         this.storageVersionProvider = storageVersionProvider;
         this.checkIfTombstoneCompactionIsNeededIntervalInMillis = checkIfCompactionIsNeededIntervalInMillis;
-        this.numberOfCompactorThreads = numberOfCompactorThreads;
+        this.rebalanceableEveryNMillis = rebalanceableEveryNMillis;
+        this.numberOfStripes = numberOfStripes;
+        this.rebalanceableAfterTimestamp = new long[numberOfStripes];
     }
 
     public void start() throws Exception {
 
         final int silenceBackToBackErrors = 100;
-        scheduledThreadPool = Executors.newScheduledThreadPool(numberOfCompactorThreads,
-            new ThreadFactoryBuilder().setNameFormat("partition-tombstone-compactor-%d").build());
-        for (int i = 0; i < numberOfCompactorThreads; i++) {
+        ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("partition-tombstone-compactor-%d").build();
+        scheduledThreadPool = Executors.newScheduledThreadPool(numberOfStripes, threadFactory);
+        for (int i = 0; i < numberOfStripes; i++) {
             int stripe = i;
-            int[] failedToCompact = { 0 };
+            int[] failedToCompact = {0};
             scheduledThreadPool.scheduleWithFixedDelay(() -> {
                 try {
                     failedToCompact[0] = 0;
@@ -65,20 +74,51 @@ public class PartitionTombstoneCompactor {
     }
 
     public void compactTombstone(boolean force, int compactStripe) throws Exception {
+
+        int[] compacted = new int[1];
         partitionIndex.streamActivePartitions((versionedPartitionName) -> {
-            storageVersionProvider.tx(versionedPartitionName.getPartitionName(),
+            PartitionName partitionName = versionedPartitionName.getPartitionName();
+            storageVersionProvider.tx(partitionName,
                 null,
                 (deltaIndex, stripeIndex, storageVersion) -> {
                     if (storageVersion != null
-                        && stripeIndex != -1
-                        && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
-                        && (compactStripe == -1 || stripeIndex == compactStripe)) {
-                        partitionIndex.get(versionedPartitionName, stripeIndex).compactTombstone(force, stripeIndex);
+                    && stripeIndex != -1
+                    && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
+                    && (compactStripe == -1 || stripeIndex == compactStripe)) {
+                        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+
+                        boolean forced = force;
+                        int compactToStripe = stripeIndex;
+
+                        int rebalanceToStripe = -1;
+                        if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
+                            rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
+                            if (rebalanceToStripe > -1) {
+                                forced = true;
+                                compactToStripe = rebalanceToStripe;
+                                LOG.info("Rebalancing by compacting {} from {} to {}", partitionName, stripeIndex, compactToStripe);
+                            }
+                        }
+                        int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
+                        partitionStore.compactTombstone(forced, compactToStripe, () -> {
+                            compacted[0]++;
+                            if (effectivelyFinalRebalanceToStripe != -1) {
+                                storageVersionProvider.transitionStripe(versionedPartitionName, storageVersion, effectivelyFinalRebalanceToStripe);
+                                LOG.info("Rebalancing transitioned {} to {}", partitionName, effectivelyFinalRebalanceToStripe);
+                            }
+                            return null;
+                        });
+
                     }
                     return null;
                 });
             return true;
         });
+
+        if (compactStripe != -1 && compacted[0] == 0) {
+            rebalanceableAfterTimestamp[compactStripe] = System.currentTimeMillis() + rebalanceableEveryNMillis;
+            LOG.info("Rebalancing for stripe {} has been paused until {}", compactStripe, rebalanceableAfterTimestamp[compactStripe]);
+        }
     }
 
 }

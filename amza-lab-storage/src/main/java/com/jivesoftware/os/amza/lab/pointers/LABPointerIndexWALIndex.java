@@ -87,6 +87,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             new LABRawhide());
     }
 
+    @Override
     public int getStripe() {
         return currentStripe;
     }

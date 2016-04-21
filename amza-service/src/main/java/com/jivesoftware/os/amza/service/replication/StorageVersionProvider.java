@@ -223,6 +223,25 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         }
     }
 
+    void transitionStripe(VersionedPartitionName versionedPartitionName, StorageVersion storageVersion, int rebalanceToStripe) throws Exception {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        callableTransactor.replaceOneWithAll(partitionName, () -> {
+            synchronized (versionStripingLocks.lock(partitionName, 0)) {
+                StorageVersion currentStorageVersion = lookupStorageVersion(partitionName);
+                if (storageVersion.equals(currentStorageVersion)) {
+                    set(partitionName, storageVersion.partitionVersion, rebalanceToStripe);
+                } else {
+                    throw new IllegalStateException(
+                        "Failed to transition to versionedPartitionName:" + versionedPartitionName
+                        + " stripe:" + rebalanceToStripe
+                        + " from " + currentStorageVersion
+                        + " to " + storageVersion);
+                }
+            }
+            return null;
+        });
+    }
+
     public interface PartitionMemberStorageVersionStream {
 
         boolean stream(PartitionName partitionName, RingMember ringMember, StorageVersion storageVersion) throws Exception;
@@ -231,7 +250,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     public void streamLocal(PartitionMemberStorageVersionStream stream) throws Exception {
         byte[] fromKey = walKey(rootRingMember, null);
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
-        byte[] intBuffer = new byte[4];
 
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
             (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {

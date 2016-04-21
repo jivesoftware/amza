@@ -61,6 +61,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -218,7 +219,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         long ttlTimestampId,
         long ttlVersion,
         int stripe,
-        boolean expectedEndOfMerge) throws Exception {
+        boolean expectedEndOfMerge,
+        Callable<Void> completedCompactCommit) throws Exception {
 
         if (expectedEndOfMerge && !hasEndOfMergeMarker.get()) {
             return 0;
@@ -230,7 +232,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             ttlTimestampId,
             ttlVersion,
             got,
-            stripe);
+            stripe,
+            completedCompactCommit);
 
         long[] compactKeyHighwaterTimestamps = findKeyHighwaterTimestamps();
 

@@ -220,7 +220,8 @@ public class BinaryWALTx implements WALTx {
         long ttlTimestampId,
         long ttlVersion,
         I compactableWALIndex,
-        int stripe) throws Exception {
+        int stripe,
+        Callable<Void> completedCompactCommit) throws Exception {
 
         long start = System.currentTimeMillis();
 
@@ -336,6 +337,9 @@ public class BinaryWALTx implements WALTx {
                     io.flush(true);
                     io.initLeaps(fpOfLastLeap, updatesSinceLeap);
 
+
+                    completedCompactCommit.call();
+                    
                     ioProvider.delete(backupKey, name);
                     LOG.info("Compacted partition {}/{} was:{} bytes isNow:{} bytes.", key, name, sizeBeforeCompaction, sizeAfterCompaction);
                     return null;

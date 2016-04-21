@@ -30,6 +30,7 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class PartitionStore implements RangeScannable {
@@ -81,7 +82,9 @@ public class PartitionStore implements RangeScannable {
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
         walStorage.load(deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stripe);
         if (properties.forceCompactionOnStartup) {
-            compactTombstone(true, stripe);
+            compactTombstone(true, stripe, () -> {
+                return null;
+            });
         }
         loadedAtDeltaWALId.set(deltaWALId);
     }
@@ -104,7 +107,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream);
     }
 
-    public void compactTombstone(boolean force, int stripe) {
+    public void compactTombstone(boolean force, int stripe, Callable<Void> completedCompactCommit) {
         // ageInMillis: 180 days
         // intervalMillis: 10 days
         // Do I have anything older than (180+10) days?
@@ -150,7 +153,8 @@ public class PartitionStore implements RangeScannable {
                             ttlCompactTimestamp,
                             ttlCompactVersion,
                             stripe,
-                            expectedEndOfMerge);
+                            expectedEndOfMerge,
+                            completedCompactCommit);
                     } finally {
                         amzaStats.endCompaction(CompactionFamily.tombstone, versionedPartitionName.toString());
                     }

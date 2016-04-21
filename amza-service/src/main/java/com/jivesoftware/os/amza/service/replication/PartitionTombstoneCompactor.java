@@ -93,24 +93,25 @@ public class PartitionTombstoneCompactor {
                         File fromBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, stripeIndex);
                         File toBaseKey = fromBaseKey;
 
-
                         int rebalanceToStripe = -1;
-                        if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
-                            rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
-                            if (rebalanceToStripe > -1) {
-                                forced = true;
-                                compactToStripe = rebalanceToStripe;
-                                toBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, compactToStripe);
-                                LOG.info("Rebalancing by compacting {} from {}:{} to {}:{}",
-                                    partitionName,
-                                    stripeIndex,
-                                    fromBaseKey,
-                                    compactToStripe,
-                                    toBaseKey);
+                        if (!partitionName.isSystemPartition()) {
+                            if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
+                                rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
+                                if (rebalanceToStripe > -1) {
+                                    forced = true;
+                                    compactToStripe = rebalanceToStripe;
+                                    toBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, compactToStripe);
+                                    LOG.info("Rebalancing by compacting {} from {}:{} to {}:{}",
+                                        partitionName,
+                                        stripeIndex,
+                                        fromBaseKey,
+                                        compactToStripe,
+                                        toBaseKey);
+                                }
                             }
                         }
                         int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
-                        partitionStore.compactTombstone(forced,  fromBaseKey,  toBaseKey, compactToStripe, () -> {
+                        partitionStore.compactTombstone(forced, fromBaseKey, toBaseKey, compactToStripe, () -> {
                             if (effectivelyFinalRebalanceToStripe != -1) {
                                 rebalanced[0]++;
                                 storageVersionProvider.transitionStripe(versionedPartitionName, storageVersion, effectivelyFinalRebalanceToStripe);

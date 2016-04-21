@@ -143,7 +143,12 @@ public class PartitionStore implements RangeScannable {
         synchronized (this) {
             try {
                 if (force || walStorage.compactableTombstone(tombstoneCheckTimestamp, tombstoneCheckVersion, ttlCheckTimestamp, ttlCheckVersion)) {
-                    amzaStats.beginCompaction(CompactionFamily.tombstone, versionedPartitionName.toString());
+                    String dir = fromBaseKey.toString();
+                    if (!fromBaseKey.equals(toBaseKey)) {
+                        dir = " rebalance " + fromBaseKey + " to " + toBaseKey;
+                    }
+                    String name = versionedPartitionName.toString() + " " + dir + " stripe:" + stripe + " force:" + force;
+                    amzaStats.beginCompaction(CompactionFamily.tombstone, name);
                     try {
                         LOG.info("Compacting tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
                             tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
@@ -159,7 +164,7 @@ public class PartitionStore implements RangeScannable {
                             expectedEndOfMerge,
                             completedCompactCommit);
                     } finally {
-                        amzaStats.endCompaction(CompactionFamily.tombstone, versionedPartitionName.toString());
+                        amzaStats.endCompaction(CompactionFamily.tombstone, name);
                     }
                 } else {
                     LOG.debug("Ignored tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",

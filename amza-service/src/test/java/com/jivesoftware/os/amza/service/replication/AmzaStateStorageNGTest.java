@@ -26,6 +26,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
+import java.util.concurrent.TimeUnit;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -63,7 +64,14 @@ public class AmzaStateStorageNGTest {
         AmzaStats amzaStats = new AmzaStats();
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(amzaStats,
             workingDirectories,
-            walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
+            workingDirectories.length,
+            walIndexProviderRegistry,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            ids,
+            new SickPartitions(),
+            -1,
+            TimeUnit.DAYS.toMillis(1));
 
         TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());

@@ -14,9 +14,6 @@ public interface AmzaConfig extends Config {
     @IntDefault(1000)
     int getTakeFromNeighborsIntervalInMillis();
 
-    @LongDefault(60_000)
-    long getCheckIfCompactionIsNeededIntervalInMillis();
-
     @IntDefault(8)
     int getNumberOfCompactorThreads();
 
@@ -31,5 +28,17 @@ public interface AmzaConfig extends Config {
 
     @BooleanDefault(false)
     boolean getUseMemMap();
+
+    @IntDefault(2)
+    int getTombstoneCompactionFactor();
+
+    @LongDefault(60_000)
+    long getCheckIfCompactionIsNeededIntervalInMillis();
+
+    @LongDefault(1000 * 60 * 60)
+    long getRebalanceableEveryNMillis();
+
+    @LongDefault(1024 * 1024 * 1024)
+    long getRebalanceIfImbalanceGreaterThanNBytes();
 
 }

@@ -77,6 +77,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaServiceInitializer {
@@ -88,9 +89,7 @@ public class AmzaServiceInitializer {
         public String[] workingDirectories = null;
 
         public long asyncFsyncIntervalMillis = 1_000;
-        public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
 
-        public int numberOfCompactorThreads = 8;
         public int numberOfTakerThreads = 8;
 
         public int corruptionParanoiaFactor = 10;
@@ -119,6 +118,12 @@ public class AmzaServiceInitializer {
 
         public long aquariumLeaderDeadAfterMillis = 60_000;
         public long aquariumLivelinessFeedEveryMillis = 500;
+
+        public int tombstoneCompactionFactor = 2;
+        public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
+        public long rebalanceableEveryNMillis = TimeUnit.HOURS.toMillis(1);
+        public long rebalanceIfImbalanceGreaterThanNBytes = 1024 * 1024 * 1024;
+
     }
 
     public interface IndexProviderRegistryCallback {
@@ -177,16 +182,16 @@ public class AmzaServiceInitializer {
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
         indexProviderRegistryCallback.call(workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, numberOfStripes);
 
-        int tombstoneCompactionFactor = 2; // TODO expose to config;
-
         IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(amzaStats,
             workingWALDirectories,
+            numberOfStripes,
             indexProviderRegistry,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             orderIdProvider,
             sickPartitions,
-            tombstoneCompactionFactor);
+            config.tombstoneCompactionFactor,
+            config.rebalanceIfImbalanceGreaterThanNBytes);
 
         int numProc = Runtime.getRuntime().availableProcessors();
 
@@ -339,7 +344,6 @@ public class AmzaServiceInitializer {
             walUpdated,
             config.flushHighwatersAfterNUpdates);
 
-
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
             amzaStats,
             partitionIndex,
@@ -396,7 +400,6 @@ public class AmzaServiceInitializer {
             return null;
         });
 
-
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             numberOfStripes,
             storageVersionProvider,
@@ -417,10 +420,12 @@ public class AmzaServiceInitializer {
             primaryRowMarshaller,
             highwaterRowMarshaller);
 
-        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(partitionIndex,
+        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(walStorageProvider,
+            partitionIndex,
             storageVersionProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
-            config.numberOfCompactorThreads);
+            config.rebalanceableEveryNMillis,
+            numberOfStripes);
 
         return new AmzaService(orderIdProvider,
             amzaStats,

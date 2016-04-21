@@ -156,11 +156,14 @@ public class AmzaMain {
 
             final AmzaServiceInitializer.AmzaServiceConfig amzaServiceConfig = new AmzaServiceInitializer.AmzaServiceConfig();
             amzaServiceConfig.checkIfCompactionIsNeededIntervalInMillis = amzaConfig.getCheckIfCompactionIsNeededIntervalInMillis();
-            amzaServiceConfig.numberOfCompactorThreads = amzaConfig.getNumberOfCompactorThreads();
             amzaServiceConfig.numberOfTakerThreads = amzaConfig.getNumberOfTakerThreads();
             amzaServiceConfig.workingDirectories = workingDirs;
             amzaServiceConfig.asyncFsyncIntervalMillis = amzaConfig.getAsyncFsyncIntervalMillis();
             amzaServiceConfig.useMemMap = amzaConfig.getUseMemMap();
+
+            amzaServiceConfig.tombstoneCompactionFactor = amzaConfig.getTombstoneCompactionFactor();
+            amzaServiceConfig.rebalanceIfImbalanceGreaterThanNBytes = amzaConfig.getRebalanceIfImbalanceGreaterThanNBytes();
+            amzaServiceConfig.rebalanceableEveryNMillis = amzaConfig.getRebalanceableEveryNMillis();
 
             final AmzaStats amzaStats = new AmzaStats();
             final SickThreads sickThreads = new SickThreads();

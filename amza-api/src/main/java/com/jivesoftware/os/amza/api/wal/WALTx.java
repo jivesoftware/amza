@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.api.wal;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import java.util.concurrent.Callable;
 
 /**
  * @author jonathan.colt
@@ -29,7 +30,8 @@ public interface WALTx {
         long ttlTimestampId,
         long ttlVersion,
         I rowIndex,
-        int stripe) throws Exception;
+        int stripe,
+        Callable<Void> completedCompactCommit) throws Exception;
 
     interface EndOfMerge {
 

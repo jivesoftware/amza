@@ -147,40 +147,40 @@ public class PartitionStore implements RangeScannable {
                 ttlCompactVersion = getVersion(properties.ttlVersionAgeInMillis);
             }
         }
-        synchronized (this) {
-            try {
-                if (force || walStorage.compactableTombstone(tombstoneCheckTimestamp, tombstoneCheckVersion, ttlCheckTimestamp, ttlCheckVersion)) {
-                    String dir = fromBaseKey.toString();
-                    if (!fromBaseKey.equals(toBaseKey)) {
-                        dir = " rebalance " + fromBaseKey + " to " + toBaseKey;
-                    }
-                    String name = versionedPartitionName.toString() + " " + dir + " stripe:" + stripe + " force:" + force;
-                    amzaStats.beginCompaction(CompactionFamily.tombstone, name);
-                    try {
-                        LOG.info("Compacting tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
-                            tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
-                        boolean expectedEndOfMerge = !versionedPartitionName.getPartitionName().isSystemPartition();
-                        walStorage.compactTombstone(fromBaseKey,
-                            toBaseKey,
-                            properties.rowType,
-                            tombstoneCompactTimestamp,
-                            tombstoneCompactVersion,
-                            ttlCompactTimestamp,
-                            ttlCompactVersion,
-                            stripe,
-                            expectedEndOfMerge,
-                            transitionToCompacted);
-                    } finally {
-                        amzaStats.endCompaction(CompactionFamily.tombstone, name);
-                    }
-                } else {
-                    LOG.debug("Ignored tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
-                        tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
+
+        try {
+            if (force || walStorage.compactableTombstone(tombstoneCheckTimestamp, tombstoneCheckVersion, ttlCheckTimestamp, ttlCheckVersion)) {
+                String dir = fromBaseKey.toString();
+                if (!fromBaseKey.equals(toBaseKey)) {
+                    dir = " rebalance " + fromBaseKey + " to " + toBaseKey;
                 }
-            } catch (Exception x) {
-                LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
+                String name = versionedPartitionName.toString() + " " + dir + " stripe:" + stripe + " force:" + force;
+                amzaStats.beginCompaction(CompactionFamily.tombstone, name);
+                try {
+                    LOG.info("Compacting tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
+                        tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
+                    boolean expectedEndOfMerge = !versionedPartitionName.getPartitionName().isSystemPartition();
+                    walStorage.compactTombstone(fromBaseKey,
+                        toBaseKey,
+                        properties.rowType,
+                        tombstoneCompactTimestamp,
+                        tombstoneCompactVersion,
+                        ttlCompactTimestamp,
+                        ttlCompactVersion,
+                        stripe,
+                        expectedEndOfMerge,
+                        transitionToCompacted);
+                } finally {
+                    amzaStats.endCompaction(CompactionFamily.tombstone, name);
+                }
+            } else {
+                LOG.debug("Ignored tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
+                    tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
             }
+        } catch (Exception x) {
+            LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
         }
+
     }
 
     private long getTimestampId(long timeAgoInMillis) {

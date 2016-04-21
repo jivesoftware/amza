@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
@@ -29,6 +30,7 @@ public class PartitionTombstoneCompactor {
     private final long rebalanceableEveryNMillis;
     private final int numberOfStripes;
     private final long[] rebalanceableAfterTimestamp;
+    private final StripingLocksProvider<PartitionName> locksProvider = new StripingLocksProvider<>(1024);
 
     public PartitionTombstoneCompactor(IndexedWALStorageProvider indexedWALStorageProvider,
         PartitionIndex partitionIndex,
@@ -79,63 +81,65 @@ public class PartitionTombstoneCompactor {
         int[] rebalanced = new int[1];
         partitionIndex.streamActivePartitions((versionedPartitionName) -> {
             PartitionName partitionName = versionedPartitionName.getPartitionName();
-            storageVersionProvider.tx(partitionName,
-                null,
-                (deltaIndex, stripeIndex, storageVersion) -> {
-                    if (storageVersion != null
-                    && stripeIndex != -1
-                    && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
-                    && (compactStripe == -1 || stripeIndex == compactStripe)) {
-                        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+            synchronized (locksProvider.lock(partitionName, 123)) {
+                storageVersionProvider.tx(partitionName,
+                    null,
+                    (deltaIndex, stripeIndex, storageVersion) -> {
+                        if (storageVersion != null
+                        && stripeIndex != -1
+                        && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
+                        && (compactStripe == -1 || stripeIndex == compactStripe)) {
+                            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
 
-                        boolean forced = force;
-                        int compactToStripe = stripeIndex;
-                        File fromBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, stripeIndex);
-                        File toBaseKey = fromBaseKey;
+                            boolean forced = force;
+                            int compactToStripe = stripeIndex;
+                            File fromBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, stripeIndex);
+                            File toBaseKey = fromBaseKey;
 
-                        int rebalanceToStripe = -1;
-                        if (!partitionName.isSystemPartition()) {
-                            if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
-                                rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
-                                if (rebalanceToStripe > -1) {
-                                    forced = true;
-                                    compactToStripe = rebalanceToStripe;
-                                    toBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, compactToStripe);
-                                    LOG.info("Rebalancing by compacting {} from {}:{} to {}:{}",
-                                        partitionName,
-                                        stripeIndex,
-                                        fromBaseKey,
-                                        compactToStripe,
-                                        toBaseKey);
+                            int rebalanceToStripe = -1;
+                            if (!partitionName.isSystemPartition()) {
+                                if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
+                                    rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
+                                    if (rebalanceToStripe > -1) {
+                                        forced = true;
+                                        compactToStripe = rebalanceToStripe;
+                                        toBaseKey = indexedWALStorageProvider.baseKey(versionedPartitionName, compactToStripe);
+                                        LOG.info("Rebalancing by compacting {} from {}:{} to {}:{}",
+                                            partitionName,
+                                            stripeIndex,
+                                            fromBaseKey,
+                                            compactToStripe,
+                                            toBaseKey);
+                                    }
                                 }
                             }
-                        }
-                        int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
-                        partitionStore.compactTombstone(forced,
-                            fromBaseKey,
-                            toBaseKey,
-                            compactToStripe,
-                            (transitionToCompactedTx) -> {
-                                return storageVersionProvider.replaceOneWithAll(partitionName,
-                                    () -> {
-                                        return transitionToCompactedTx.tx(() -> {
-                                            if (effectivelyFinalRebalanceToStripe != -1) {
-                                                rebalanced[0]++;
-                                                storageVersionProvider.transitionStripe(versionedPartitionName,
-                                                    storageVersion,
-                                                    effectivelyFinalRebalanceToStripe);
-                                                
-                                                LOG.info("Rebalancing transitioned {} to {}", partitionName, effectivelyFinalRebalanceToStripe);
-                                            }
-                                            return null;
-                                        });
-                                    });
-                            });
+                            int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
+                            partitionStore.compactTombstone(forced,
+                                fromBaseKey,
+                                toBaseKey,
+                                compactToStripe,
+                                (transitionToCompactedTx) -> {
+                                    return storageVersionProvider.replaceOneWithAll(partitionName,
+                                        () -> {
+                                            return transitionToCompactedTx.tx(() -> {
+                                                if (effectivelyFinalRebalanceToStripe != -1) {
+                                                    rebalanced[0]++;
+                                                    storageVersionProvider.transitionStripe(versionedPartitionName,
+                                                        storageVersion,
+                                                        effectivelyFinalRebalanceToStripe);
 
-                    }
-                    return null;
-                });
-            return true;
+                                                    LOG.info("Rebalancing transitioned {} to {}", partitionName, effectivelyFinalRebalanceToStripe);
+                                                }
+                                                return null;
+                                            });
+                                        });
+                                });
+
+                        }
+                        return null;
+                    });
+                return true;
+            }
         });
 
         if (compactStripe != -1 && rebalanced[0] == 0 && System.currentTimeMillis() > rebalanceableAfterTimestamp[compactStripe]) {

@@ -71,9 +71,10 @@ public class RowPartitionNGTest {
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
         compact.scheduleAtFixedRate(() -> {
             try {
-                indexedWAL.compactTombstone(walDir, walDir, RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, 0, false, () -> {
-                    return null;
-                });
+                indexedWAL.compactTombstone(walDir, walDir, RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, 0, false,
+                    (transitionToCompacted) -> transitionToCompacted.tx(() -> {
+                        return null;
+                    }));
             } catch (Exception x) {
                 x.printStackTrace();
             }

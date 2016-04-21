@@ -37,11 +37,14 @@ public class CallableTransactor {
 
         Semaphore semaphore = semaphore(partitionName);
         semaphore.release();
-        semaphore.acquire(numPermits);
         try {
-            return tx.call();
+            semaphore.acquire(numPermits);
+            try {
+                return tx.call();
+            } finally {
+                semaphore.release(numPermits);
+            }
         } finally {
-            semaphore.release(numPermits);
             semaphore.acquire();
         }
     }

@@ -18,7 +18,7 @@ import org.apache.commons.io.FileUtils;
  * @author jonathan.colt
  */
 public class IndexedWALStorageProvider {
-
+    
     private final AmzaStats amzaStats;
     private final File[] workingDirectories;
     private final int numberOfStripes;

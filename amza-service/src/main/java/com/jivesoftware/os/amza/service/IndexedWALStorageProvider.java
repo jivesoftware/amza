@@ -78,10 +78,10 @@ public class IndexedWALStorageProvider {
         long imbalance = freeSpace[maxFreeIndex] - freeSpace[minFreeIndex];
 
         if (imbalance > rebalanceIfImbalanceGreaterThanInBytes) {
-            int minStripeCount = (numberOfStripes / numberOfWorkingDirectories) + (minFreeIndex < (numberOfStripes % numberOfWorkingDirectories) ? 1 : 0);
-            int rebalanceToStripe = minFreeIndex + (numberOfWorkingDirectories * rand.nextInt(minStripeCount));
+            int maxStripeCount = (numberOfStripes / numberOfWorkingDirectories) + (maxFreeIndex < (numberOfStripes % numberOfWorkingDirectories) ? 1 : 0);
+            int rebalanceToStripe = maxFreeIndex + (numberOfWorkingDirectories * rand.nextInt(maxStripeCount));
 
-            if (stripe % numberOfWorkingDirectories == maxFreeIndex && rebalanceToStripe != stripe) {
+            if (stripe % numberOfWorkingDirectories == minFreeIndex && rebalanceToStripe != stripe) {
                 long sizeOfDirectory = FileUtils.sizeOfDirectory(baseKey(versionedPartitionName, stripe));
                 if (sizeOfDirectory * 2 < rebalanceIfImbalanceGreaterThanInBytes) { // the times 2 says our index shouldn't be any bigger than our wal ;)
                     return rebalanceToStripe;

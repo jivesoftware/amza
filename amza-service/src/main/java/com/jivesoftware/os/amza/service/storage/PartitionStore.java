@@ -27,11 +27,11 @@ import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
+import com.jivesoftware.os.amza.service.storage.WALStorage.TxTransitionToCompacted;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
-import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class PartitionStore implements RangeScannable {
@@ -83,9 +83,12 @@ public class PartitionStore implements RangeScannable {
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
         walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stripe);
         if (properties.forceCompactionOnStartup) {
-            compactTombstone(true, baseKey, baseKey, stripe, () -> {
-                return null;
-            });
+            compactTombstone(true, baseKey, baseKey, stripe,
+                (transitionToCompacted) -> {
+                    return transitionToCompacted.tx(() -> {
+                        return null;
+                    });
+                });
         }
         loadedAtDeltaWALId.set(deltaWALId);
     }
@@ -108,7 +111,11 @@ public class PartitionStore implements RangeScannable {
         return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream);
     }
 
-    public void compactTombstone(boolean force, File fromBaseKey, File toBaseKey, int stripe, Callable<Void> completedCompactCommit) {
+    public void compactTombstone(boolean force,
+        File fromBaseKey,
+        File toBaseKey,
+        int stripe,
+        TxTransitionToCompacted transitionToCompacted) {
         // ageInMillis: 180 days
         // intervalMillis: 10 days
         // Do I have anything older than (180+10) days?
@@ -162,7 +169,7 @@ public class PartitionStore implements RangeScannable {
                             ttlCompactVersion,
                             stripe,
                             expectedEndOfMerge,
-                            completedCompactCommit);
+                            transitionToCompacted);
                     } finally {
                         amzaStats.endCompaction(CompactionFamily.tombstone, name);
                     }

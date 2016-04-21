@@ -223,8 +223,7 @@ public class BinaryWALTx implements WALTx {
         long ttlTimestampId,
         long ttlVersion,
         I compactableWALIndex,
-        int stripe,
-        Callable<Void> completedCompactCommit) throws Exception {
+        int stripe) throws Exception {
 
         File fromKey = ioProvider.versionedKey(fromBaseKey, AmzaVersionConstants.LATEST_VERSION);
         File toKey = ioProvider.versionedKey(toBaseKey, AmzaVersionConstants.LATEST_VERSION);
@@ -295,7 +294,7 @@ public class BinaryWALTx implements WALTx {
 
         long finalEndOfLastRow = endOfLastRow;
         byte[] finalCarryOverEndOfMerge = carryOverEndOfMerge;
-        return (endOfMerge) -> {
+        return (endOfMerge, completedCompactCommit) -> {
             compactionLock.acquire(NUM_PERMITS);
             try {
                 compact(compactToRowType,

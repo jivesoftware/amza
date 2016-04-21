@@ -36,8 +36,7 @@ public interface WALTx {
         long ttlTimestampId,
         long ttlVersion,
         I rowIndex,
-        int stripe,
-        Callable<Void> completedCompactCommit) throws Exception;
+        int stripe) throws Exception;
 
     interface EndOfMerge {
 
@@ -66,7 +65,7 @@ public interface WALTx {
 
     interface Compacted<II> {
 
-        CommittedCompacted<II> commit(EndOfMerge endOfMerge) throws Exception;
+        CommittedCompacted<II> commit(EndOfMerge endOfMerge, Callable<Void> completedCompactCommit) throws Exception;
     }
 
     class CommittedCompacted<III> {

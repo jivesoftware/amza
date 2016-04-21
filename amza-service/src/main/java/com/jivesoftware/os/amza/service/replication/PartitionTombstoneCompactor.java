@@ -111,14 +111,26 @@ public class PartitionTombstoneCompactor {
                             }
                         }
                         int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
-                        partitionStore.compactTombstone(forced, fromBaseKey, toBaseKey, compactToStripe, () -> {
-                            if (effectivelyFinalRebalanceToStripe != -1) {
-                                rebalanced[0]++;
-                                storageVersionProvider.transitionStripe(versionedPartitionName, storageVersion, effectivelyFinalRebalanceToStripe);
-                                LOG.info("Rebalancing transitioned {} to {}", partitionName, effectivelyFinalRebalanceToStripe);
-                            }
-                            return null;
-                        });
+                        partitionStore.compactTombstone(forced,
+                            fromBaseKey,
+                            toBaseKey,
+                            compactToStripe,
+                            (transitionToCompactedTx) -> {
+                                return storageVersionProvider.replaceOneWithAll(partitionName,
+                                    () -> {
+                                        return transitionToCompactedTx.tx(() -> {
+                                            if (effectivelyFinalRebalanceToStripe != -1) {
+                                                rebalanced[0]++;
+                                                storageVersionProvider.transitionStripe(versionedPartitionName,
+                                                    storageVersion,
+                                                    effectivelyFinalRebalanceToStripe);
+                                                
+                                                LOG.info("Rebalancing transitioned {} to {}", partitionName, effectivelyFinalRebalanceToStripe);
+                                            }
+                                            return null;
+                                        });
+                                    });
+                            });
 
                     }
                     return null;

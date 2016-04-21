@@ -299,12 +299,14 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
         File baseKey = indexedWALStorageProvider.baseKey(versionedPartitionName1, 0);
-        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
-            return null;
-        });
-        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true, () -> {
-            return null;
-        }); // Bla
+        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true,
+            (transitionToCompacted) -> transitionToCompacted.tx(() -> {
+                return null;
+            }));
+        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, 0, true,
+            (transitionToCompacted) -> transitionToCompacted.tx(() -> {
+                return null;
+            })); // Bla
 
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
 

@@ -225,21 +225,22 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
     void transitionStripe(VersionedPartitionName versionedPartitionName, StorageVersion storageVersion, int rebalanceToStripe) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
-        callableTransactor.replaceOneWithAll(partitionName, () -> {
-            synchronized (versionStripingLocks.lock(partitionName, 0)) {
-                StorageVersion currentStorageVersion = lookupStorageVersion(partitionName);
-                if (storageVersion.equals(currentStorageVersion)) {
-                    set(partitionName, storageVersion.partitionVersion, rebalanceToStripe);
-                } else {
-                    throw new IllegalStateException(
-                        "Failed to transition to versionedPartitionName:" + versionedPartitionName
-                        + " stripe:" + rebalanceToStripe
-                        + " from " + currentStorageVersion
-                        + " to " + storageVersion);
-                }
+        synchronized (versionStripingLocks.lock(partitionName, 0)) {
+            StorageVersion currentStorageVersion = lookupStorageVersion(partitionName);
+            if (storageVersion.equals(currentStorageVersion)) {
+                set(partitionName, storageVersion.partitionVersion, rebalanceToStripe);
+            } else {
+                throw new IllegalStateException(
+                    "Failed to transition to versionedPartitionName:" + versionedPartitionName
+                    + " stripe:" + rebalanceToStripe
+                    + " from " + currentStorageVersion
+                    + " to " + storageVersion);
             }
-            return null;
-        });
+        }
+    }
+
+    <V> V replaceOneWithAll(PartitionName partitionName, Callable<V> callable) throws Exception {
+        return callableTransactor.replaceOneWithAll(partitionName, callable);
     }
 
     public interface PartitionMemberStorageVersionStream {

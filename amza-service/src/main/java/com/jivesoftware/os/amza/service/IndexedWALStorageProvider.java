@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
+import java.util.Random;
 import org.apache.commons.io.FileUtils;
 
 /**
@@ -19,6 +20,7 @@ import org.apache.commons.io.FileUtils;
  */
 public class IndexedWALStorageProvider {
 
+    private final Random rand = new Random();
     private final AmzaStats amzaStats;
     private final File[] workingDirectories;
     private final int numberOfStripes;
@@ -54,14 +56,14 @@ public class IndexedWALStorageProvider {
     }
 
     public int rebalanceToStripe(VersionedPartitionName versionedPartitionName, int stripe) {
-        int length = workingDirectories.length;
-        long[] freeSpace = new long[length];
+        int numberOfWorkingDirectories = workingDirectories.length;
+        long[] freeSpace = new long[numberOfWorkingDirectories];
         long maxFree = Long.MIN_VALUE;
         int maxFreeIndex = -1;
 
         long minFree = Long.MAX_VALUE;
         int minFreeIndex = -1;
-        for (int i = 0; i < workingDirectories.length; i++) {
+        for (int i = 0; i < numberOfWorkingDirectories; i++) {
             freeSpace[i] = workingDirectories[i].getFreeSpace();
             if (freeSpace[i] < minFree) {
                 minFree = freeSpace[i];
@@ -76,12 +78,13 @@ public class IndexedWALStorageProvider {
         long imbalance = freeSpace[maxFreeIndex] - freeSpace[minFreeIndex];
 
         if (imbalance > rebalanceIfImbalanceGreaterThanInBytes) {
-            int minStripe = (numberOfStripes / workingDirectories.length) + (minFreeIndex < (numberOfStripes % workingDirectories.length) ? 1 : 0);
-            int maxStripe = (numberOfStripes / workingDirectories.length) + (maxFreeIndex < (numberOfStripes % workingDirectories.length) ? 1 : 0);
-            if (maxStripe == stripe && minStripe != stripe) {
+            int minStripeCount = (numberOfStripes / numberOfWorkingDirectories) + (minFreeIndex < (numberOfStripes % numberOfWorkingDirectories) ? 1 : 0);
+            int rebalanceToStripe = minFreeIndex + (numberOfWorkingDirectories * rand.nextInt(minStripeCount));
+
+            if (stripe % numberOfWorkingDirectories == maxFreeIndex && rebalanceToStripe != stripe) {
                 long sizeOfDirectory = FileUtils.sizeOfDirectory(baseKey(versionedPartitionName, stripe));
                 if (sizeOfDirectory * 2 < rebalanceIfImbalanceGreaterThanInBytes) { // the times 2 says our index shouldn't be any bigger than our wal ;)
-                    return minStripe;
+                    return rebalanceToStripe;
                 }
             }
         }

@@ -75,7 +75,7 @@ public class PartitionTombstoneCompactor {
 
     public void compactTombstone(boolean force, int compactStripe) throws Exception {
 
-        int[] compacted = new int[1];
+        int[] rebalanced = new int[1];
         partitionIndex.streamActivePartitions((versionedPartitionName) -> {
             PartitionName partitionName = versionedPartitionName.getPartitionName();
             storageVersionProvider.tx(partitionName,
@@ -101,8 +101,8 @@ public class PartitionTombstoneCompactor {
                         }
                         int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
                         partitionStore.compactTombstone(forced, compactToStripe, () -> {
-                            compacted[0]++;
                             if (effectivelyFinalRebalanceToStripe != -1) {
+                                rebalanced[0]++;
                                 storageVersionProvider.transitionStripe(versionedPartitionName, storageVersion, effectivelyFinalRebalanceToStripe);
                                 LOG.info("Rebalancing transitioned {} to {}", partitionName, effectivelyFinalRebalanceToStripe);
                             }
@@ -115,7 +115,7 @@ public class PartitionTombstoneCompactor {
             return true;
         });
 
-        if (compactStripe != -1 && compacted[0] == 0) {
+        if (compactStripe != -1 && rebalanced[0] == 0 && System.currentTimeMillis() > rebalanceableAfterTimestamp[compactStripe]) {
             rebalanceableAfterTimestamp[compactStripe] = System.currentTimeMillis() + rebalanceableEveryNMillis;
             LOG.info("Rebalancing for stripe {} has been paused until {}", compactStripe, rebalanceableAfterTimestamp[compactStripe]);
         }

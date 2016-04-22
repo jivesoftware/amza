@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.filer;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -14,4 +15,6 @@ public interface ByteBufferFactory {
     long length();
 
     long nextLength(int index, long oldLength, long position);
+
+    void close(ByteBufferBackedFiler[] filers) throws IOException;
 }

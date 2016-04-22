@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.filer;
 
+import com.jivesoftware.os.filer.io.DirectBufferCleaner;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -56,6 +57,16 @@ public class FileBackedMemMappedByteBufferFactory implements ByteBufferFactory {
     public long nextLength(int index, long oldLength, long position) {
         long segmentOffset = segmentSize * index;
         return Math.min(segmentSize, file.length() - segmentOffset);
+    }
+
+    @Override
+    public void close(ByteBufferBackedFiler[] filers) throws IOException {
+        if (filers.length > 0) {
+            for (ByteBufferBackedFiler filer : filers) {
+                filer.close();
+            }
+            DirectBufferCleaner.clean(filers[0].buffer);
+        }
     }
 
     private void ensureDirectory(File directory) {

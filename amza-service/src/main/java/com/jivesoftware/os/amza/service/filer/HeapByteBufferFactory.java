@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.filer;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -36,5 +37,12 @@ public class HeapByteBufferFactory implements ByteBufferFactory {
             newSize *= 2;
         }
         return newSize;
+    }
+
+    @Override
+    public void close(ByteBufferBackedFiler[] filers) throws IOException {
+        for (ByteBufferBackedFiler filer : filers) {
+            filer.close();
+        }
     }
 }

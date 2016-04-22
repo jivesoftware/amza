@@ -9,7 +9,6 @@
 package com.jivesoftware.os.amza.service.filer;
 
 import com.jivesoftware.os.amza.api.filer.IFiler;
-import com.jivesoftware.os.filer.io.DirectBufferCleaner;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
@@ -107,7 +106,7 @@ public class ByteBufferBackedFiler implements IFiler {
 
     @Override
     public void close() throws IOException {
-        DirectBufferCleaner.clean(buffer);
+        //DirectBufferCleaner.clean(buffer);
     }
 
     @Override

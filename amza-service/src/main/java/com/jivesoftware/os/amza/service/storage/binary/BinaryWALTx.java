@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -86,7 +85,6 @@ public class BinaryWALTx implements WALTx {
         compactionLock.acquire();
         try {
             RowIO io = rowIO;
-            LOG.info("WTF: io readFromTransactionId:" + System.identityHashCode(io) + ":" + name);
             long offset = io.getInclusiveStartOfRow(sinceTransactionId);
             return readWithOffset.read(offset, io);
         } finally {
@@ -339,7 +337,7 @@ public class BinaryWALTx implements WALTx {
 
                 long sizeBeforeCompaction = rowIO.sizeInBytes();
 
-                Callable<Void> commit = () -> {
+                compactionRowIndex.commit(true, () -> {
                     rowIO.close();
                     ioProvider.moveTo(fromKey, name, backupKey, name);
                     if (!ioProvider.ensureKey(toKey)) {
@@ -347,9 +345,7 @@ public class BinaryWALTx implements WALTx {
                     }
                     ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
                     // Reopen the world
-                    LOG.info("WTF: io reassignmenting:" + System.identityHashCode(rowIO) + ":" + name);
                     RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
-                    LOG.info("WTF: io reassignment:" + System.identityHashCode(io) + ":" + name);
                     rowIO = io;
                     if (rowIO == null) {
                         throw new IOException("Failed to reopen " + toKey);
@@ -363,9 +359,7 @@ public class BinaryWALTx implements WALTx {
                     LOG.info("Compacted partition fromKey:{} -> toKey:{} named:{} was:{} bytes isNow:{} bytes.",
                         fromKey, toKey, name, sizeBeforeCompaction, sizeAfterCompaction);
                     return null;
-                };
-
-                compactionRowIndex.commit(true, commit);
+                });
 
                 return new CommittedCompacted<>(compactableWALIndex,
                     sizeBeforeCompaction,

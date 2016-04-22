@@ -140,8 +140,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             if (storageVersion != null) {
                 Preconditions.checkArgument(currentStorageVersion.partitionVersion == storageVersion.partitionVersion,
                     "Partition version has changed: %s != %s", currentStorageVersion.partitionVersion, storageVersion.partitionVersion);
-                Preconditions.checkArgument(currentStorageVersion.stripeVersion == storageVersion.stripeVersion,
-                    "Stripe version has changed: %s != %s", currentStorageVersion.stripeVersion, storageVersion.stripeVersion);
             }
             int stripeIndex = getCurrentStripe(currentStorageVersion);
             Preconditions.checkArgument(stripeIndex != -1,

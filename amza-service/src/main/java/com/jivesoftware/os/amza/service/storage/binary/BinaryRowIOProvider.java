@@ -77,6 +77,11 @@ public class BinaryRowIOProvider implements RowIOProvider {
     }
 
     @Override
+    public long sizeInBytes(File dir, String name) {
+        return new File(dir, name).length();
+    }
+
+    @Override
     public File buildKey(File versionedKey, String name) {
         return new File(versionedKey, name);
     }

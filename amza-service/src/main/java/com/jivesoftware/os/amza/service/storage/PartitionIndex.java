@@ -236,7 +236,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
             }
 
             File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
-            WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, stripe, properties);
+            WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties);
             partitionStore = new PartitionStore(amzaStats, orderIdProvider, versionedPartitionName, walStorage, properties);
             partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe);
 

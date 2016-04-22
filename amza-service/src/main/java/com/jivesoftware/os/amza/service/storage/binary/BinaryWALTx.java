@@ -70,6 +70,11 @@ public class BinaryWALTx implements WALTx {
         return matched;
     }
 
+    public static long sizeInBytes(File baseKey, String name, RowIOProvider ioProvider) throws Exception {
+        File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
+        return ioProvider.sizeInBytes(key, name);
+    }
+
     @Override
     public <R> R tx(Tx<R> tx) throws Exception {
         compactionLock.acquire();
@@ -301,7 +306,6 @@ public class BinaryWALTx implements WALTx {
         byte[] finalCarryOverEndOfMerge = carryOverEndOfMerge;
         return (endOfMerge, completedCompactCommit) -> {
             compactionLock.acquire(NUM_PERMITS);
-            LOG.info("WTF: io available:" + compactionLock.availablePermits());
             try {
                 compact(compactToRowType,
                     finalEndOfLastRow,

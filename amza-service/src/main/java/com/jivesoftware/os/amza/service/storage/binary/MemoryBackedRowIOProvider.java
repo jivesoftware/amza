@@ -102,4 +102,9 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     public boolean exists(File key, String name) {
         return true;
     }
+
+    @Override
+    public long sizeInBytes(File key, String name) {
+        return 0;
+    }
 }

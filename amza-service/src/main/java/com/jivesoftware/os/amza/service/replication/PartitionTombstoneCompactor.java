@@ -98,7 +98,7 @@ public class PartitionTombstoneCompactor {
 
                             int rebalanceToStripe = -1;
                             if (!partitionName.isSystemPartition()) {
-                                if (force || System.currentTimeMillis() > rebalanceableAfterTimestamp[stripeIndex]) {
+                                if (force || rebalancingIsActive()) {
                                     rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
                                     if (rebalanceToStripe > -1) {
                                         forced = true;
@@ -146,6 +146,16 @@ public class PartitionTombstoneCompactor {
             rebalanceableAfterTimestamp[compactStripe] = System.currentTimeMillis() + rebalanceableEveryNMillis;
             LOG.info("Rebalancing for stripe {} has been paused until {}", compactStripe, rebalanceableAfterTimestamp[compactStripe]);
         }
+    }
+
+    private boolean rebalancingIsActive() {
+        long timestamp = System.currentTimeMillis();
+        for (int i = 0; i < rebalanceableAfterTimestamp.length; i++) {
+            if (timestamp > rebalanceableAfterTimestamp[i]) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

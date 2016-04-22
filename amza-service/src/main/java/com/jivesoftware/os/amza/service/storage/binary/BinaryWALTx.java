@@ -44,7 +44,7 @@ public class BinaryWALTx implements WALTx {
     private final int maxLeaps;
 
     private final RowIOProvider ioProvider;
-    private RowIO io;
+    private volatile RowIO io;
 
     public BinaryWALTx(//File baseKey,
         String name,
@@ -254,42 +254,48 @@ public class BinaryWALTx implements WALTx {
         MutableLong flushTxId = new MutableLong(-1);
 
         byte[] carryOverEndOfMerge = null;
-
-        long prevEndOfLastRow = 0;
-        long endOfLastRow = io.getEndOfLastRow();
-
-        while (prevEndOfLastRow < endOfLastRow) {
-            try {
-                carryOverEndOfMerge = compact(compactToRowType,
-                    prevEndOfLastRow,
-                    endOfLastRow,
-                    carryOverEndOfMerge,
-                    compactableWALIndex,
-                    compactionRowIndex,
-                    compactionIO,
-                    oldestTimestamp,
-                    oldestVersion,
-                    oldestTombstonedTimestamp,
-                    oldestTombstonedVersion,
-                    keyCount,
-                    clobberCount,
-                    tombstoneCount,
-                    ttlCount,
-                    flushTxId,
-                    tombstoneTimestampId,
-                    tombstoneVersion,
-                    ttlTimestampId,
-                    ttlVersion,
-                    null);
-            } catch (Exception x) {
-                LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to:{}",
-                    new Object[]{fromKey, toKey, name, prevEndOfLastRow, endOfLastRow}, x);
-                compactionRowIndex.abort();
-                throw x;
-            }
-
-            prevEndOfLastRow = endOfLastRow;
+        
+        long endOfLastRow;
+        compactionLock.acquire();
+        try {
+            long prevEndOfLastRow = 0;
             endOfLastRow = io.getEndOfLastRow();
+
+            while (prevEndOfLastRow < endOfLastRow) {
+                try {
+                    carryOverEndOfMerge = compact(compactToRowType,
+                        prevEndOfLastRow,
+                        endOfLastRow,
+                        carryOverEndOfMerge,
+                        compactableWALIndex,
+                        compactionRowIndex,
+                        compactionIO,
+                        oldestTimestamp,
+                        oldestVersion,
+                        oldestTombstonedTimestamp,
+                        oldestTombstonedVersion,
+                        keyCount,
+                        clobberCount,
+                        tombstoneCount,
+                        ttlCount,
+                        flushTxId,
+                        tombstoneTimestampId,
+                        tombstoneVersion,
+                        ttlTimestampId,
+                        ttlVersion,
+                        null);
+                } catch (Exception x) {
+                    LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to:{}",
+                        new Object[]{fromKey, toKey, name, prevEndOfLastRow, endOfLastRow}, x);
+                    compactionRowIndex.abort();
+                    throw x;
+                }
+
+                prevEndOfLastRow = endOfLastRow;
+                endOfLastRow = io.getEndOfLastRow();
+            }
+        } finally {
+            compactionLock.release();
         }
 
         long finalEndOfLastRow = endOfLastRow;

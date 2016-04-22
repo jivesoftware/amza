@@ -181,6 +181,7 @@ public class DiskBackedWALFiler implements WALFiler {
         closed.compareAndSet(false, true);
         randomAccessFile.close();
         if (memMapFiler != null) {
+            LOG.info("WTF", new RuntimeException("WTF"));
             memMapFiler.close();
         }
     }

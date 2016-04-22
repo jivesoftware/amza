@@ -226,9 +226,7 @@ public class SingleAutoGrowingByteBufferBackedFiler implements IFiler {
 
     @Override
     public void close() throws IOException {
-        for (ByteBufferBackedFiler filer : filers) {
-            filer.close();
-        }
+        byteBufferFactory.close(filers);
     }
 
     @Override

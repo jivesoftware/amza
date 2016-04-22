@@ -107,7 +107,6 @@ public class ByteBufferBackedFiler implements IFiler {
 
     @Override
     public void close() throws IOException {
-        DirectBufferCleaner.clean(buffer);
     }
 
     @Override

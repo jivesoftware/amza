@@ -37,22 +37,21 @@ public class BinaryWALTx implements WALTx {
     private static final int NUM_PERMITS = 1024;
 
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
-    //private final File key;
     private final String name;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final int updatesBetweenLeaps;
     private final int maxLeaps;
 
     private final RowIOProvider ioProvider;
-    private volatile RowIO io;
+    private volatile RowIO rowIO;
 
-    public BinaryWALTx(//File baseKey,
+    public BinaryWALTx(
         String name,
         RowIOProvider ioProvider,
         PrimaryRowMarshaller rowMarshaller,
         int updatesBetweenLeaps,
         int maxLeaps) throws Exception {
-        //this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
+
         this.name = name + SUFFIX;
         this.primaryRowMarshaller = rowMarshaller;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
@@ -76,7 +75,7 @@ public class BinaryWALTx implements WALTx {
     public <R> R tx(Tx<R> tx) throws Exception {
         compactionLock.acquire();
         try {
-            return tx.tx(io);
+            return tx.tx(rowIO);
         } finally {
             compactionLock.release();
         }
@@ -86,6 +85,8 @@ public class BinaryWALTx implements WALTx {
     public <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception {
         compactionLock.acquire();
         try {
+            RowIO io = rowIO;
+            LOG.info("WTF: io readFromTransactionId:" + System.identityHashCode(io) + ":" + name);
             long offset = io.getInclusiveStartOfRow(sinceTransactionId);
             return readWithOffset.read(offset, io);
         } finally {
@@ -97,7 +98,7 @@ public class BinaryWALTx implements WALTx {
     public long length() throws Exception {
         compactionLock.acquire();
         try {
-            return io.sizeInBytes();
+            return rowIO.sizeInBytes();
         } finally {
             compactionLock.release();
         }
@@ -107,7 +108,7 @@ public class BinaryWALTx implements WALTx {
     public void flush(boolean fsync) throws Exception {
         compactionLock.acquire();
         try {
-            io.flush(fsync);
+            rowIO.flush(fsync);
         } finally {
             compactionLock.release();
         }
@@ -118,7 +119,7 @@ public class BinaryWALTx implements WALTx {
         compactionLock.acquire(NUM_PERMITS);
         try {
             initIO(baseKey);
-            return tx.tx(io);
+            return tx.tx(rowIO);
         } finally {
             compactionLock.release(NUM_PERMITS);
         }
@@ -154,7 +155,7 @@ public class BinaryWALTx implements WALTx {
             stream -> primaryRowMarshaller.fromRows(
                 txFpRowStream -> {
                     // scan with allowRepairs=true to truncate at point of corruption
-                    return io.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
+                    return rowIO.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType.isPrimary()) {
                             return txFpRowStream.stream(rowTxId, rowPointer, rowType, row);
                         }
@@ -172,20 +173,20 @@ public class BinaryWALTx implements WALTx {
     }
 
     private void initIO(File baseKey) throws Exception {
-        if (io == null) {
+        if (rowIO == null) {
             File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
-            io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
-            if (io == null) {
+            rowIO = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
+            if (rowIO == null) {
                 File backupKey = ioProvider.buildKey(key, "backup");
                 if (ioProvider.exists(backupKey, name)) {
                     ioProvider.moveTo(backupKey, name, key, name);
-                    io = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
-                    if (io == null) {
+                    rowIO = ioProvider.open(key, name, false, updatesBetweenLeaps, maxLeaps);
+                    if (rowIO == null) {
                         throw new IllegalStateException("Failed to recover backup WAL " + name);
                     }
                 } else {
-                    io = ioProvider.open(key, name, true, updatesBetweenLeaps, maxLeaps);
-                    if (io == null) {
+                    rowIO = ioProvider.open(key, name, true, updatesBetweenLeaps, maxLeaps);
+                    if (rowIO == null) {
                         throw new IllegalStateException("Failed to initialize WAL " + name);
                     }
                 }
@@ -198,7 +199,7 @@ public class BinaryWALTx implements WALTx {
         File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         compactionLock.acquire(NUM_PERMITS);
         try {
-            io.close();
+            rowIO.close();
             File compactingKey = ioProvider.buildKey(key, "compacting");
             File backupKey = ioProvider.buildKey(key, "backup");
             ioProvider.delete(key, name);
@@ -211,7 +212,7 @@ public class BinaryWALTx implements WALTx {
 
     @Override
     public void hackTruncation(int numBytes) {
-        io.hackTruncation(numBytes);
+        rowIO.hackTruncation(numBytes);
     }
 
     @Override
@@ -254,12 +255,12 @@ public class BinaryWALTx implements WALTx {
         MutableLong flushTxId = new MutableLong(-1);
 
         byte[] carryOverEndOfMerge = null;
-        
+
         long endOfLastRow;
         compactionLock.acquire();
         try {
             long prevEndOfLastRow = 0;
-            endOfLastRow = io.getEndOfLastRow();
+            endOfLastRow = rowIO.getEndOfLastRow();
 
             while (prevEndOfLastRow < endOfLastRow) {
                 try {
@@ -292,7 +293,7 @@ public class BinaryWALTx implements WALTx {
                 }
 
                 prevEndOfLastRow = endOfLastRow;
-                endOfLastRow = io.getEndOfLastRow();
+                endOfLastRow = rowIO.getEndOfLastRow();
             }
         } finally {
             compactionLock.release();
@@ -302,6 +303,7 @@ public class BinaryWALTx implements WALTx {
         byte[] finalCarryOverEndOfMerge = carryOverEndOfMerge;
         return (endOfMerge, completedCompactCommit) -> {
             compactionLock.acquire(NUM_PERMITS);
+            LOG.info("WTF: io available:" + compactionLock.availablePermits());
             try {
                 compact(compactToRowType,
                     finalEndOfLastRow,
@@ -335,22 +337,25 @@ public class BinaryWALTx implements WALTx {
                     throw new IOException("Failed trying to ensure " + backupKey);
                 }
 
-                long sizeBeforeCompaction = io.sizeInBytes();
+                long sizeBeforeCompaction = rowIO.sizeInBytes();
 
                 Callable<Void> commit = () -> {
-                    io.close();
+                    rowIO.close();
                     ioProvider.moveTo(fromKey, name, backupKey, name);
                     if (!ioProvider.ensureKey(toKey)) {
                         throw new IOException("Failed trying to ensure " + toKey);
                     }
                     ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
                     // Reopen the world
-                    io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
-                    if (io == null) {
+                    LOG.info("WTF: io reassignmenting:" + System.identityHashCode(rowIO) + ":" + name);
+                    RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
+                    LOG.info("WTF: io reassignment:" + System.identityHashCode(io) + ":" + name);
+                    rowIO = io;
+                    if (rowIO == null) {
                         throw new IOException("Failed to reopen " + toKey);
                     }
-                    io.flush(true);
-                    io.initLeaps(fpOfLastLeap, updatesSinceLeap);
+                    rowIO.flush(true);
+                    rowIO.initLeaps(fpOfLastLeap, updatesSinceLeap);
 
                     completedCompactCommit.call();
 
@@ -410,7 +415,7 @@ public class BinaryWALTx implements WALTx {
         MutableLong flushTxId = new MutableLong(-1);
         byte[][] keepCarryingOver = {carryOverEndOfMerge};
         primaryRowMarshaller.fromRows(
-            txFpRowStream -> io.scan(startAtRow, false,
+            txFpRowStream -> rowIO.scan(startAtRow, false,
                 (rowFP, rowTxId, rowType, row) -> {
                     if (rowFP >= endOfLastRow) {
                         return false;

@@ -182,7 +182,7 @@ public class PartitionStripeProvider {
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider);
         return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
             return tx.tx(
                 new TxPartitionStripe() {
@@ -259,7 +259,7 @@ public class PartitionStripeProvider {
     public void streamLocalAquariums(PartitionMemberStateStream stream) throws Exception {
         storageVersionProvider.streamLocal((partitionName, ringMember, storageVersion) -> {
             VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-            VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);
+            VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider);
             return transactor.doWithOne(versionedAquarium,
                 (versionedAquarium1) -> stream.stream(partitionName, ringMember, versionedAquarium1));
         });
@@ -267,7 +267,7 @@ public class PartitionStripeProvider {
 
     public void expunged(VersionedPartitionName versionedPartitionName) throws Exception {
 
-        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, -1);
+        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider);
 
         LOG.info("Removing storage versions for composted partition: {}", versionedPartitionName);
         transactor.doWithAll(versionedAquarium, (versionedAquarium1) -> {

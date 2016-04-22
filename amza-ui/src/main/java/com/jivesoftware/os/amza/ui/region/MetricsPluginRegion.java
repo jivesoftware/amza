@@ -326,12 +326,15 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
+
+                long[] stripeVersion = new long[1];
                 txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                     if (includeCount) {
                         map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
                     } else {
                         map.put("count", "(requires watch)");
                     }
+                    stripeVersion[0] = stripeIndex; // yawn
 
                     map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium)));
                     return null;
@@ -393,7 +396,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     "state", currentState != null ? currentState.name() : "unknown",
                     "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
                     "partitionVersion", versionedPartitionName == null ? "none" : String.valueOf(versionedPartitionName.getPartitionVersion()),
-                    "stripeVersion", versionedAquarium == null ? "none" : String.valueOf(versionedAquarium.getStripeVersion())));
+                    "stripeVersion", versionedAquarium == null ? "none" : String.valueOf(stripeVersion[0])));
 
                 return -1;
             });

@@ -24,4 +24,6 @@ public interface RowIOProvider {
     boolean ensureKey(File key);
 
     boolean exists(File key, String name);
+
+    long sizeInBytes(File key, String name);
 }

@@ -55,7 +55,7 @@ public class PartitionTombstoneCompactor {
         scheduledThreadPool = Executors.newScheduledThreadPool(numberOfStripes, threadFactory);
         for (int i = 0; i < numberOfStripes; i++) {
             int stripe = i;
-            int[] failedToCompact = {0};
+            int[] failedToCompact = { 0 };
             scheduledThreadPool.scheduleWithFixedDelay(() -> {
                 try {
                     failedToCompact[0] = 0;
@@ -86,9 +86,10 @@ public class PartitionTombstoneCompactor {
                     null,
                     (deltaIndex, stripeIndex, storageVersion) -> {
                         if (storageVersion != null
-                        && stripeIndex != -1
-                        && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
-                        && (compactStripe == -1 || stripeIndex == compactStripe)) {
+                            && stripeIndex != -1
+                            && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
+                            && (compactStripe == -1 || stripeIndex == compactStripe)) {
+
                             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
 
                             boolean forced = force;
@@ -99,7 +100,9 @@ public class PartitionTombstoneCompactor {
                             int rebalanceToStripe = -1;
                             if (!partitionName.isSystemPartition()) {
                                 if (force || rebalancingIsActive()) {
-                                    rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName, stripeIndex);
+                                    rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName,
+                                        stripeIndex,
+                                        partitionIndex.getProperties(partitionName));
                                     if (rebalanceToStripe > -1) {
                                         forced = true;
                                         compactToStripe = rebalanceToStripe;

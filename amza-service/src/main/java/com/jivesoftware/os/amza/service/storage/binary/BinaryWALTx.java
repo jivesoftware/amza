@@ -70,6 +70,11 @@ public class BinaryWALTx implements WALTx {
         return matched;
     }
 
+    public static long sizeInBytes(File baseKey, String name, RowIOProvider ioProvider) throws Exception {
+        File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
+        return ioProvider.sizeInBytes(key, name);
+    }
+
     @Override
     public <R> R tx(Tx<R> tx) throws Exception {
         compactionLock.acquire();

@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
+import java.io.IOException;
 import java.util.Random;
 import org.apache.commons.io.FileUtils;
 
@@ -55,7 +56,13 @@ public class IndexedWALStorageProvider {
         this.rebalanceIfImbalanceGreaterThanInBytes = rebalanceIfImbalanceGreaterThanInBytes;
     }
 
-    public int rebalanceToStripe(VersionedPartitionName versionedPartitionName, int stripe) {
+    private String name(VersionedPartitionName versionedPartitionName) throws IOException {
+        return (versionedPartitionName.getPartitionVersion() == VersionedPartitionName.STATIC_VERSION)
+            ? versionedPartitionName.toBase64()
+            : String.valueOf(versionedPartitionName.getPartitionVersion());
+    }
+
+    public int rebalanceToStripe(VersionedPartitionName versionedPartitionName, int stripe, PartitionProperties partitionProperties) throws Exception {
         int numberOfWorkingDirectories = workingDirectories.length;
         long[] freeSpace = new long[numberOfWorkingDirectories];
         long maxFree = Long.MIN_VALUE;
@@ -82,8 +89,12 @@ public class IndexedWALStorageProvider {
             int rebalanceToStripe = maxFreeIndex + (numberOfWorkingDirectories * rand.nextInt(maxStripeCount));
 
             if (stripe % numberOfWorkingDirectories == minFreeIndex && rebalanceToStripe != stripe) {
-                long sizeOfDirectory = FileUtils.sizeOfDirectory(baseKey(versionedPartitionName, stripe));
-                if (sizeOfDirectory * 2 < rebalanceIfImbalanceGreaterThanInBytes) { // the times 2 says our index shouldn't be any bigger than our wal ;)
+                String providerName = partitionProperties.indexClassName;
+                @SuppressWarnings("unchecked")
+                RowIOProvider rowIOProvider = indexProviderRegistry.getRowIOProvider(providerName);
+
+                long sizeOfWAL = BinaryWALTx.sizeInBytes(baseKey(versionedPartitionName, stripe), name(versionedPartitionName), rowIOProvider);
+                if (sizeOfWAL * 2 < rebalanceIfImbalanceGreaterThanInBytes) { // the times 2 says our index shouldn't be any bigger than our wal ;)
                     return rebalanceToStripe;
                 }
             }
@@ -93,10 +104,6 @@ public class IndexedWALStorageProvider {
 
     public File baseKey(VersionedPartitionName versionedPartitionName, int stripe) {
         return new File(workingDirectories[stripe % workingDirectories.length], String.valueOf(versionedPartitionName.getPartitionVersion() % 1024));
-    }
-
-    public WALStorage<?> create(VersionedPartitionName versionedPartitionName, int stripe, PartitionProperties partitionProperties) throws Exception {
-        return create(versionedPartitionName, partitionProperties);
     }
 
     public <I extends WALIndex> WALStorage<I> create(
@@ -109,9 +116,7 @@ public class IndexedWALStorageProvider {
         @SuppressWarnings("unchecked")
         RowIOProvider rowIOProvider = indexProviderRegistry.getRowIOProvider(providerName);
 
-        String name = (versionedPartitionName.getPartitionVersion() == VersionedPartitionName.STATIC_VERSION)
-            ? versionedPartitionName.toBase64()
-            : String.valueOf(versionedPartitionName.getPartitionVersion());
+        String name = name(versionedPartitionName);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(
             name,

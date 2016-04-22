@@ -71,7 +71,7 @@ if [ "$?" -ne "0" ]; then
 fi
 
 git checkout master
-git merge ${ON_BRANCH}
+git merge --no-edit ${ON_BRANCH}
 if [ "$?" -ne "0" ]; then
 	echo "Failed to merge to master."
 	exit 1

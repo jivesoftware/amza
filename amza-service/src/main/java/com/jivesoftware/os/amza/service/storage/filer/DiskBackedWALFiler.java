@@ -180,6 +180,9 @@ public class DiskBackedWALFiler implements WALFiler {
     public void close() throws IOException {
         closed.compareAndSet(false, true);
         randomAccessFile.close();
+        if (memMapFiler != null) {
+            memMapFiler.close();
+        }
     }
 
     @Override

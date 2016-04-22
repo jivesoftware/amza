@@ -182,7 +182,7 @@ public class SystemWALStorage {
             PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(new VersionedAquarium(versionedPartitionName, null, 0), highestTxId);
+                tx.tx(new VersionedAquarium(versionedPartitionName, null), highestTxId);
             }
         }
     }

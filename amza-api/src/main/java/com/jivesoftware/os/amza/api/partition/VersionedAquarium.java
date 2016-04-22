@@ -13,16 +13,13 @@ public class VersionedAquarium {
 
     private final VersionedPartitionName versionedPartitionName;
     private final AquariumTransactor aquariumTransactor;
-    private final long stripeVersion;
 
     public VersionedAquarium(VersionedPartitionName versionedPartitionName,
-        AquariumTransactor aquariumTransactor,
-        long stripeVersion) {
+        AquariumTransactor aquariumTransactor) {
         this.versionedPartitionName = Preconditions.checkNotNull(versionedPartitionName, "VersionedPartitionName cannot be null");
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition() || aquariumTransactor != null,
             "Non system partitions require an AquariumTransactor");
         this.aquariumTransactor = aquariumTransactor;
-        this.stripeVersion = stripeVersion;
     }
 
     public VersionedPartitionName getVersionedPartitionName() {
@@ -99,10 +96,6 @@ public class VersionedAquarium {
         aquariumTransactor.delete(versionedPartitionName);
     }
 
-    public long getStripeVersion() {
-        return stripeVersion;
-    }
-
     @Override
     public boolean equals(Object obj) {
         throw new UnsupportedOperationException("Stop that");
@@ -115,7 +108,7 @@ public class VersionedAquarium {
 
     @Override
     public String toString() {
-        return "VersionedState{" + "versionedPartitionName=" + versionedPartitionName + ", stripeVersion=" + stripeVersion + '}';
+        return "VersionedState{" + "versionedPartitionName=" + versionedPartitionName + '}';
     }
 
 }

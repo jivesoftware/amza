@@ -31,7 +31,7 @@ public class SystemPartitionCommitChanges implements CommitChanges {
     @Override
     public void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception {
         commitTx.tx(highwaterStorage,
-            new VersionedAquarium(versionedPartitionName, null, 0),
+            new VersionedAquarium(versionedPartitionName, null),
             (prefix, commitable) -> systemWALStorage.update(versionedPartitionName, prefix, commitable, walUpdated));
         highwaterStorage.flush(null);
     }

@@ -301,7 +301,6 @@ public class BinaryWALTx implements WALTx {
         byte[] finalCarryOverEndOfMerge = carryOverEndOfMerge;
         return (endOfMerge, completedCompactCommit) -> {
             compactionLock.acquire(NUM_PERMITS);
-            LOG.info("WTF: io available:" + compactionLock.availablePermits());
             try {
                 compact(compactToRowType,
                     finalEndOfLastRow,

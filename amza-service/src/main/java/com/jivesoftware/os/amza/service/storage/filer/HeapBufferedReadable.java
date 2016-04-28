@@ -35,7 +35,7 @@ public class HeapBufferedReadable implements IReadable {
             backingReadable.seek(position);
             long remaining = length() - position;
             int nextBufferSize = Math.max(bufferSize, needed);
-            int used = Math.min((int) remaining, nextBufferSize);
+            int used = (int) Math.min(remaining, (long) nextBufferSize);
             if (buffer == null || needed > buffer.leakBytes().length) {
                 byte[] bytes = new byte[nextBufferSize];
                 backingReadable.read(bytes, 0, used);

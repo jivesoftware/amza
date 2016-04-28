@@ -1,8 +1,10 @@
 package com.jivesoftware.os.amza.api.partition;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import java.util.Map;
 
@@ -82,28 +84,38 @@ public class PartitionProperties {
         this.maxLeaps = maxLeaps;
     }
 
+    @JsonIgnore
+    public PartitionProperties copy() {
+        return new PartitionProperties(durability, tombstoneTimestampAgeInMillis, tombstoneTimestampIntervalMillis, tombstoneVersionAgeInMillis,
+            tombstoneVersionIntervalMillis, ttlTimestampAgeInMillis, ttlTimestampIntervalMillis, ttlVersionAgeInMillis, ttlVersionIntervalMillis,
+            forceCompactionOnStartup, consistency, requireConsistency, replicated, disabled, rowType, indexClassName,
+            indexProperties == null ? indexProperties : Maps.newHashMap(indexProperties),
+            updatesBetweenLeaps,
+            maxLeaps);
+    }
+
     @Override
     public String toString() {
-        return "PartitionProperties{" +
-            "durability=" + durability +
-            ", tombstoneTimestampAgeInMillis=" + tombstoneTimestampAgeInMillis +
-            ", tombstoneTimestampIntervalMillis=" + tombstoneTimestampIntervalMillis +
-            ", tombstoneVersionAgeInMillis=" + tombstoneVersionAgeInMillis +
-            ", tombstoneVersionIntervalMillis=" + tombstoneVersionIntervalMillis +
-            ", ttlTimestampAgeInMillis=" + ttlTimestampAgeInMillis +
-            ", ttlTimestampIntervalMillis=" + ttlTimestampIntervalMillis +
-            ", ttlVersionAgeInMillis=" + ttlVersionAgeInMillis +
-            ", ttlVersionIntervalMillis=" + ttlVersionIntervalMillis +
-            ", forceCompactionOnStartup=" + forceCompactionOnStartup +
-            ", consistency=" + consistency +
-            ", requireConsistency=" + requireConsistency +
-            ", replicated=" + replicated +
-            ", disabled=" + disabled +
-            ", rowType=" + rowType +
-            ", indexClassName='" + indexClassName + '\'' +
-            ", indexProperties=" + indexProperties +
-            ", updatesBetweenLeaps=" + updatesBetweenLeaps +
-            ", maxLeaps=" + maxLeaps +
-            '}';
+        return "PartitionProperties{"
+            + "durability=" + durability
+            + ", tombstoneTimestampAgeInMillis=" + tombstoneTimestampAgeInMillis
+            + ", tombstoneTimestampIntervalMillis=" + tombstoneTimestampIntervalMillis
+            + ", tombstoneVersionAgeInMillis=" + tombstoneVersionAgeInMillis
+            + ", tombstoneVersionIntervalMillis=" + tombstoneVersionIntervalMillis
+            + ", ttlTimestampAgeInMillis=" + ttlTimestampAgeInMillis
+            + ", ttlTimestampIntervalMillis=" + ttlTimestampIntervalMillis
+            + ", ttlVersionAgeInMillis=" + ttlVersionAgeInMillis
+            + ", ttlVersionIntervalMillis=" + ttlVersionIntervalMillis
+            + ", forceCompactionOnStartup=" + forceCompactionOnStartup
+            + ", consistency=" + consistency
+            + ", requireConsistency=" + requireConsistency
+            + ", replicated=" + replicated
+            + ", disabled=" + disabled
+            + ", rowType=" + rowType
+            + ", indexClassName='" + indexClassName + '\''
+            + ", indexProperties=" + indexProperties
+            + ", updatesBetweenLeaps=" + updatesBetweenLeaps
+            + ", maxLeaps=" + maxLeaps
+            + '}';
     }
 }

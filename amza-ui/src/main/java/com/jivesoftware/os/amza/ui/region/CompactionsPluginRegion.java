@@ -47,9 +47,13 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
     public static class CompactionsPluginRegionInput {
 
         final String action;
+        final String fromIndexClass;
+        final String toIndexClass;
 
-        public CompactionsPluginRegionInput(String action) {
+        public CompactionsPluginRegionInput(String action, String fromIndexClass, String toIndexClass) {
             this.action = action;
+            this.fromIndexClass = fromIndexClass;
+            this.toIndexClass = toIndexClass;
         }
     }
 
@@ -80,6 +84,10 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
                     amzaService.expunge();
                     return null;
                 });
+            }
+
+            if (input.action.equals("migrateIndexClass")) {
+                amzaService.migrate(input.fromIndexClass, input.toIndexClass);
             }
 
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions(AmzaStats.CompactionFamily.values());

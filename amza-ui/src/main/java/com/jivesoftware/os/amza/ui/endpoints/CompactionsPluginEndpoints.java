@@ -34,7 +34,7 @@ public class CompactionsPluginEndpoints {
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response compactions() {
-        String rendered = soyService.renderPlugin(pluginRegion, new CompactionsPluginRegionInput(""));
+        String rendered = soyService.renderPlugin(pluginRegion, new CompactionsPluginRegionInput("", "", ""));
         return Response.ok(rendered).build();
     }
 
@@ -42,8 +42,10 @@ public class CompactionsPluginEndpoints {
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    public Response filter(@FormParam("action") @DefaultValue("") String action) {
-        String rendered = soyService.renderPlugin(pluginRegion, new CompactionsPluginRegionInput(action));
+    public Response filter(@FormParam("action") @DefaultValue("") String action,
+        @FormParam("fromIndexClass") @DefaultValue("") String fromIndexClass,
+        @FormParam("toIndexClass") @DefaultValue("") String toIndexClass) {
+        String rendered = soyService.renderPlugin(pluginRegion, new CompactionsPluginRegionInput(action, fromIndexClass, toIndexClass));
         return Response.ok(rendered).build();
     }
 

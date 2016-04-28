@@ -229,7 +229,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
                 PartitionProperties copy = partitionProperties.copy();
                 copy.indexClassName = toIndexClass;
-                partitionIndex.putProperties(partitionName, copy);
+                partitionCreator.updatePartitionProperties(partitionName, copy);
             }
             return true;
         });

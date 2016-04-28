@@ -288,6 +288,25 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
     }
 
+    public interface PartitionPropertiesStream {
+
+        boolean stream(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
+    }
+
+    public void streamAllParitions(PartitionPropertiesStream partitionStream) throws Exception {
+        getSystemPartition(PartitionCreator.REGION_PROPERTIES).rowScan(
+            (RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) -> {
+                if (!valueTombstoned) {
+                    PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
+                    PartitionProperties properties = partitionPropertyMarshaller.fromBytes(value);
+                    if (!partitionStream.stream(partitionName, properties)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+    }
+
     public Iterable<VersionedPartitionName> getSystemPartitions() {
         return SYSTEM_PARTITIONS.keySet();
     }

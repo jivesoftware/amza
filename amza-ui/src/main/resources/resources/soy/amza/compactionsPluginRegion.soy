@@ -14,6 +14,11 @@
                 <button title="Forced Compact All Tombstones" type="submit" name="action" value="forceCompactionTombstones" class="btn btn-default">Compact All Tombstones</button>
                 <button title="Forced Compact All Tombstones" type="submit" name="action" value="forceExpunge" class="btn btn-default">Expunge All</button>
             </form>
+            <form id="migrate" data-active-class="btn-default" method="post" name="migrate">
+                <input type="text" style="width:200px; padding-left:10px;" placeholder="from index class" value="" name="fromIndexClass" id="fromIndexClass"  title="">
+                <input type="text" style="width:200px; padding-left:10px;" placeholder="to index class" value="" name="toIndexClass" id="fromIndexClass"  title="">
+                <button title="Forced Compact All Tombstones" type="submit" name="action" value="migrateIndexClass" class="btn btn-default">Migrate Index Class</button>
+            </form>
         </div>
     </div>
     <div class="panel panel-default">

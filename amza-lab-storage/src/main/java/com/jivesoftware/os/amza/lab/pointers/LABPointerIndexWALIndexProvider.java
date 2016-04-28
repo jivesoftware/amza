@@ -7,7 +7,6 @@ import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.lab.LABEnvironment;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.sleepycat.je.DatabaseNotFoundException;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
 
@@ -75,18 +74,10 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(LABPointerIndexWALIndexName.Type.active, versionedPartitionName.toBase64());
         LABEnvironment env = environments[stripe];
         for (LABPointerIndexWALIndexName n : name.all()) {
-            try {
-                env.remove(n.getPrimaryName());
-                LOG.info("Removed database: {}", n.getPrimaryName());
-            } catch (DatabaseNotFoundException x) {
-                // ignore
-            }
-            try {
-                env.remove(n.getPrefixName());
-                LOG.info("Removed database: {}", n.getPrefixName());
-            } catch (DatabaseNotFoundException x) {
-                // ignore
-            }
+            env.remove(n.getPrimaryName());
+            LOG.info("Removed database: {}", n.getPrimaryName());
+            env.remove(n.getPrefixName());
+            LOG.info("Removed database: {}", n.getPrefixName());
         }
     }
 

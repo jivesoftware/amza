@@ -44,8 +44,13 @@ public class SystemWALStorage {
         this.hardFlush = hardFlush;
     }
 
-    public void load(HighestPartitionTx tx) throws Exception {
-        highestPartitionTxIds(tx);
+    public void load(Iterable<VersionedPartitionName> systemPartitionNames, HighestPartitionTx tx) throws Exception {
+        for (VersionedPartitionName versionedPartitionName : systemPartitionNames) {
+            long highestTxId = highestPartitionTxId(versionedPartitionName);
+            if (highestTxId != -1) {
+                tx.tx(new VersionedAquarium(versionedPartitionName, null), highestTxId);
+            }
+        }
     }
 
     public RowsChanged update(VersionedPartitionName versionedPartitionName,
@@ -174,16 +179,6 @@ public class SystemWALStorage {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             return partitionStore.getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
-        }
-    }
-
-    private void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
-            PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
-            if (partitionStore != null) {
-                long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(new VersionedAquarium(versionedPartitionName, null), highestTxId);
-            }
         }
     }
 

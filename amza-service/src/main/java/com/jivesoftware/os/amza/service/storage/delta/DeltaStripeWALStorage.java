@@ -9,6 +9,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -36,6 +38,7 @@ import com.jivesoftware.os.amza.service.AckWaters;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
+import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
@@ -173,6 +176,7 @@ public class DeltaStripeWALStorage {
     }
 
     public void load(PartitionIndex partitionIndex,
+        VersionedPartitionProvider versionedPartitionProvider,
         CurrentVersionProvider currentVersionProvider,
         PrimaryRowMarshaller primaryRowMarshaller) throws Exception {
 
@@ -188,7 +192,7 @@ public class DeltaStripeWALStorage {
                     DeltaWAL currentWAL = deltaWALs.get(i);
                     if (prevWAL != null) {
                         Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(), "Delta WALs were not contiguous");
-                        mergeDelta(partitionIndex, currentVersionProvider, prevWAL, true, () -> currentWAL);
+                        mergeDelta(partitionIndex, versionedPartitionProvider, currentVersionProvider, prevWAL, true, () -> currentWAL);
                     }
                     deltaWAL.set(currentWAL);
                     Set<VersionedPartitionName> accepted = Sets.newHashSet();
@@ -299,7 +303,11 @@ public class DeltaStripeWALStorage {
         return updateSinceLastMerge.get() > mergeAfterNUpdates;
     }
 
-    public void merge(PartitionIndex partitionIndex, CurrentVersionProvider currentVersionProvider, boolean force) throws Exception {
+    public void merge(PartitionIndex partitionIndex,
+        VersionedPartitionProvider versionedPartitionProvider,
+        CurrentVersionProvider currentVersionProvider,
+        boolean force) throws Exception {
+
         if (!force && !mergeable()) {
             return;
         }
@@ -312,7 +320,7 @@ public class DeltaStripeWALStorage {
         amzaStats.beginCompaction(CompactionFamily.merge, "Delta Stripe:" + index);
         try {
             DeltaWAL wal = deltaWAL.get();
-            if (mergeDelta(partitionIndex, currentVersionProvider, wal, false, () -> deltaWALFactory.create(wal.getId()))) {
+            if (mergeDelta(partitionIndex, versionedPartitionProvider, currentVersionProvider, wal, false, () -> deltaWALFactory.create(wal.getId()))) {
                 merging.set(0);
             }
         } finally {
@@ -322,6 +330,7 @@ public class DeltaStripeWALStorage {
 
     private boolean mergeDelta(
         PartitionIndex partitionIndex,
+        VersionedPartitionProvider versionedPartitionProvider,
         CurrentVersionProvider currentVersionProvider,
         DeltaWAL wal,
         boolean validate,
@@ -362,7 +371,8 @@ public class DeltaStripeWALStorage {
                         try {
                             while (true) {
                                 try {
-                                    result = currentVersionProvider.tx(versionedPartitionName.getPartitionName(),
+                                    PartitionName partitionName = versionedPartitionName.getPartitionName();
+                                    result = currentVersionProvider.tx(partitionName,
                                         null,
                                         (deltaIndex, stripeIndex, storageVersion) -> {
                                             MergeResult r;
@@ -370,7 +380,13 @@ public class DeltaStripeWALStorage {
                                                 LOG.warn("Ignored merge for partition {} with nonexistent storage", versionedPartitionName);
                                                 r = null;
                                             } else {
-                                                r = currentDelta.merge(partitionIndex, stripeIndex, validate);
+                                                PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
+                                                if (properties == null) {
+                                                    LOG.warn("Ignored merge for partition {} with missing properties", versionedPartitionName);
+                                                    r = null;
+                                                } else {
+                                                    r = currentDelta.merge(partitionIndex, properties, stripeIndex, validate);
+                                                }
                                             }
                                             sickThreads.recovered();
                                             return r;

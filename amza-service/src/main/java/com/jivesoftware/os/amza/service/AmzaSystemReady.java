@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
@@ -29,7 +29,7 @@ public class AmzaSystemReady {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaRingStoreReader ringStoreReader;
-    private final PartitionIndex partitionIndex;
+    private final PartitionCreator partitionCreator;
     private final SickPartitions sickPartitions;
 
     private final AtomicBoolean tookFully = new AtomicBoolean();
@@ -38,16 +38,16 @@ public class AmzaSystemReady {
     private final List<Callable<Void>> onReadyCallbacks = Collections.synchronizedList(Lists.newArrayList());
 
     public AmzaSystemReady(AmzaRingStoreReader ringStoreReader,
-        PartitionIndex partitionIndex,
+        PartitionCreator partitionCreator,
         SickPartitions sickPartitions,
         SickThreads sickThreads) {
 
         this.ringStoreReader = ringStoreReader;
-        this.partitionIndex = partitionIndex;
+        this.partitionCreator = partitionCreator;
         this.sickPartitions = sickPartitions;
 
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
-            PartitionProperties properties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
+        for (VersionedPartitionName versionedPartitionName : partitionCreator.getSystemPartitions()) {
+            PartitionProperties properties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
             if (properties.replicated) {
                 sickPartitions.sick(versionedPartitionName, new Throwable("System partition has not yet taken fully from a quorum"));
                 systemTookFully.put(versionedPartitionName, Collections.newSetFromMap(Maps.newConcurrentMap()));
@@ -107,7 +107,7 @@ public class AmzaSystemReady {
                 ready.set(true);
 
                 ready.notifyAll();
-                for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
+                for (VersionedPartitionName versionedPartitionName : partitionCreator.getSystemPartitions()) {
                     sickPartitions.recovered(versionedPartitionName);
                 }
                 systemTookFully.clear();

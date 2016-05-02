@@ -111,7 +111,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 stripeIndex = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
                 if (stripeIndex == -1) {
                     stripeIndex = rand.nextInt(stripeVersions.length);
-                    if (versionedPartitionProvider.getProperties(partitionName) == null) {
+                    if (!versionedPartitionProvider.hasPartition(partitionName)) {
                         throw new PropertiesNotPresentException("Properties missing for " + partitionName);
                     }
                     if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {

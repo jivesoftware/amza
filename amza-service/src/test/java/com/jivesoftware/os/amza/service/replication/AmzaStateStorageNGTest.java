@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.SickPartitions;
@@ -12,6 +13,7 @@ import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -75,14 +77,10 @@ public class AmzaStateStorageNGTest {
 
         TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
-        PartitionIndex partitionIndex = new PartitionIndex(interner,
-            amzaStats,
+        PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
             orderIdProvider,
             indexedWALStorageProvider,
-            partitionPropertyMarshaller,
             4);
-
-        partitionIndex.init((partitionName) -> 0);
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -92,6 +90,12 @@ public class AmzaStateStorageNGTest {
 
         WALUpdated updated = (versionedPartitionName, txId) -> {
         };
+        RowChanges rowChanges = changes -> {
+        };
+        PartitionCreator partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage,
+            updated, rowChanges, interner);
+
+        partitionCreator.init((partitionName) -> 0);
 
         Member root = new Member(new byte[]{1});
         Member other1 = new Member(new byte[]{2});

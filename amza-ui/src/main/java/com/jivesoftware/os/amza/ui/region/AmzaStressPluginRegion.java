@@ -381,7 +381,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 }
             }
         } else {
-            amzaService.setPropertiesIfAbsent(partitionName, partitionProperties);
+            amzaService.createPartitionIfAbsent(partitionName, partitionProperties);
 
             while (true) {
                 try {

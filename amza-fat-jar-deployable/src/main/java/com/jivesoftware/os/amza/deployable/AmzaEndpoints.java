@@ -201,7 +201,7 @@ public class AmzaEndpoints {
         PartitionName partitionName = new PartitionName(false,
             ringName.getBytes(StandardCharsets.UTF_8),
             simplePartitionName.getBytes(StandardCharsets.UTF_8));
-        amzaService.setPropertiesIfAbsent(partitionName,
+        amzaService.createPartitionIfAbsent(partitionName,
             new PartitionProperties(Durability.fsync_never,
                 0, 0, 0, 0, 0, 0, 0, 0,
                 false,

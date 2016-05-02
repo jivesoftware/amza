@@ -35,7 +35,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     private final BAInterner interner;
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
-    private final PartitionIndex partitionIndex;
+    private final PartitionCreator partitionCreator;
     private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
     private final long flushHighwatersAfterNUpdates;
@@ -49,7 +49,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     public PartitionBackedHighwaterStorage(BAInterner interner,
         OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
-        PartitionIndex partitionIndex,
+        PartitionCreator partitionCreator,
         SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
         long flushHighwatersAfterNUpdates) {
@@ -57,7 +57,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         this.interner = interner;
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
-        this.partitionIndex = partitionIndex;
+        this.partitionCreator = partitionCreator;
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
         this.flushHighwatersAfterNUpdates = flushHighwatersAfterNUpdates;
@@ -164,7 +164,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             , (t) -> new ConcurrentHashMap<>());
         HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);
         if (highwaterUpdates == null) {
-            PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
+            PartitionProperties partitionProperties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
             long txtId = -1L;
             if (partitionProperties.durability != Durability.ephemeral) {
                 TimestampedValue got = systemWALStorage.getTimestampedValue(PartitionCreator.HIGHWATER_MARK_INDEX, null,
@@ -241,7 +241,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                             RingMember ringMember = ringEntry.getKey();
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {
                                 VersionedPartitionName versionedPartitionName = partitionEntry.getKey();
-                                PartitionProperties properties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
+                                PartitionProperties properties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
                                 if (properties.durability != Durability.ephemeral) {
                                     HighwaterUpdates highwaterUpdates = partitionEntry.getValue();
                                     if (highwaterUpdates != null && highwaterUpdates.updates.get() > 0) {

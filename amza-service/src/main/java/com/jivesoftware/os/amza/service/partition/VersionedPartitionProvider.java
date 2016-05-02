@@ -10,18 +10,20 @@ import com.jivesoftware.os.amza.service.storage.PartitionIndex;
  */
 public interface VersionedPartitionProvider {
 
+    boolean hasPartition(PartitionName partitionName) throws Exception;
+
     PartitionProperties getProperties(PartitionName partitionName) throws Exception;
 
-    PartitionIndex.VersionedPartitionProperties getVersionedProperties(PartitionName partitionName,
+    VersionedPartitionProperties getVersionedProperties(PartitionName partitionName,
         VersionedPartitionProperties versionedPartitionProperties);
 
     class VersionedPartitionProperties {
 
-        public final long vesion;
+        public final long version;
         public final PartitionProperties properties;
 
-        public VersionedPartitionProperties(long vesion, PartitionProperties properties) {
-            this.vesion = vesion;
+        public VersionedPartitionProperties(long version, PartitionProperties properties) {
+            this.version = version;
             this.properties = properties;
         }
 

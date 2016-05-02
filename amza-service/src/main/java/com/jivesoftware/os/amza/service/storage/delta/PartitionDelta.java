@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALPrefix;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
@@ -373,7 +374,7 @@ class PartitionDelta {
         }
     }
 
-    MergeResult merge(PartitionIndex partitionIndex, int stripe, boolean validate) throws Exception {
+    MergeResult merge(PartitionIndex partitionIndex, PartitionProperties properties, int stripe, boolean validate) throws Exception {
         final PartitionDelta merge = merging.get();
         long merged = 0;
         long lastTxId = 0;
@@ -385,9 +386,8 @@ class PartitionDelta {
                 lastTxId = merge.highestTxId();
 
                 partitionStore = validate
-                    ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName, stripe)
-                    : partitionIndex.get(merge.versionedPartitionName, stripe);
-                PartitionProperties properties = partitionIndex.getProperties(merge.versionedPartitionName.getPartitionName());
+                    ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName, properties, stripe)
+                    : partitionIndex.get(merge.versionedPartitionName, properties, stripe);
                 long highestTxId = partitionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);
                 LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());

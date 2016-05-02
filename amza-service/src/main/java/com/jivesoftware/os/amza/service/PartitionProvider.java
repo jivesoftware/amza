@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  */
 public interface PartitionProvider {
 
-    void setPropertiesIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
+    void createPartitionIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
 
     Partition getPartition(PartitionName partitionName) throws Exception;
 

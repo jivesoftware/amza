@@ -124,7 +124,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.aquariumLivelinessFeedEveryMillis = 500;
         config.maxUpdatesBeforeDeltaStripeCompaction = 10;
         config.deltaStripeCompactionIntervalInMillis = 1000;
@@ -262,9 +262,9 @@ public class AmzaTestCluster {
                 LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
 
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
-                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                    partitionStripeFunction,
-                    workingIndexDirectories),
+                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                        partitionStripeFunction,
+                        workingIndexDirectories),
                     persistentRowIOProvider);
 
             },
@@ -359,7 +359,7 @@ public class AmzaTestCluster {
 
         public void create(Consistency consistency, PartitionName partitionName, String indexClassName, RowType rowType) throws Exception {
             // TODO test other consistencies and durabilities and .... Hehe
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(Durability.fsync_never,
+            PartitionProperties properties = new PartitionProperties(Durability.fsync_never,
                 0, 0, 0, 0, 0, 0, 0, 0,
                 false,
                 consistency,
@@ -370,7 +370,8 @@ public class AmzaTestCluster {
                 indexClassName,
                 null,
                 -1,
-                -1));
+                -1);
+            amzaService.createPartitionIfAbsent(partitionName, properties);
             amzaService.awaitOnline(partitionName, Integer.MAX_VALUE); //TODO lololol
         }
 
@@ -489,7 +490,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = {0};
+                    int[] count = { 0 };
                     partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -610,7 +611,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

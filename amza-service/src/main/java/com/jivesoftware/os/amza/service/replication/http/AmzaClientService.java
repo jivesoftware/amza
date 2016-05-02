@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
-import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -49,7 +48,7 @@ public class AmzaClientService implements AmzaRestClient {
         Exception {
         byte[] ringNameBytes = partitionName.getRingName();
         ringWriter.ensureSubRing(ringNameBytes, ringSize);
-        partitionProvider.setPropertiesIfAbsent(partitionName, partitionProperties);
+        partitionProvider.createPartitionIfAbsent(partitionName, partitionProperties);
         return ringReader.getRing(partitionName.getRingName());
     }
 

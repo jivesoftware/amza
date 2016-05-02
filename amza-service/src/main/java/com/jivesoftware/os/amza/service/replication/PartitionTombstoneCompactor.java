@@ -2,7 +2,9 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
@@ -24,6 +26,7 @@ public class PartitionTombstoneCompactor {
     private ScheduledExecutorService scheduledThreadPool;
 
     private final IndexedWALStorageProvider indexedWALStorageProvider;
+    private final PartitionCreator partitionCreator;
     private final PartitionIndex partitionIndex;
     private final StorageVersionProvider storageVersionProvider;
     private final long checkIfTombstoneCompactionIsNeededIntervalInMillis;
@@ -33,6 +36,7 @@ public class PartitionTombstoneCompactor {
     private final StripingLocksProvider<PartitionName> locksProvider = new StripingLocksProvider<>(1024);
 
     public PartitionTombstoneCompactor(IndexedWALStorageProvider indexedWALStorageProvider,
+        PartitionCreator partitionCreator,
         PartitionIndex partitionIndex,
         StorageVersionProvider storageVersionProvider,
         long checkIfCompactionIsNeededIntervalInMillis,
@@ -40,6 +44,7 @@ public class PartitionTombstoneCompactor {
         int numberOfStripes) {
 
         this.indexedWALStorageProvider = indexedWALStorageProvider;
+        this.partitionCreator = partitionCreator;
         this.partitionIndex = partitionIndex;
         this.storageVersionProvider = storageVersionProvider;
         this.checkIfTombstoneCompactionIsNeededIntervalInMillis = checkIfCompactionIsNeededIntervalInMillis;
@@ -90,7 +95,10 @@ public class PartitionTombstoneCompactor {
                             && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
                             && (compactStripe == -1 || stripeIndex == compactStripe)) {
 
-                            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+                            PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+                            if (partitionStore == null) {
+                                return null;
+                            }
 
                             boolean forced = force;
                             int compactToStripe = stripeIndex;
@@ -102,7 +110,7 @@ public class PartitionTombstoneCompactor {
                                 if (force || rebalancingIsActive()) {
                                     rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName,
                                         stripeIndex,
-                                        partitionIndex.getProperties(partitionName));
+                                        partitionStore.getProperties());
                                     if (rebalanceToStripe > -1) {
                                         forced = true;
                                         compactToStripe = rebalanceToStripe;

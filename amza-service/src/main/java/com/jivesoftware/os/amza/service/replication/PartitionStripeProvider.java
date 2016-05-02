@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.service.partition.VersionedPartitionTransactor;
 import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
@@ -42,6 +43,7 @@ public class PartitionStripeProvider {
 
     private final ExecutorService compactDeltasThreadPool;
     private final ExecutorService flusherExecutor;
+    private final PartitionCreator partitionCreator;
     private final PartitionIndex partitionIndex;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final DeltaStripeWALStorage[] deltaStripeWALStorages;
@@ -59,11 +61,12 @@ public class PartitionStripeProvider {
     private final long deltaStripeCompactionIntervalInMillis;
 
     public PartitionStripeProvider(AmzaStats stats,
+        PartitionCreator partitionCreator,
         PartitionIndex partitionIndex,
         PrimaryRowMarshaller primaryRowMarshaller,
         DeltaStripeWALStorage[] deltaStripeWALStorages,
         HighwaterStorage highwaterStorage,
-        HighwaterRowMarshaller highwaterRowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         RingMember rootRingMember,
         AmzaRingStoreReader ringStoreReader,
         AmzaAquariumProvider aquariumProvider,
@@ -74,6 +77,7 @@ public class PartitionStripeProvider {
         long asyncFlushIntervalMillis,
         long deltaStripeCompactionIntervalInMillis) {
 
+        this.partitionCreator = partitionCreator;
         this.partitionIndex = partitionIndex;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.deltaStripeWALStorages = deltaStripeWALStorages;
@@ -94,7 +98,7 @@ public class PartitionStripeProvider {
                 partitionStripes[deltaIndex][stripeIndex] = new PartitionStripe(stats,
                     "stripe-" + deltaIndex + "-" + stripeIndex,
                     stripeIndex,
-                    partitionIndex,
+                    partitionCreator,
                     deltaStripeWALStorages[deltaIndex],
                     amzaStripedPartitionWatcher,
                     primaryRowMarshaller,
@@ -121,7 +125,7 @@ public class PartitionStripeProvider {
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    deltaStripeWALStorage.load(partitionIndex, storageVersionProvider, primaryRowMarshaller);
+                    deltaStripeWALStorage.load(partitionIndex, partitionCreator, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
                     LOG.error("Failed while loading {} ", new Object[] { deltaStripeWALStorage }, x);
                     throw new RuntimeException(x);
@@ -150,7 +154,7 @@ public class PartitionStripeProvider {
                     try {
                         if (deltaStripeWALStorage.mergeable()) {
                             try {
-                                deltaStripeWALStorage.merge(partitionIndex, storageVersionProvider, false);
+                                deltaStripeWALStorage.merge(partitionIndex, partitionCreator, storageVersionProvider, false);
                             } catch (Throwable x) {
                                 LOG.error("Compactor failed.", x);
                             }
@@ -180,6 +184,9 @@ public class PartitionStripeProvider {
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
+        if (tx == null) {
+            return null;
+        }
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
         VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider);
@@ -212,7 +219,7 @@ public class PartitionStripeProvider {
     public void mergeAll(boolean force) {
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             try {
-                deltaStripeWALStorage.merge(partitionIndex, storageVersionProvider, force);
+                deltaStripeWALStorage.merge(partitionIndex, partitionCreator, storageVersionProvider, force);
             } catch (Throwable x) {
                 LOG.error("mergeAll failed.", x);
             }

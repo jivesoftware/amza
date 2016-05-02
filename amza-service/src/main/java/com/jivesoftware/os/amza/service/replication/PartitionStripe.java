@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
@@ -39,7 +40,7 @@ public class PartitionStripe {
     private final AmzaStats stats;
     private final String name;
     private final int stripeIndex;
-    private final PartitionIndex partitionIndex;
+    private final PartitionCreator partitionCreator;
     private final DeltaStripeWALStorage storage;
     private final RowChanges allRowChanges;
     private final PrimaryRowMarshaller primaryRowMarshaller;
@@ -48,7 +49,7 @@ public class PartitionStripe {
     public PartitionStripe(AmzaStats stats,
         String name,
         int stripeIndex,
-        PartitionIndex partitionIndex,
+        PartitionCreator partitionCreator,
         DeltaStripeWALStorage storage,
         RowChanges allRowChanges,
         PrimaryRowMarshaller primaryRowMarshaller,
@@ -57,7 +58,7 @@ public class PartitionStripe {
         this.stats = stats;
         this.name = name;
         this.stripeIndex = stripeIndex;
-        this.partitionIndex = partitionIndex;
+        this.partitionCreator = partitionCreator;
         this.storage = storage;
         this.allRowChanges = allRowChanges;
         this.primaryRowMarshaller = primaryRowMarshaller;
@@ -74,12 +75,12 @@ public class PartitionStripe {
     }
 
     boolean exists(VersionedPartitionName localVersionedPartitionName) throws Exception {
-        return partitionIndex.exists(localVersionedPartitionName, stripeIndex);
+        return partitionCreator.hasStore(localVersionedPartitionName, stripeIndex);
     }
 
     public long highestAquariumTxId(VersionedAquarium versionedAquarium) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore != null) {
             return storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
         } else {
@@ -104,7 +105,7 @@ public class PartitionStripe {
         if (specificVersion.isPresent() && versionedPartitionName.getPartitionVersion() != specificVersion.get()) {
             return null;
         }
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -134,7 +135,7 @@ public class PartitionStripe {
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -151,7 +152,7 @@ public class PartitionStripe {
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -168,7 +169,7 @@ public class PartitionStripe {
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -191,7 +192,7 @@ public class PartitionStripe {
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName,
             livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -216,7 +217,7 @@ public class PartitionStripe {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
         if (versionedPartitionName != null && livelyEndState != null) {
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+            PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
             if (partitionStore != null) {
                 storage.takeAllRows(versionedPartitionName, partitionStore.getWalStorage(), rowStream);
             }
@@ -232,7 +233,7 @@ public class PartitionStripe {
         if (versionedPartitionName == null || livelyEndState == null || livelyEndState.getCurrentState() == null) {
             return takeRowUpdates.give(null, null, null);
         }
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             return takeRowUpdates.give(null, null, null);
         } else {
@@ -255,7 +256,7 @@ public class PartitionStripe {
         WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -292,7 +293,7 @@ public class PartitionStripe {
         WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -320,7 +321,7 @@ public class PartitionStripe {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
 
         // any state is OK!
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
@@ -334,7 +335,7 @@ public class PartitionStripe {
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
 
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName, stripeIndex);
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {

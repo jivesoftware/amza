@@ -200,7 +200,7 @@ public class AmzaEndpoints {
         amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes());
 
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName,
+        amzaService.createPartitionIfAbsent(partitionName,
             new PartitionProperties(Durability.fsync_never,
                 0, 0, 0, 0, 0, 0, 0, 0,
                 false,

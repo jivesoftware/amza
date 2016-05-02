@@ -97,7 +97,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     amzaService.getRingWriter().ensureMaximalRing(ringNameBytes);
 
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
-                    amzaService.setPropertiesIfAbsent(partitionName,
+                    amzaService.createPartitionIfAbsent(partitionName,
                         new PartitionProperties(Durability.fsync_never,
                             0, 0, 0, 0, 0, 0, 0, 0,
                             false,

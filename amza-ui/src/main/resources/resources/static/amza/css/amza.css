@@ -28,6 +28,7 @@ li.j-listitem {
 /* theme */
 body {
     background-image: url(/static/amza/img/bkg.jpg);
+    margin-top: 64px;
 }
 
 /* Used by event stream */

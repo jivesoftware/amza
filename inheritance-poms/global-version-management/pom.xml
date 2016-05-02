@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.342</version>
+        <version>0.343</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
@@ -17,7 +17,7 @@
         <mlogger.version>0.15</mlogger.version>
         <filer.version>0.93</filer.version>
         <routing.bird.version>0.42</routing.bird.version>
-        <aquarium.version>0.10</aquarium.version>
+        <aquarium.version>0.11</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>

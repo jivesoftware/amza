@@ -394,18 +394,24 @@ public class AmzaServiceInitializer {
             int count = 0;
             for (PartitionName partitionName : partitionCreator.getMemberPartitions(ringStoreReader)) {
                 count++;
-                partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
-                    return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
-                        if (partitionStore != null) {
-                            takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
-                        } else {
-                            LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}", versionedPartitionName);
-                        }
-                        return null;
+                try {
+                    partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
+                        return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                            VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                            PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+                            if (partitionStore != null) {
+                                takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
+                            } else {
+                                LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}", versionedPartitionName);
+                            }
+                            return null;
+                        });
                     });
-                });
+                } catch (PropertiesNotPresentException x) {
+                    LOG.warn("Skipped system ready init for a partition because its properties were missing: {}", partitionName);
+                } catch (Exception x) {
+                    LOG.error("Failed system ready init for a partition, please fix: {}", new Object[] { partitionName }, x);
+                }
             }
             LOG.info("Finished loading {} highest txIds after system ready!", count);
             return null;

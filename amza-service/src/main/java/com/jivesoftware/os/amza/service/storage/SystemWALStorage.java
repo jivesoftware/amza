@@ -47,9 +47,7 @@ public class SystemWALStorage {
     public void load(Iterable<VersionedPartitionName> systemPartitionNames, HighestPartitionTx tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : systemPartitionNames) {
             long highestTxId = highestPartitionTxId(versionedPartitionName);
-            if (highestTxId != -1) {
-                tx.tx(new VersionedAquarium(versionedPartitionName, null), highestTxId);
-            }
+            tx.tx(new VersionedAquarium(versionedPartitionName, null), highestTxId);
         }
     }
 

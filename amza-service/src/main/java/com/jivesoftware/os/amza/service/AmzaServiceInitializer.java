@@ -21,7 +21,6 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -297,6 +296,7 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             partitionCreator,
             ringStoreReader,
+            workingIndexDirectories,
             stripeVersions,
             deltaStripeWALStorages,
             walUpdated,

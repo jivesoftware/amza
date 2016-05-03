@@ -25,6 +25,7 @@ import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.File;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
@@ -45,6 +46,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final SystemWALStorage systemWALStorage;
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final RingMembership ringMembership;
+    private final File[] workingIndexDirectories;
     private final long[] stripeVersions;
     private final DeltaStripeWALStorage[] deltaStripeWALStorages;
     private final WALUpdated walUpdated;
@@ -61,6 +63,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         SystemWALStorage systemWALStorage,
         VersionedPartitionProvider versionedPartitionProvider,
         RingMembership ringMembership,
+        File[] workingIndexDirectories,
         long[] stripeVersions,
         DeltaStripeWALStorage[] deltaStripeWALStorages,
         WALUpdated walUpdated,
@@ -71,6 +74,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         this.systemWALStorage = systemWALStorage;
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.ringMembership = ringMembership;
+        this.workingIndexDirectories = workingIndexDirectories;
         this.stripeVersions = stripeVersions;
         this.deltaStripeWALStorages = deltaStripeWALStorages;
         this.walUpdated = walUpdated;
@@ -110,7 +114,16 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 storageVersion = lookupStorageVersion(partitionName);
                 stripeIndex = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
                 if (stripeIndex == -1) {
-                    stripeIndex = rand.nextInt(stripeVersions.length);
+
+                    long maxFree = 0;
+                    for (int i = 0; i < workingIndexDirectories.length; i++) {
+                        long free = workingIndexDirectories[i].getFreeSpace();
+                        if (free > maxFree) {
+                            stripeIndex = i;
+                            maxFree = free;
+                        }
+                    }
+
                     if (!versionedPartitionProvider.hasPartition(partitionName)) {
                         throw new PropertiesNotPresentException("Properties missing for " + partitionName);
                     }

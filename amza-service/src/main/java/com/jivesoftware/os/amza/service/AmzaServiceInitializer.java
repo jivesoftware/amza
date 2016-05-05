@@ -247,7 +247,7 @@ public class AmzaServiceInitializer {
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
+        AckWaters ackWaters = new AckWaters(amzaStats, config.ackWatersStripingLevel);
 
         DeltaStripeWALStorage[] deltaStripeWALStorages = new DeltaStripeWALStorage[numberOfStripes];
 

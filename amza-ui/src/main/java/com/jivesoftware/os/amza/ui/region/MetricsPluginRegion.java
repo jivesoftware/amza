@@ -517,6 +517,14 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) amzaStats.takeExcessRows.get() / amzaStats.takes.get()) / 4096 * 100),
             numberFormat.format(amzaStats.takeExcessRows.get())));
 
+        sb.append(progress("Acks (" + numberFormat.format(grandTotal.acks.get()) + ")",
+            (int) (((double) grandTotal.acksLag.longValue() / 10000d) * 100),
+            getDurationBreakdown(grandTotal.acksLag.longValue()) + " lag"));
+
+        sb.append(progress("Quorums (" + numberFormat.format(grandTotal.quorums.get()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.get()) + ")",
+            (int) (((double) grandTotal.quorumsLatency.longValue() / 10000d) * 100),
+            getDurationBreakdown(grandTotal.quorumsLatency.longValue()) + " lag"));
+
         sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.get()) + ")",
             (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
 

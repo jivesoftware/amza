@@ -339,6 +339,7 @@ public class TakeCoordinator {
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
         ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
+        amzaStats.acks(remoteRingMember, versionedAquarium.getVersionedPartitionName().getPartitionName(), 1, localTxId);
     }
 
 }

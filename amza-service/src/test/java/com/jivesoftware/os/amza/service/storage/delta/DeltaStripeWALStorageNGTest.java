@@ -234,7 +234,7 @@ public class DeltaStripeWALStorageNGTest {
         DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner,
             1,
             new AmzaStats(),
-            new AckWaters(2),
+            new AckWaters(amzaStats, 2),
             new SickThreads(),
             ringStoreReader,
             deltaWALFactory,

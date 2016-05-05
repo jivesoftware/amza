@@ -148,6 +148,7 @@ public class Main {
 
         //  hmmm
         LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
+        labConfig.setLeapCacheMaxCapacity(Integer.parseInt(System.getProperty("amza.leap.cache.max.capacity", "1000000")));
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             interner,

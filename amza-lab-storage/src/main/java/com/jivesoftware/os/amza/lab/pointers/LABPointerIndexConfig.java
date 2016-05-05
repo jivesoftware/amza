@@ -33,4 +33,9 @@ public interface LABPointerIndexConfig extends Config {
 
     @IntDefault(24)
     int getConcurrency();
+
+    @LongDefault(1_000_000)
+    long getLeapCacheMaxCapacity();
+
+    void setLeapCacheMaxCapacity(long leapCacheMaxCapacity);
 }

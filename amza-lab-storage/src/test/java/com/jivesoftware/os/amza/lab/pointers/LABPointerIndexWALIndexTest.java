@@ -385,6 +385,7 @@ public class LABPointerIndexWALIndexTest {
 
     private LABPointerIndexWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
         LABPointerIndexConfig config = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
+
         return new LABPointerIndexWALIndexProvider(config, "lab", 1, new File[]{dir}).createIndex(partitionName, 0);
     }
 

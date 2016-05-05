@@ -93,8 +93,8 @@ public class PartitionComposter implements RowChanges {
     public void changes(RowsChanged changes) throws Exception {
         PartitionName partitionName = changes.getVersionedPartitionName().getPartitionName();
         if (partitionName.equals(REGION_INDEX.getPartitionName())) {
-            for (WALValue value : changes.getApply().values()) {
-                dirtyPartitions.put(value.getValue(), value.getValue());
+            for (WALKey key : changes.getApply().keySet()) {
+                dirtyPartitions.put(key.key, key.key);
             }
         } else if (partitionName.equals(PARTITION_VERSION_INDEX.getPartitionName())) {
             for (WALKey key : changes.getApply().keySet()) {

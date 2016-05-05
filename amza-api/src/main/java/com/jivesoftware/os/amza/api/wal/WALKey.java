@@ -102,11 +102,15 @@ public class WALKey {
         byte[] upper = new byte[keyFragment.length];
         System.arraycopy(keyFragment, 0, upper, 0, keyFragment.length);
 
-        // given: [64,72,96,127]
-        // want: [64,72,97,-128]
+        // given: [64,72,96,0] want: [64,72,97,1]
+        // given: [64,72,96,127] want: [64,72,96,-128] because -128 is the next lex value after 127
+        // given: [64,72,96,-1] want: [64,72,97,0] because -1 is the lex largest value and we roll to the next digit
         for (int i = upper.length - 1; i >= 0; i--) {
-            if (upper[i] == Byte.MAX_VALUE) {
+            if (upper[i] == -1) {
+                upper[i] = 0;
+            } else if (upper[i] == Byte.MAX_VALUE) {
                 upper[i] = Byte.MIN_VALUE;
+                break;
             } else {
                 upper[i]++;
                 break;

@@ -33,17 +33,19 @@ public class MetricsPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response filter(@QueryParam("partitionName") @DefaultValue("") String partitionName,
         @QueryParam("ringName") @DefaultValue("") String ringName,
+        @QueryParam("exact") @DefaultValue("false") boolean exact,
         @QueryParam("visualize") @DefaultValue("false") boolean visualize) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new MetricsPluginRegionInput(ringName, partitionName, visualize));
+            new MetricsPluginRegionInput(ringName, partitionName, exact, visualize));
         return Response.ok(rendered).build();
     }
 
     @GET
     @Produces(MediaType.TEXT_HTML)
     @Path("/stats/")
-    public Response stats(@QueryParam("partitionName") String partitionName) {
-        return Response.ok(pluginRegion.renderStats(partitionName)).build();
+    public Response stats(@QueryParam("partitionName") String partitionName,
+        @QueryParam("exact") boolean exact) {
+        return Response.ok(pluginRegion.renderStats(partitionName, exact)).build();
     }
 
     @GET

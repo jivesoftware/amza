@@ -10,14 +10,6 @@ amza.stats = {
     init: function () {
         $stats = $('#stats');
 
-//        if (amza.stats.requireFocus) {
-//            amza.onWindowFocus.push(function () {
-//                if (amza.stats.html) {
-//                    amza.stats;
-//                }
-//            });
-//        }
-
         amza.stats.poll();
     },
     poll: function () {
@@ -248,14 +240,6 @@ amza.overview = {
     init: function () {
         $overview = $('#overview');
 
-//        if (amza.stats.requireFocus) {
-//            amza.onWindowFocus.push(function () {
-//                if (amza.stats.html) {
-//                    amza.stats;
-//                }
-//            });
-//        }
-
         amza.overview.poll();
     },
     poll: function () {
@@ -304,16 +288,4 @@ $(document).ready(function () {
         amza.overview.init();
     }
 
-});
-
-$(window).focus(function () {
-    amza.windowFocused = true;
-    for (var i = 0; i < amza.onWindowFocus.length; i++) {
-        amza.onWindowFocus[i]();
-    }
-}).blur(function () {
-    amza.windowFocused = false;
-    for (var i = 0; i < amza.onWindowBlur.length; i++) {
-        amza.onWindowBlur[i]();
-    }
 });

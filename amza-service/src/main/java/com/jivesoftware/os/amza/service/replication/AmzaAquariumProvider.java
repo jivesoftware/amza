@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.service.AmzaPartitionCommitable;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
+import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
@@ -169,6 +170,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                                 aquarium.tapTheGlass();
                                 takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
                             }
+                        } catch (PartitionIsDisposedException e) {
+                            LOG.info("Ignored disposed partition {}", partitionName);
                         } catch (PropertiesNotPresentException e) {
                             // somewhat expected
                             smellsFishy.add(partitionName);

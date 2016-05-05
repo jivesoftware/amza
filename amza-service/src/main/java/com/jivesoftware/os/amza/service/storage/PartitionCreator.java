@@ -321,6 +321,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         }
     }
 
+    @Override
     public boolean isPartitionDisposed(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return false;

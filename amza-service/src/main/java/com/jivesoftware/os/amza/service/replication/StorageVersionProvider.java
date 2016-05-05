@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
+import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
@@ -124,6 +125,9 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                         }
                     }
 
+                    if (versionedPartitionProvider.isPartitionDisposed(partitionName)) {
+                        throw new PartitionIsDisposedException("Partition " + partitionName + " is disposed");
+                    }
                     if (!versionedPartitionProvider.hasPartition(partitionName)) {
                         throw new PropertiesNotPresentException("Properties missing for " + partitionName);
                     }

@@ -190,6 +190,10 @@ div.upena-cfg-pending-container {
     border-radius: 6px 6px 0 0;
 }
 
+div.partition-picker {
+    margin-bottom: 20px;
+}
+
 .popover{
     max-width: 100%; 
 }

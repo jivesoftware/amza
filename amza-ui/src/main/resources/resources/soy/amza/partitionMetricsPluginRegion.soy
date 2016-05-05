@@ -14,20 +14,21 @@
                     Partition Name
                     {sp}
                     <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
-                        class="form-control" placeholder="Partition Name" value="{$partitionName}"
+                        placeholder="Partition Name" value="{$partitionName}"
                         name="partitionName" id="partitionNamePicker"  title="">
                     {sp}
                     Ring Name
                     {sp}
                     <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
-                        class="form-control" placeholder="Ring Name" value="{$ringName}"
+                        placeholder="Ring Name" value="{$ringName}"
                         name="ringName" id="ringNamePicker" title="">
                     {sp}
                     Exact
                     {sp}
                     <input type="checkbox" autocomplete="off" style="padding-left:10px;"
-                        class="form-control" placeholder="Exact" value="true" {if $exact}checked="checked"{/if}
+                        placeholder="Exact" value="true" {if $exact}checked="checked"{/if}
                         name="exact" id="exactPicker"  title="">
+                    <input type="submit" style="display:none;">
                 </form>
             </div>
             <table class="table table-condensed">

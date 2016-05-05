@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
+import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
@@ -138,8 +139,11 @@ public class PartitionComposter implements RowChanges {
                             return null;
                         });
                         return true;
+                    } catch (PartitionIsDisposedException e) {
+                        LOG.info("Ignored disposed partition: {}", partitionName);
+                        return true;
                     } catch (NotARingMemberException e) {
-                        LOG.debug("Skipped compost for non-member partition without strorage: {}", partitionName);
+                        LOG.debug("Skipped compost for non-member partition without storage: {}", partitionName);
                         return true;
                     } catch (Throwable t) {
                         dirtyPartitions.put(key, key);

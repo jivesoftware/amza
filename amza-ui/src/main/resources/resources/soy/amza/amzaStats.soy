@@ -13,13 +13,15 @@
         <td></td>
         <td></td>
         <td></td>
-        <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag}millis lag</i></td>
-        <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag}millis lag</i></td>
-        <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag}millis lag</i></td>
-        <td><b>{$grandTotals.updates}</b>{sp}<i>{$grandTotals.updatesLag}millis lag</i></td>
-        <td><b>{$grandTotals.offers}</b>{sp}<i>{$grandTotals.offersLag}millis lag</i></td>
-        <td><b>{$grandTotals.takes}</b>{sp}<i>{$grandTotals.takesLag}millis lag</i></td>
-        <td><b>{$grandTotals.takeApplies}</b>{sp}<i>{$grandTotals.takeAppliesLag}millis lag</i></td>
+        <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag} ms lag</i></td>
+        <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag} ms lag</i></td>
+        <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag} ms lag</i></td>
+        <td><b>{$grandTotals.updates}</b>{sp}<i>{$grandTotals.updatesLag} ms lag</i></td>
+        <td><b>{$grandTotals.offers}</b>{sp}<i>{$grandTotals.offersLag} ms lag</i></td>
+        <td><b>{$grandTotals.takes}</b>{sp}<i>{$grandTotals.takesLag} ms lag</i></td>
+        <td><b>{$grandTotals.takeApplies}</b>{sp}<i>{$grandTotals.takeAppliesLag} ms lag</i></td>
+        <td><b>{$grandTotals.acks}</b>{sp}<i>{$grandTotals.acksLag} ms lag</i></td>
+        <td><b>{$grandTotals.quorums} / {$grandTotals.quorumTimeouts}</b>{sp}<i>{$grandTotals.quorumsLatency} ms lag</i></td>
         <td></td>
         <td></td>
         <td></td>
@@ -78,13 +80,15 @@
             <td>{$r.ringName}</td>
             <td>{$r.name}</td>
             <td><b>{$r.count}</b></td>
-            <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag}millis lag</i></td>
-            <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag}millis lag</i></td>
-            <td><b>{$r.directApplies}</b><i>{sp}{$r.directAppliesLag}millis lag</i></td>
-            <td><b>{$r.updates}</b>{sp}<i>{$r.updatesLag}millis lag</i></td>
-            <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag}millis lag</i></td>
-            <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
-            <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
+            <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag} ms lag</i></td>
+            <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag} ms lag</i></td>
+            <td><b>{$r.directApplies}</b><i>{sp}{$r.directAppliesLag} ms lag</i></td>
+            <td><b>{$r.updates}</b>{sp}<i>{$r.updatesLag} ms lag</i></td>
+            <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag} ms lag</i></td>
+            <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag} ms lag</i></td>
+            <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag} ms lag</i></td>
+            <td><b>{$r.acks}</b>{sp}<i>{$r.acksLag} ms lag</i></td>
+            <td><b>{$r.quorums} / {$r.quorumTimeouts}</b>{sp}<i>{$r.quorumsLatency} ms lag</i></td>
             <td>{$r.partitionVersion}</td>
             <td>
                 <table class="table table-condensed">

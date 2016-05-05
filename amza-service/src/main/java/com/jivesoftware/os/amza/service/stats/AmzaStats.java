@@ -122,6 +122,11 @@ public class AmzaStats {
         public final AtomicLong takeAppliesLag = new AtomicLong();
         public final AtomicLong directApplies = new AtomicLong();
         public final AtomicLong directAppliesLag = new AtomicLong();
+        public final AtomicLong acks = new AtomicLong();
+        public final AtomicLong acksLag = new AtomicLong();
+        public final AtomicLong quorums = new AtomicLong();
+        public final AtomicLong quorumsLatency = new AtomicLong();
+        public final AtomicLong quorumTimeouts = new AtomicLong();
     }
 
     public void longPolled(RingMember member) {
@@ -212,6 +217,29 @@ public class AmzaStats {
         long lag = lag(smallestTxId);
         totals.offersLag.set(lag);
         grandTotals.offersLag.set((grandTotals.offersLag.get() + lag) / 2);
+    }
+
+    public void acks(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
+        grandTotals.acks.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.acks.addAndGet(count);
+        long lag = lag(smallestTxId);
+        totals.acksLag.set(lag);
+        grandTotals.acksLag.set((grandTotals.acksLag.get() + lag) / 2);
+    }
+
+    public void quorums(PartitionName partitionName, int count, long lag) {
+        grandTotals.quorums.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.quorums.addAndGet(count);
+        totals.quorumsLatency.set(lag);
+        grandTotals.quorumsLatency.set((grandTotals.quorumsLatency.get() + lag) / 2);
+    }
+
+    public void quorumTimeouts(PartitionName partitionName, int count) {
+        grandTotals.quorumTimeouts.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.quorumTimeouts.addAndGet(count);
     }
 
     public void took(RingMember from, PartitionName partitionName, int count, long smallestTxId) {

@@ -26,7 +26,8 @@ amza.stats = {
             url: "/amza/ui/metrics/stats/",
             dataType: "html",
             data: {
-                partitionName: $('#stats').data('partition-name')
+                partitionName: $('#stats').data('partition-name'),
+                exact: $('#stats').data('partition-exact')
             },
             //contentType: "application/json",
             success: function (data) {

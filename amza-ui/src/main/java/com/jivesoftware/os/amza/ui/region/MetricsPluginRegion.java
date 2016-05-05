@@ -36,6 +36,7 @@ import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.RuntimeMXBean;
+import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -109,11 +110,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         final String ringName;
         final String partitionName;
+        final boolean exact;
         final boolean visualize;
 
-        public MetricsPluginRegionInput(String ringName, String partitionName, boolean visualize) {
+        public MetricsPluginRegionInput(String ringName, String partitionName, boolean exact, boolean visualize) {
             this.ringName = ringName;
             this.partitionName = partitionName;
+            this.exact = exact;
             this.visualize = visualize;
         }
     }
@@ -194,9 +197,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         try {
 
+            data.put("ringName", input.ringName);
+            data.put("partitionName", input.partitionName);
+            data.put("exact", input.exact);
             if (input.partitionName.length() > 0) {
-                data.put("ringName", input.ringName);
-                data.put("partitionName", input.partitionName);
                 if (input.visualize) {
                     VisualizePartition visualizePartition = new VisualizePartition();
                     amzaService.visualizePartition(input.ringName.getBytes(), input.partitionName.getBytes(), visualizePartition);
@@ -228,7 +232,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 List<Map<String, Object>> regionTotals = new ArrayList<>();
                 List<PartitionName> partitionNames = Lists.newArrayList();
                 Iterables.addAll(partitionNames, amzaService.getSystemPartitionNames());
-                Iterables.addAll(partitionNames, amzaService.getMemberPartitionNames());
+                //Iterables.addAll(partitionNames, amzaService.getMemberPartitionNames());
                 Collections.sort(partitionNames);
                 for (PartitionName partitionName : partitionNames) {
                     Totals totals = amzaStats.getPartitionTotals().get(partitionName);
@@ -247,7 +251,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
     }
 
-    public String renderStats(String filter) {
+    public String renderStats(String filter, boolean exact) {
         Map<String, Object> data = Maps.newHashMap();
         try {
             List<Map<String, String>> longPolled = new ArrayList<>();
@@ -267,7 +271,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             Iterables.addAll(partitionNames, amzaService.getMemberPartitionNames());
             Collections.sort(partitionNames);
             for (PartitionName partitionName : partitionNames) {
-                if (new String(partitionName.getName()).contains(filter)) {
+                String name = new String(partitionName.getName(), StandardCharsets.UTF_8);
+                if (exact && name.equals(filter) || !exact && name.contains(filter)) {
                     Totals totals = amzaStats.getPartitionTotals().get(partitionName);
                     if (totals == null) {
                         totals = new Totals();
@@ -283,7 +288,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     }
 
     public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals, boolean includeCount) throws Exception {
-        SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
 

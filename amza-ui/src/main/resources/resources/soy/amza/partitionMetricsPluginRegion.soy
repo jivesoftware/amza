@@ -2,12 +2,35 @@
 
 /**
  * @param partitionName
+ * @param ringName
+ * @param exact
  */
 {template .partitionMetricsPluginRegion}
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>Partition{sp}{$partitionName}{sp}Metrics</div>
         <div class="panel-body">
-             <table class="table table-condensed">
+            <div class="partition-picker">
+                <form method="GET">
+                    Partition Name
+                    {sp}
+                    <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                        class="form-control" placeholder="Partition Name" value="{$partitionName}"
+                        name="partitionName" id="partitionNamePicker"  title="">
+                    {sp}
+                    Ring Name
+                    {sp}
+                    <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                        class="form-control" placeholder="Ring Name" value="{$ringName}"
+                        name="ringName" id="ringNamePicker" title="">
+                    {sp}
+                    Exact
+                    {sp}
+                    <input type="checkbox" autocomplete="off" style="padding-left:10px;"
+                        class="form-control" placeholder="Exact" value="true" checked=""
+                        name="exact" id="exactPicker"  title="">
+                </form>
+            </div>
+            <table class="table table-condensed">
                 <thead>
                     <tr class="active">
                         <th>Action</th>
@@ -28,7 +51,7 @@
                         <th><span class="glyphicon glyphicon-tint"></span>{sp}Highwaters</th>
                     </tr>
                 </thead>
-                <tbody id="stats" data-partition-name="{$partitionName}">
+                <tbody id="stats" data-partition-name="{$partitionName}" data-partition-exact="{$exact}">
                     
                 </tbody>
             </table>

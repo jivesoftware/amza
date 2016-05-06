@@ -162,13 +162,16 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                             if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
 
                                 StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-                                VersionedPartitionName versionedPartitionName = storageVersionProvider.tx(partitionName, storageVersion,
-                                    (deltaIndex, stripeIndex, storageVersion1) -> new VersionedPartitionName(partitionName, storageVersion1.partitionVersion));
+                                if (storageVersion != null) {
+                                    VersionedPartitionName versionedPartitionName = storageVersionProvider.tx(partitionName, storageVersion,
+                                        (deltaIndex, stripeIndex, storageVersion1) -> new VersionedPartitionName(partitionName,
+                                            storageVersion1.partitionVersion));
 
-                                Aquarium aquarium = getAquarium(versionedPartitionName);
-                                aquarium.acknowledgeOther();
-                                aquarium.tapTheGlass();
-                                takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
+                                    Aquarium aquarium = getAquarium(versionedPartitionName);
+                                    aquarium.acknowledgeOther();
+                                    aquarium.tapTheGlass();
+                                    takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
+                                }
                             }
                         } catch (PartitionIsDisposedException e) {
                             LOG.info("Ignored disposed partition {}", partitionName);

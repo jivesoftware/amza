@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -27,7 +28,6 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -315,107 +315,132 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
 
-            partitionStripeProvider.txPartition(name, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+            try {
+                partitionStripeProvider.txPartition(name, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
 
-                VersionedPartitionName versionedPartitionName = versionedAquarium == null ? null : versionedAquarium.getVersionedPartitionName();
-                LivelyEndState livelyEndState = versionedAquarium == null ? null : versionedAquarium.getLivelyEndState();
-                Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
+                    VersionedPartitionName versionedPartitionName = versionedAquarium == null ? null : versionedAquarium.getVersionedPartitionName();
+                    LivelyEndState livelyEndState = versionedAquarium == null ? null : versionedAquarium.getLivelyEndState();
+                    Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
 
-                map.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
-                map.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
-                //map.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
-                //map.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
+                    map.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
+                    map.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
+                    //map.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
+                    //map.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
 
-                map.put("partitionVersion", versionedPartitionName == null ? "none" : Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
-                map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
+                    map.put("partitionVersion", versionedPartitionName == null ? "none" : Long.toHexString(versionedPartitionName.getPartitionVersion()));
+                    State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
+                    map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
 
-                long[] stripeVersion = new long[1];
-                txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                    long[] stripeVersion = new long[1];
+                    txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                        if (includeCount) {
+                            map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
+                        } else {
+                            map.put("count", "(requires watch)");
+                        }
+                        stripeVersion[0] = stripeIndex; // yawn
+
+                        map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium)));
+                        return null;
+                    });
+
+                    int category = categories.getOrDefault(versionedPartitionName, -1);
+                    long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);
+                    long partitionCallCount = partitionCallCounts.getOrDefault(versionedPartitionName, -1L);
+                    map.put("category", category != -1 ? String.valueOf(category) : "unknown");
+                    map.put("ringCallCount", String.valueOf(ringCallCount));
+                    map.put("partitionCallCount", String.valueOf(partitionCallCount));
+
+                    List<Map<String, Object>> tookLatencies = Lists.newArrayList();
                     if (includeCount) {
-                        map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
-                    } else {
-                        map.put("count", "(requires watch)");
-                    }
-                    stripeVersion[0] = stripeIndex; // yawn
+                        long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
+                        amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName,
+                            (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis,
+                                lastTakenMillis, lastCategoryCheckMillis) -> {
+                                Builder<String, Object> builder = ImmutableMap.<String, Object>builder();
+                                builder.put("member", ringMember.getMember());
 
-                    map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium)));
-                    return null;
+                                long tooSlowTimestamp = -1;
+                                long latencyInMillis = -1;
+                                if (lastOfferedTxId != -1) {
+                                    long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
+                                    tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
+                                    latencyInMillis = currentTime - lastOfferedTimestamp;
+                                }
+                                String latency = ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(latencyInMillis));
+                                builder
+                                    .put("latency", (lastOfferedTxId == -1) ? "never" : latency)
+                                    .put("category", String.valueOf(category1))
+                                    .put("tooSlow", (lastOfferedTxId == -1) ? "never" : getDurationBreakdown(tooSlowTimestamp))
+                                    .put("takeSessionId", String.valueOf(takeSessionId))
+                                    .put("online", online)
+                                    .put("steadyState", steadyState);
+                                tookLatencies.add(builder.build());
+                                return true;
+                            });
+                    }
+                    map.put("tookLatencies", tookLatencies);
+
+                    if (includeCount) {
+                        if (versionedPartitionName == null) {
+                            map.put("highwaters", "none");
+                        } else if (name.isSystemPartition()) {
+                            HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                            WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+                            map.put("highwaters", renderHighwaters(partitionHighwater));
+                        } else {
+                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                            map.put("highwaters", renderHighwaters(partitionHighwater));
+                        }
+                    } else {
+                        map.put("highwaters", "(requires watch)");
+                    }
+
+                    map.put("localState", ImmutableMap.of("online", livelyEndState != null && livelyEndState.isOnline(),
+                        "state", currentState != null ? currentState.name() : "unknown",
+                        "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
+                        "partitionVersion", versionedPartitionName == null ? "none" : String.valueOf(versionedPartitionName.getPartitionVersion()),
+                        "stripeVersion", versionedAquarium == null ? "none" : String.valueOf(stripeVersion[0])));
+
+                    return -1;
                 });
 
-                int category = categories.getOrDefault(versionedPartitionName, -1);
-                long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);
-                long partitionCallCount = partitionCallCounts.getOrDefault(versionedPartitionName, -1L);
-                map.put("category", category != -1 ? String.valueOf(category) : "unknown");
-                map.put("ringCallCount", String.valueOf(ringCallCount));
-                map.put("partitionCallCount", String.valueOf(partitionCallCount));
+                List<Map<String, Object>> neighborStates = new ArrayList<>();
+                Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
+                for (RingMember ringMember : neighboringRingMembers) {
 
-                List<Map<String, Object>> tookLatencies = Lists.newArrayList();
-                if (includeCount) {
-                    long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
-                    amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName,
-                        (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis,
-                            lastTakenMillis, lastCategoryCheckMillis) -> {
-                            Builder<String, Object> builder = ImmutableMap.<String, Object>builder();
-                            builder.put("member", ringMember.getMember());
-
-                            long tooSlowTimestamp = -1;
-                            long latencyInMillis = -1;
-                            if (lastOfferedTxId != -1) {
-                                long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
-                                tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
-                                latencyInMillis = currentTime - lastOfferedTimestamp;
-                            }
-                            String latency = ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(latencyInMillis));
-                            builder
-                                .put("latency", (lastOfferedTxId == -1) ? "never" : latency)
-                                .put("category", String.valueOf(category1))
-                                .put("tooSlow", (lastOfferedTxId == -1) ? "never" : getDurationBreakdown(tooSlowTimestamp))
-                                .put("takeSessionId", String.valueOf(takeSessionId))
-                                .put("online", online)
-                                .put("steadyState", steadyState);
-                            tookLatencies.add(builder.build());
-                            return true;
-                        });
+                    RemoteVersionedState neighborState = partitionStripeProvider.getRemoteVersionedState(ringMember, name);
+                    neighborStates.add(ImmutableMap.of("version", neighborState != null ? String.valueOf(neighborState.version) : "unknown",
+                        "state", neighborState != null && neighborState.waterline != null ? neighborState.waterline.getState().name() : "unknown",
+                        "name", new String(ringMember.getMember().getBytes())));
                 }
-                map.put("tookLatencies", tookLatencies);
+                map.put("neighborStates", neighborStates);
+            } catch (PartitionIsDisposedException e) {
+                //TODO just make soy more tolerant
+                map.put("state", "disposed");
+                map.put("quorum", "disposed");
 
-                if (includeCount) {
-                    if (versionedPartitionName == null) {
-                        map.put("highwaters", "none");
-                    } else if (name.isSystemPartition()) {
-                        HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-                        map.put("highwaters", renderHighwaters(partitionHighwater));
-                    } else {
-                        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                        map.put("highwaters", renderHighwaters(partitionHighwater));
-                    }
-                } else {
-                    map.put("highwaters", "(requires watch)");
-                }
+                map.put("partitionVersion", "disposed");
+                map.put("isOnline", false);
 
-                map.put("localState", ImmutableMap.of("online", livelyEndState != null && livelyEndState.isOnline(),
-                    "state", currentState != null ? currentState.name() : "unknown",
+                map.put("count", 0);
+                map.put("highestTxId", "-1");
+
+                map.put("category", "disposed");
+                map.put("ringCallCount", "-1");
+                map.put("partitionCallCount", "-1");
+
+                map.put("tookLatencies", Collections.emptyList());
+                map.put("highwaters", "disposed");
+
+                map.put("localState", ImmutableMap.of("online", false,
+                    "state", "disposed",
                     "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
-                    "partitionVersion", versionedPartitionName == null ? "none" : String.valueOf(versionedPartitionName.getPartitionVersion()),
-                    "stripeVersion", versionedAquarium == null ? "none" : String.valueOf(stripeVersion[0])));
-
-                return -1;
-            });
-
-            List<Map<String, Object>> neighborStates = new ArrayList<>();
-            Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
-            for (RingMember ringMember : neighboringRingMembers) {
-
-                RemoteVersionedState neighborState = partitionStripeProvider.getRemoteVersionedState(ringMember, name);
-                neighborStates.add(ImmutableMap.of("version", neighborState != null ? String.valueOf(neighborState.version) : "unknown",
-                    "state", neighborState != null && neighborState.waterline != null ? neighborState.waterline.getState().name() : "unknown",
-                    "name", new String(ringMember.getMember().getBytes())));
+                    "partitionVersion", "disposed",
+                    "stripeVersion", "disposed"));
+                map.put("neighborStates", Collections.emptyList());
             }
-            map.put("neighborStates", neighborStates);
-
         }
         map.put("gets", numberFormat.format(totals.gets.get()));
         map.put("getsLag", getDurationBreakdown(totals.getsLatency.get()));

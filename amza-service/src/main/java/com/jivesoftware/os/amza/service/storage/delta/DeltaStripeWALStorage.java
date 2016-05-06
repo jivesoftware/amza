@@ -465,11 +465,7 @@ public class DeltaStripeWALStorage {
         }
 
         for (MergeResult result : results) {
-            VersionedPartitionName versionedPartitionName = result.versionedPartitionName;
-            currentVersionProvider.invalidateDeltaIndexCache(versionedPartitionName, () -> {
-                PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
-                return partitionDelta == null || partitionDelta.mergedSize() == 0;
-            });
+            currentVersionProvider.invalidateDeltaIndexCache(result.versionedPartitionName);
         }
         return true;
     }

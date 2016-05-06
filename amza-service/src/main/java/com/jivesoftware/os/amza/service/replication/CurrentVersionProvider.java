@@ -17,7 +17,7 @@ public interface CurrentVersionProvider {
 
     <R> R tx(PartitionName partitionName, StorageVersion storageVersion, StripeIndexs<R> tx) throws Exception;
 
-    void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception;
+    void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName) throws Exception;
 
     boolean isCurrentVersion(VersionedPartitionName versionedPartitionName);
 

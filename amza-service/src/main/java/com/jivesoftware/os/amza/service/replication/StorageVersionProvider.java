@@ -22,7 +22,8 @@ import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
-import com.jivesoftware.os.filer.io.StripingLocksProvider;
+import com.jivesoftware.os.jive.utils.collections.lh.LHMapState;
+import com.jivesoftware.os.jive.utils.collections.lh.LHash;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -32,6 +33,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -53,10 +56,8 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final WALUpdated walUpdated;
     private final AwaitNotify<PartitionName> awaitNotify;
 
-    private final ConcurrentHashMap<PartitionName, StorageVersion> localVersionCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<PartitionName, StickyStorage> partitionStorage = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = new ConcurrentHashMap<>();
-    private final CallableTransactor callableTransactor = new CallableTransactor(1024, Short.MAX_VALUE); // TODO config?
-    private final ConcurrentHashMap<VersionedPartitionName, Integer> localDeltaIndexCache = new ConcurrentHashMap<>();
 
     public StorageVersionProvider(BAInterner interner,
         OrderIdProvider orderIdProvider,
@@ -102,18 +103,38 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         }
     }
 
-    private final StripingLocksProvider<PartitionName> versionStripingLocks = new StripingLocksProvider<>(1024);
+    private StorageVersionProvider.StickyStorage getStickyStorage(PartitionName partitionName) {
+        return partitionStorage.computeIfAbsent(partitionName, key -> {
+            try {
+                return new StorageVersionProvider.StickyStorage(getRawStorageVersion(partitionName));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    private StorageVersion getRawStorageVersion(PartitionName partitionName) throws Exception {
+        TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
+            walKey(rootRingMember, partitionName));
+        if (rawState != null) {
+            return StorageVersion.fromBytes(rawState.getValue());
+        } else {
+            return null;
+        }
+    }
 
     public StorageVersion createIfAbsent(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return new StorageVersion(0, 0);
         }
-        StorageVersion storageVersion = lookupStorageVersion(partitionName);
-        int stripeIndex = getCurrentStripe(storageVersion);
+
+        StickyStorage stickyStorage = getStickyStorage(partitionName);
+        int stripeIndex = getCurrentStripe(stickyStorage.storageVersion);
         if (stripeIndex == -1) {
-            synchronized (versionStripingLocks.lock(partitionName, 0)) {
-                storageVersion = lookupStorageVersion(partitionName);
-                stripeIndex = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
+            stickyStorage.semaphore.acquire(Short.MAX_VALUE);
+            try {
+                stickyStorage = getStickyStorage(partitionName);
+                stripeIndex = (stickyStorage.storageVersion == null) ? -1 : getStripeIndex(stickyStorage.storageVersion.stripeVersion);
                 if (stripeIndex == -1) {
 
                     long maxFree = 0;
@@ -134,60 +155,80 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
                         throw new NotARingMemberException("Not a member of ring for " + partitionName);
                     }
-                    storageVersion = set(partitionName, orderIdProvider.nextId(), stripeIndex);
+                    updateStickyStorage(partitionName, stickyStorage, orderIdProvider.nextId(), stripeIndex);
                 }
+            } finally {
+                stickyStorage.semaphore.release(Short.MAX_VALUE);
             }
         }
-        return storageVersion;
+        return stickyStorage.storageVersion;
     }
 
     @Override
-    public <R> R tx(PartitionName partitionName, StorageVersion storageVersion, StripeIndexs<R> tx) throws Exception {
-
+    public <R> R tx(PartitionName partitionName, StorageVersion requireStorageVersion, StripeIndexs<R> tx) throws Exception {
         if (partitionName.isSystemPartition()) {
             return tx.tx(-1, getSystemStripe(partitionName), new StorageVersion(0, 0));
         }
-        return callableTransactor.doWithOne(partitionName, () -> {
-            StorageVersion currentStorageVersion = lookupStorageVersion(partitionName);
-            if (currentStorageVersion == null && storageVersion == null) {
+
+        StorageVersionProvider.StickyStorage stickyStorage = getStickyStorage(partitionName);
+        stickyStorage.semaphore.acquire();
+        try {
+            StorageVersion currentStorageVersion = stickyStorage.storageVersion;
+            if (currentStorageVersion == null && requireStorageVersion == null) {
                 return tx.tx(-1, -1, null);
             }
 
             Preconditions.checkNotNull(currentStorageVersion, "Storage version was null for %s", partitionName);
-            if (storageVersion != null) {
-                Preconditions.checkArgument(currentStorageVersion.partitionVersion == storageVersion.partitionVersion,
-                    "Partition version has changed: %s != %s", currentStorageVersion.partitionVersion, storageVersion.partitionVersion);
+            if (requireStorageVersion != null) {
+                Preconditions.checkArgument(currentStorageVersion.partitionVersion == requireStorageVersion.partitionVersion,
+                    "Partition version has changed: %s != %s", currentStorageVersion.partitionVersion, requireStorageVersion.partitionVersion);
             }
             int stripeIndex = getCurrentStripe(currentStorageVersion);
             Preconditions.checkArgument(stripeIndex != -1,
                 "Missing stripe index for %s with stripe version %s", partitionName, currentStorageVersion.stripeVersion);
-            int deltaIndex = getAndCacheDeltaIndexIfNeeded(stripeIndex, new VersionedPartitionName(partitionName, currentStorageVersion.partitionVersion));
-            return tx.tx(deltaIndex, stripeIndex, currentStorageVersion);
-        });
-    }
 
-    public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception {
-
-        callableTransactor.doWithAll(versionedPartitionName.getPartitionName(), () -> {
-            if (invalidatable.call()) {
-                LOG.info("Invalidated delta index cache for {}", versionedPartitionName);
-                localDeltaIndexCache.remove(versionedPartitionName);
+            StickyStripe stickyStripe;
+            synchronized (stickyStorage.stripeCache) {
+                stickyStripe = stickyStorage.stripeCache.get(currentStorageVersion.partitionVersion);
+                if (stickyStripe == null) {
+                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, currentStorageVersion.partitionVersion);
+                    int s = stripeIndex;
+                    for (int i = 0; i < deltaStripeWALStorages.length; i++) {
+                        DeltaStripeWALStorage deltaStripeWALStorage = deltaStripeWALStorages[i];
+                        if (deltaStripeWALStorage.hasChangesFor(versionedPartitionName)) {
+                            s = i;
+                        }
+                    }
+                    stickyStripe = new StickyStripe(s);
+                    stickyStorage.stripeCache.put(currentStorageVersion.partitionVersion, stickyStripe);
+                }
+                stickyStripe.acquired.incrementAndGet();
             }
-            return null;
-        });
+
+            try {
+                return tx.tx(stickyStripe.stripeIndex, stripeIndex, currentStorageVersion);
+            } finally {
+                stickyStripe.acquired.decrementAndGet();
+            }
+        } finally {
+            stickyStorage.semaphore.release();
+        }
     }
 
-    private int getAndCacheDeltaIndexIfNeeded(int stripeIndex, VersionedPartitionName versionedPartitionName) {
-
-        return localDeltaIndexCache.computeIfAbsent(versionedPartitionName, (vpn) -> {
-            for (int i = 0; i < deltaStripeWALStorages.length; i++) {
-                DeltaStripeWALStorage deltaStripeWALStorage = deltaStripeWALStorages[i];
-                if (deltaStripeWALStorage.hasChangesFor(vpn)) {
-                    return i;
+    @Override
+    public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName) throws Exception {
+        StickyStorage stickyStorage = getStickyStorage(versionedPartitionName.getPartitionName());
+        stickyStorage.semaphore.acquire();
+        try {
+            synchronized (stickyStorage.stripeCache) {
+                StickyStripe stickyStripe = stickyStorage.stripeCache.get(versionedPartitionName.getPartitionVersion());
+                if (stickyStripe != null && stickyStripe.acquired.get() == 0) {
+                    stickyStorage.stripeCache.remove(versionedPartitionName.getPartitionVersion());
                 }
             }
-            return stripeIndex;
-        });
+        } finally {
+            stickyStorage.semaphore.release();
+        }
     }
 
     // Sucks but its our legacy
@@ -197,23 +238,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     }
 
     private int getCurrentStripe(StorageVersion storageVersion) {
-        return (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
-    }
-
-    private StorageVersion lookupStorageVersion(PartitionName partitionName) {
-        return localVersionCache.computeIfAbsent(partitionName, key -> {
-            try {
-                TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
-                    walKey(rootRingMember, partitionName));
-                if (rawState != null) {
-                    return StorageVersion.fromBytes(rawState.getValue());
-                } else {
-                    return null;
-                }
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to deserialize version", e);
-            }
-        });
+        return (storageVersion == null) ? -1 : getStripeIndex(storageVersion.stripeVersion);
     }
 
     @Override
@@ -222,40 +247,56 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         if (partitionName.isSystemPartition()) {
             return true;
         }
-        StorageVersion storageVersion = lookupStorageVersion(partitionName);
+        StorageVersion storageVersion = getStickyStorage(partitionName).storageVersion;
         return storageVersion != null && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion();
     }
 
     @Override
     public void abandonVersion(VersionedPartitionName versionedPartitionName) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
-        synchronized (versionStripingLocks.lock(partitionName, 0)) {
-            StorageVersion storageVersion = lookupStorageVersion(partitionName);
-            int stripe = (storageVersion == null) ? -1 : getStripe(storageVersion.stripeVersion);
+        StickyStorage stickyStorage = getStickyStorage(partitionName);
+        stickyStorage.semaphore.acquire(Short.MAX_VALUE);
+        try {
+            StorageVersion storageVersion = getStickyStorage(partitionName).storageVersion;
+            int stripe = (storageVersion == null) ? -1 : getStripeIndex(storageVersion.stripeVersion);
             if (stripe != -1 && storageVersion.partitionVersion <= versionedPartitionName.getPartitionVersion()) {
-                storageVersion = set(partitionName, orderIdProvider.nextId(), stripe);
+                updateStickyStorage(partitionName, stickyStorage, orderIdProvider.nextId(), stripe);
             }
+        } finally {
+            stickyStorage.semaphore.release(Short.MAX_VALUE);
         }
     }
 
-    void transitionStripe(VersionedPartitionName versionedPartitionName, StorageVersion storageVersion, int rebalanceToStripe) throws Exception {
+    // call with all semaphores for partition
+    void transitionStripe(VersionedPartitionName versionedPartitionName, StorageVersion requireStorageVersion, int rebalanceToStripe) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
-        synchronized (versionStripingLocks.lock(partitionName, 0)) {
-            StorageVersion currentStorageVersion = lookupStorageVersion(partitionName);
-            if (storageVersion.equals(currentStorageVersion)) {
-                set(partitionName, storageVersion.partitionVersion, rebalanceToStripe);
-            } else {
-                throw new IllegalStateException(
-                    "Failed to transition to versionedPartitionName:" + versionedPartitionName
+        StickyStorage stickyStorage = getStickyStorage(partitionName);
+        StorageVersion currentStorageVersion = stickyStorage.storageVersion;
+        if (requireStorageVersion.equals(currentStorageVersion)) {
+            updateStickyStorage(partitionName, stickyStorage, requireStorageVersion.partitionVersion, rebalanceToStripe);
+        } else {
+            throw new IllegalStateException(
+                "Failed to transition to versionedPartitionName:" + versionedPartitionName
                     + " stripe:" + rebalanceToStripe
                     + " from " + currentStorageVersion
-                    + " to " + storageVersion);
-            }
+                    + " to " + requireStorageVersion);
         }
     }
 
     <V> V replaceOneWithAll(PartitionName partitionName, Callable<V> callable) throws Exception {
-        return callableTransactor.replaceOneWithAll(partitionName, callable);
+        StickyStorage stickyStorage = getStickyStorage(partitionName);
+
+        stickyStorage.semaphore.release();
+        try {
+            stickyStorage.semaphore.acquire(Short.MAX_VALUE);
+            try {
+                return callable.call();
+            } finally {
+                stickyStorage.semaphore.release(Short.MAX_VALUE);
+            }
+        } finally {
+            stickyStorage.semaphore.acquire();
+        }
     }
 
     public interface PartitionMemberStorageVersionStream {
@@ -281,7 +322,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     PartitionName partitionName = PartitionName.fromBytes(key, o, interner);
                     StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
-                    int stripe = getStripe(storageVersion.stripeVersion);
+                    int stripe = getStripeIndex(storageVersion.stripeVersion);
                     if (stripe != -1) {
                         return stream.stream(partitionName, ringMember, storageVersion);
                     }
@@ -290,7 +331,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             });
     }
 
-    private int getStripe(long stripeVersion) {
+    private int getStripeIndex(long stripeVersion) {
         for (int i = 0; i < stripeVersions.length; i++) {
             if (stripeVersions[i] == stripeVersion) {
                 return i;
@@ -324,12 +365,13 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         });
     }
 
-    private StorageVersion set(PartitionName partitionName, long partitionVersion, int stripe) throws Exception {
+    private void updateStickyStorage(PartitionName partitionName, StickyStorage stickyStorage, long partitionVersion, int stripe) throws Exception {
         StorageVersion storageVersion = new StorageVersion(partitionVersion, stripeVersions[stripe]);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);
-        StorageVersion cachedVersion = localVersionCache.get(partitionName);
+
+        StorageVersion cachedVersion = stickyStorage.storageVersion;
         if (cachedVersion != null && cachedVersion.equals(storageVersion)) {
-            return storageVersion;
+            return;
         }
 
         byte[] versionedStateBytes = storageVersion.toBytes();
@@ -344,28 +386,33 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         });
 
         LOG.info("Storage version: {} {} was updated to {}", rootRingMember, versionedPartitionName, partitionVersion);
-        localVersionCache.put(partitionName, storageVersion);
+        stickyStorage.storageVersion = storageVersion;
         //TODO anything to notify?
         //takeCoordinator.stateChanged(amzaRingReader, versionedPartitionName, commitableStorageVersion.state);
         //takeCoordinator.awakeCya();
-
-        return storageVersion;
     }
 
     public boolean remove(RingMember rootRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
-        long timestampAndVersion = orderIdProvider.nextId();
-        RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.PARTITION_VERSION_INDEX, null,
-            (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
-                walKey(rootRingMember, versionedPartitionName.getPartitionName()),
-                null,
-                timestampAndVersion,
-                true,
-                timestampAndVersion),
-            walUpdated);
+        StickyStorage stickyStorage = getStickyStorage(versionedPartitionName.getPartitionName());
+        stickyStorage.semaphore.acquire(Short.MAX_VALUE);
+        try {
+            long timestampAndVersion = orderIdProvider.nextId();
+            RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.PARTITION_VERSION_INDEX, null,
+                (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
+                    walKey(rootRingMember, versionedPartitionName.getPartitionName()),
+                    null,
+                    timestampAndVersion,
+                    true,
+                    timestampAndVersion),
+                walUpdated);
 
-        LOG.info("Storage version: {} {} was removed: {}", rootRingMember, versionedPartitionName, rowsChanged);
-        invalidateLocalVersionCache(versionedPartitionName.getPartitionName(), versionedPartitionName.getPartitionVersion());
-        return !rowsChanged.isEmpty();
+            LOG.info("Storage version: {} {} was removed: {}", rootRingMember, versionedPartitionName, rowsChanged);
+            stickyStorage.storageVersion = null;
+            stickyStorage.stripeCache.remove(versionedPartitionName.getPartitionVersion());
+            return !rowsChanged.isEmpty();
+        } finally {
+            stickyStorage.semaphore.release(Short.MAX_VALUE);
+        }
     }
 
     @Override
@@ -374,20 +421,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
                 clearCache(change.getKey().key, change.getValue().getValue());
             }
-        }
-    }
-
-    private void invalidateLocalVersionCache(PartitionName partitionName, long partitionVersion) {
-        if (partitionVersion == -1) {
-            localVersionCache.remove(partitionName);
-        } else {
-            localVersionCache.computeIfPresent(partitionName, (partitionName1, versionedState) -> {
-                if (versionedState.partitionVersion == partitionVersion) {
-                    return null;
-                } else {
-                    return versionedState;
-                }
-            });
         }
     }
 
@@ -408,13 +441,34 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             if (ringMember.equals(rootRingMember)) {
                 if (walValue != null) {
                     StorageVersion storageVersion = StorageVersion.fromBytes(walValue);
-                    invalidateLocalVersionCache(partitionName, storageVersion.partitionVersion);
+                    LOG.warn("Received external row changes for partition {} version {}", partitionName, storageVersion);
                 } else {
-                    invalidateLocalVersionCache(partitionName, -1);
+                    LOG.warn("Received external row changes for partition {} with no version", partitionName);
                 }
             } else {
                 invalidateRemoteVersionCache(ringMember, partitionName);
             }
+        }
+    }
+
+    private static class StickyStorage {
+
+        private final Semaphore semaphore = new Semaphore(Short.MAX_VALUE, true);
+        private final LHash<StickyStripe> stripeCache = new LHash<>(new LHMapState<>(3, -1, -2));
+        private volatile StorageVersion storageVersion;
+
+        private StickyStorage(StorageVersion storageVersion) {
+            this.storageVersion = storageVersion;
+        }
+    }
+
+    private static class StickyStripe {
+
+        private final int stripeIndex;
+        private final AtomicLong acquired = new AtomicLong();
+
+        private StickyStripe(int stripeIndex) {
+            this.stripeIndex = stripeIndex;
         }
     }
 

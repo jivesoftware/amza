@@ -431,6 +431,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takesLag", getDurationBreakdown(totals.takesLag.get()));
         map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
         map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
+        map.put("acks", numberFormat.format(totals.acks.get()));
+        map.put("acksLag", getDurationBreakdown(totals.acksLag.get()));
+        map.put("quorums", numberFormat.format(totals.quorums.get()));
+        map.put("quorumsLag", getDurationBreakdown(totals.quorumsLatency.get()));
+        map.put("quorumTimeouts", numberFormat.format(totals.quorumTimeouts.get()));
 
         return map;
     }

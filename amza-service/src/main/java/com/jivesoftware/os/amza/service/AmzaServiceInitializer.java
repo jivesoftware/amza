@@ -134,7 +134,7 @@ public class AmzaServiceInitializer {
             WALIndexProviderRegistry indexProviderRegistry,
             RowIOProvider ephemeralRowIOProvider,
             RowIOProvider persistentRowIOProvider,
-            int numberOfStripes);
+            int numberOfStripes) throws Exception;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,

@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.lab.pointers;
 
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
+import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
@@ -10,6 +12,7 @@ import com.jivesoftware.os.lab.guts.Leaps;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -28,15 +31,15 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
     public LABPointerIndexWALIndexProvider(LABPointerIndexConfig config,
         String name,
         int numberOfStripes,
-        File[] baseDirs) {
-        this.config = config;
+        File[] baseDirs) throws IOException {
 
+        this.config = config;
         this.name = name;
         this.environments = new LABEnvironment[numberOfStripes];
 
         ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
-        leapCache = LABEnvironment.buildLeapsCache((int)config.getLeapCacheMaxCapacity(), config.getConcurrency());
+        this.leapCache = LABEnvironment.buildLeapsCache((int) config.getLeapCacheMaxCapacity(), config.getConcurrency());
 
         for (int i = 0; i < environments.length; i++) {
             File active = new File(
@@ -54,7 +57,49 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 config.getMinMergeDebt(),
                 config.getMaxMergeDebt(),
                 leapCache);
+
+            File[] files = active.listFiles();
+            if (files != null) {
+                BAInterner interner = new BAInterner();
+                for (File file : files) {
+                    if (file.isDirectory()) {
+                        File dest = convertBase64toPartitionVersion(file, interner);
+                        if (dest != null && !file.renameTo(dest)) {
+                            throw new IOException("Failed rename of " + file + " to " + dest);
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    public static File convertBase64toPartitionVersion(File file, BAInterner interner) throws IOException {
+
+        String filename = file.getName();
+        int firstHyphen = filename.indexOf('-');
+        int secondHyphen = filename.indexOf('-', firstHyphen + 1);
+        if (firstHyphen != -1 && secondHyphen != -1) {
+            String base = filename.substring(0, secondHyphen);
+            String partition = filename.substring(secondHyphen + 1);
+            try {
+                long partitionVersion = Long.parseLong(partition);
+                LOG.info("Did not repair partition version {}", partitionVersion);
+            } catch (NumberFormatException e) {
+                VersionedPartitionName vpn = VersionedPartitionName.fromBase64(partition, interner);
+                LOG.info("We will repair partition {}", vpn);
+                return new File(file.getParent(), base + "-" + String.valueOf(vpn.getPartitionVersion()));
+            }
+        }
+        return null;
+    }
+
+    public static void main(String[] args) throws IOException {
+        System.out.println(convertBase64toPartitionVersion(
+            new File("/example/prefix-active-" + new VersionedPartitionName(new PartitionName(false, "abc".getBytes(), "def".getBytes()), 123L).toBase64()),
+            new BAInterner()));
+        System.out.println(convertBase64toPartitionVersion(
+            new File("/example/prefix-active-123"),
+            new BAInterner()));
     }
 
     @Override
@@ -64,7 +109,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
     @Override
     public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(Type.active, versionedPartitionName.toBase64());
+        LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(Type.active, String.valueOf(versionedPartitionName.getPartitionVersion()));
         //TODO config flush interval
         return new LABPointerIndexWALIndex(name,
             versionedPartitionName,
@@ -76,7 +121,8 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(LABPointerIndexWALIndexName.Type.active, versionedPartitionName.toBase64());
+        LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(LABPointerIndexWALIndexName.Type.active,
+            String.valueOf(versionedPartitionName.getPartitionVersion()));
         LABEnvironment env = environments[stripe];
         for (LABPointerIndexWALIndexName n : name.all()) {
             env.remove(n.getPrimaryName());

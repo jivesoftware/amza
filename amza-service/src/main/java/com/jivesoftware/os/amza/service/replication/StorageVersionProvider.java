@@ -178,7 +178,9 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 return tx.tx(-1, -1, null);
             }
 
-            Preconditions.checkNotNull(currentStorageVersion, "Storage version was null for %s", partitionName);
+            if (currentStorageVersion == null) {
+                throw new PartitionIsDisposedException("Partition " + partitionName + " is disposed");
+            }
             if (requireStorageVersion != null) {
                 Preconditions.checkArgument(currentStorageVersion.partitionVersion == requireStorageVersion.partitionVersion,
                     "Partition version has changed: %s != %s", currentStorageVersion.partitionVersion, requireStorageVersion.partitionVersion);

@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
+import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
@@ -105,6 +106,9 @@ public class TakeVersionedPartitionCoordinator {
                         return Long.MAX_VALUE;
                     }
                 });
+        } catch (PartitionIsDisposedException e) {
+            LOG.warn("Partition {} was disposed when streaming available rows", versionedPartitionName);
+            return Long.MAX_VALUE;
         } catch (PropertiesNotPresentException e) {
             LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
             return Long.MAX_VALUE;

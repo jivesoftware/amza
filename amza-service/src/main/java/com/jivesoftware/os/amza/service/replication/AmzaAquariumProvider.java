@@ -175,7 +175,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                             }
                         } catch (PartitionIsDisposedException e) {
                             LOG.info("Ignored disposed partition {}", partitionName);
-                        } catch (PropertiesNotPresentException e) {
+                        } catch (PropertiesNotPresentException | IllegalArgumentException e) {
                             // somewhat expected
                             smellsFishy.add(partitionName);
                         } catch (Exception e) {

@@ -159,8 +159,7 @@ public class DeltaStripeWALStorageNGTest {
             }
 
             @Override
-            public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName, Callable<Boolean> invalidatable) throws Exception {
-                invalidatable.call();
+            public void invalidateDeltaIndexCache(VersionedPartitionName versionedPartitionName) throws Exception {
             }
         };
 

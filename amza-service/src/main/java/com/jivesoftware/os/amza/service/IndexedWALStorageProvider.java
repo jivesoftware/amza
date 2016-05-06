@@ -65,7 +65,7 @@ public class IndexedWALStorageProvider {
                 for (File file : FileUtils.listFiles(workingDirectory, new String[] { "kvt" }, true)) {
                     File dest = convert(workingDirectory, file);
                     if (dest != null) {
-                        if (!dest.getParentFile().mkdirs()) {
+                        if (!dest.getParentFile().mkdirs() && !dest.getParentFile().exists()) {
                             throw new IOException("Failed to mkdirs for " + dest);
                         }
                         if (!file.renameTo(dest)) {

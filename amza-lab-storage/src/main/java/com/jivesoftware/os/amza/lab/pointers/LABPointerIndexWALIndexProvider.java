@@ -81,7 +81,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                             long h = hash(partitionVersion);
 
                             File parent = new File(active, String.valueOf(h % 1024));
-                            if (!parent.mkdirs()) {
+                            if (!parent.mkdirs() && !parent.exists()) {
                                 throw new IOException("Failed to mkdirs for " + parent);
                             }
 

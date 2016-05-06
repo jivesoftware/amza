@@ -70,10 +70,51 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                     }
                 }
             }
+
+            files = active.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    String[] split = file.getName().split("-");
+                    if (split.length == 3) {
+                        try {
+                            long partitionVersion = Long.parseLong(split[2]);
+                            long h = hash(partitionVersion);
+
+                            File parent = new File(active, String.valueOf(h % 1024));
+                            if (!parent.mkdirs()) {
+                                throw new IOException("Failed to mkdirs for " + parent);
+                            }
+
+                            File dest = new File(parent, file.getName());
+                            if (!file.renameTo(dest)) {
+                                throw new IOException("Failed to move " + file + " to " + dest);
+                            }
+
+                            LOG.info("We hash repaired {} to {}", file, dest);
+                        } catch (NumberFormatException e) {
+                            LOG.info("Skipped repair for " + file);
+                        }
+                    }
+                }
+            }
         }
     }
 
-    public static File convertBase64toPartitionVersion(File file, BAInterner interner) throws IOException {
+    private final static long randMult = 0x5DEECE66DL;
+    private final static long randAdd = 0xBL;
+    private final static long randMask = (1L << 48) - 1;
+
+    private static long hash(long partitionVersion) {
+        long x = (partitionVersion * randMult + randAdd) & randMask;
+        long h = Math.abs(x >>> (16));
+        if (h >= 0) {
+            return h;
+        } else {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private static File convertBase64toPartitionVersion(File file, BAInterner interner) throws IOException {
 
         String filename = file.getName();
         int firstHyphen = filename.indexOf('-');
@@ -109,7 +150,10 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
     @Override
     public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(Type.active, String.valueOf(versionedPartitionName.getPartitionVersion()));
+        int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
+        LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(modulo,
+            Type.active,
+            String.valueOf(versionedPartitionName.getPartitionVersion()));
         //TODO config flush interval
         return new LABPointerIndexWALIndex(name,
             versionedPartitionName,
@@ -121,7 +165,9 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(LABPointerIndexWALIndexName.Type.active,
+        int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
+        LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(modulo,
+            LABPointerIndexWALIndexName.Type.active,
             String.valueOf(versionedPartitionName.getPartitionVersion()));
         LABEnvironment env = environments[stripe];
         for (LABPointerIndexWALIndexName n : name.all()) {

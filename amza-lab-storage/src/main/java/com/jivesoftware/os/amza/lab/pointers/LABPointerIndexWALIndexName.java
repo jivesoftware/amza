@@ -17,24 +17,26 @@ public class LABPointerIndexWALIndexName {
         backup;
     }
 
+    private final int modulo;
     private final Type type;
     private final String name;
 
-    public LABPointerIndexWALIndexName(Type type, String name) {
+    public LABPointerIndexWALIndexName(int modulo, Type type,String name) {
+        this.modulo = modulo;
         this.type = type;
         this.name = name;
     }
 
     public String getPrimaryName() {
-        return "primary-" + type.toString() + "-" + name;
+        return modulo + "/primary-" + type.toString() + "-" + name;
     }
 
     public String getPrefixName() {
-        return "prefix-" + type.toString() + "-" + name;
+        return modulo + "/prefix-" + type.toString() + "-" + name;
     }
 
     public LABPointerIndexWALIndexName typeName(Type type) {
-        return new LABPointerIndexWALIndexName(type, name);
+        return new LABPointerIndexWALIndexName(modulo, type, name);
     }
 
     public List<LABPointerIndexWALIndexName> all() {

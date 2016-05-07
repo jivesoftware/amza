@@ -347,6 +347,7 @@ public class BinaryWALTx implements WALTx {
                     if (!ioProvider.ensureKey(toKey)) {
                         throw new IOException("Failed trying to ensure " + toKey);
                     }
+                    ioProvider.delete(toKey, name);
                     ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
                     // Reopen the world
                     RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);

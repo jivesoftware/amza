@@ -432,11 +432,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         if (prevDeltaWALId > -1 && trailingDeltaWALId[0] > prevDeltaWALId) {
                             LOG.error("Inconsistency detected while loading delta:{} prev:{}, encountered tail:{} for {}",
                                 deltaWALId, prevDeltaWALId, trailingDeltaWALId[0], versionedPartitionName);
-                            throw new IllegalStateException("Delta mismatch, intervention is required. "
-                                + "delta:" + deltaWALId
-                                + " prev:" + prevDeltaWALId
-                                + ", encountered tail:" + trailingDeltaWALId[0]
-                                + " for " + versionedPartitionName);
+
+                            // Since we added the ability to rebalance this IllegalStateException needs to be reworked so that it works.
+//                            throw new IllegalStateException("Delta mismatch, intervention is required. "
+//                                + "delta:" + deltaWALId
+//                                + " prev:" + prevDeltaWALId
+//                                + ", encountered tail:" + trailingDeltaWALId[0]
+//                                + " for " + versionedPartitionName);
                         }
                     }
                     return true;

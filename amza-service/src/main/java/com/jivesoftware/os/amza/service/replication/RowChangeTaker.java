@@ -28,7 +28,6 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
-import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.RowsTaker.StreamingRowsResult;
 import com.jivesoftware.os.aquarium.LivelyEndState;
@@ -69,7 +68,6 @@ public class RowChangeTaker implements RowChanges {
     private final AmzaRingStoreReader amzaRingReader;
     private final AmzaSystemReady systemReady;
     private final RingHost ringHost;
-    private final HighwaterStorage highwaterStorage;
     private final RowsTaker systemRowsTaker;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AvailableRowsTaker availableRowsTaker;
@@ -101,7 +99,6 @@ public class RowChangeTaker implements RowChanges {
         AmzaRingStoreReader amzaRingReader,
         AmzaSystemReady systemReady,
         RingHost ringHost,
-        HighwaterStorage highwaterStorage,
         RowsTaker systemRowsTaker,
         PartitionStripeProvider partitionStripeProvider,
         AvailableRowsTaker availableRowsTaker,
@@ -121,7 +118,6 @@ public class RowChangeTaker implements RowChanges {
         this.amzaRingReader = amzaRingReader;
         this.systemReady = systemReady;
         this.ringHost = ringHost;
-        this.highwaterStorage = highwaterStorage;
         this.systemRowsTaker = systemRowsTaker;
         this.partitionStripeProvider = partitionStripeProvider;
         this.availableRowsTaker = availableRowsTaker;

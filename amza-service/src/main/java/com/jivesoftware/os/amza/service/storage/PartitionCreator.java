@@ -283,10 +283,11 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         return partitionIndex.get(versionedPartitionName, properties, stripeIndex);
     }
 
+    @Override
     public Iterable<PartitionName> getMemberPartitions(RingMembership ringMembership) throws Exception {
         List<PartitionName> partitionNames = Lists.newArrayList();
-        systemWALStorage.rowScan(REGION_PROPERTIES, (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-            if (!valueTombstoned && valueTimestamp != -1) {
+        systemWALStorage.rowScan(REGION_INDEX, (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            if (!valueTombstoned && valueTimestamp != -1 && value != null) {
                 PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                 if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName())) {
                     partitionNames.add(partitionName);

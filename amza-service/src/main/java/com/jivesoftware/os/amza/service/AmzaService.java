@@ -279,8 +279,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 LOG.warn("Awaiting online for expunged partition {}, we will compost and retry", partitionName);
                 partitionComposter.compostPartitionIfNecessary(partitionName);
             }
-        }
-        while (System.currentTimeMillis() < endAfterTimestamp);
+        } while (System.currentTimeMillis() < endAfterTimestamp);
     }
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName, long waitForLeaderInMillis) throws Exception {
@@ -288,6 +287,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         long endAfterTimestamp = System.currentTimeMillis() + waitForLeaderInMillis;
         List<RingMemberAndHost> orderedPartitionHosts = new ArrayList<>();
+        boolean disposed = false;
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             do {
                 try {
@@ -302,27 +302,33 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 } catch (PartitionIsExpungedException e) {
                     LOG.warn("Getting route for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
+                } catch (PartitionIsDisposedException e) {
+                    LOG.info("Being asked for a route to a disposed partition:{}", partitionName);
+                    disposed = true;
+                    break;
                 }
-            }
-            while (System.currentTimeMillis() < endAfterTimestamp);
+            } while (System.currentTimeMillis() < endAfterTimestamp);
         }
 
-        RingMember currentLeader = awaitLeader(partitionName, Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
-
-        RingMemberAndHost leaderMemberAndHost = null;
-        for (RingMemberAndHost entry : ring.entries) {
-            RemoteVersionedState remoteVersionedState = partitionStripeProvider.getRemoteVersionedState(entry.ringMember, partitionName);
-            if (remoteVersionedState != null && remoteVersionedState.waterline != null) {
-                State state = remoteVersionedState.waterline.getState();
-                if (state == State.leader && entry.ringMember.equals(currentLeader)) {
-                    leaderMemberAndHost = entry;
-                }
-                if (state == State.leader || state == State.follower) {
-                    orderedPartitionHosts.add(entry);
+        if (disposed) {
+            return new AmzaPartitionRoute(ring.entries, null, true);
+        } else {
+            RingMember currentLeader = awaitLeader(partitionName, Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
+            RingMemberAndHost leaderMemberAndHost = null;
+            for (RingMemberAndHost entry : ring.entries) {
+                RemoteVersionedState remoteVersionedState = partitionStripeProvider.getRemoteVersionedState(entry.ringMember, partitionName);
+                if (remoteVersionedState != null && remoteVersionedState.waterline != null) {
+                    State state = remoteVersionedState.waterline.getState();
+                    if (state == State.leader && entry.ringMember.equals(currentLeader)) {
+                        leaderMemberAndHost = entry;
+                    }
+                    if (state == State.leader || state == State.follower) {
+                        orderedPartitionHosts.add(entry);
+                    }
                 }
             }
+            return new AmzaPartitionRoute(orderedPartitionHosts, leaderMemberAndHost, false);
         }
-        return new AmzaPartitionRoute(orderedPartitionHosts, leaderMemberAndHost);
     }
 
     public void visualizePartition(byte[] rawRingName,
@@ -346,10 +352,12 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         public final List<RingMemberAndHost> orderedMembers;
         public final RingMemberAndHost leader;
+        public boolean disposed;
 
-        public AmzaPartitionRoute(List<RingMemberAndHost> orderedMembers, RingMemberAndHost leader) {
+        public AmzaPartitionRoute(List<RingMemberAndHost> orderedMembers, RingMemberAndHost leader, boolean disposed) {
             this.orderedMembers = orderedMembers;
             this.leader = leader;
+            this.disposed = disposed;
         }
     }
 
@@ -393,8 +401,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Awaiting leader for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 }
-            }
-            while (System.currentTimeMillis() < endAfterTimestamp);
+            } while (System.currentTimeMillis() < endAfterTimestamp);
         }
         throw new TimeoutException("Timed out awaiting leader for " + partitionName);
     }
@@ -576,7 +583,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 try {
                     versionedAquarium.wipeTheGlass();
                 } catch (Exception x) {
-                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
+                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
                 }
             }
             return null;

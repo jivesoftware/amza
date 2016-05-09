@@ -394,10 +394,10 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     State s = State.valueOf(state);
                     ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count),
                         (s == State.leader || s == State.follower)
-                            ? null : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
+                            ? null : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "danger")
                     ));
                 } catch (IllegalArgumentException x) {
-                    ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count), "error"));
+                    ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count), "danger"));
                 }
             }
 

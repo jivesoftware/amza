@@ -407,10 +407,12 @@ public class AmzaServiceInitializer {
                             return null;
                         });
                     });
+                } catch (PartitionIsDisposedException x) {
+                    LOG.info("Skipped a partition because its disposed: {}", partitionName);
                 } catch (PropertiesNotPresentException x) {
                     LOG.warn("Skipped system ready init for a partition because its properties were missing: {}", partitionName);
                 } catch (Exception x) {
-                    LOG.error("Failed system ready init for a partition, please fix: {}", new Object[] { partitionName }, x);
+                    LOG.error("Failed system ready init for a partition, please fix: {}", new Object[]{partitionName}, x);
                 }
             }
             LOG.info("Finished loading {} highest txIds after system ready!", count);
@@ -423,7 +425,6 @@ public class AmzaServiceInitializer {
             ringStoreReader,
             systemReady,
             ringHost,
-            highwaterStorage,
             rowsTakerFactory.create(),
             partitionStripeProvider,
             availableRowsTaker,

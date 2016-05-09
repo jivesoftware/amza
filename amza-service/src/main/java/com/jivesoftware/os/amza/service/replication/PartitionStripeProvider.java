@@ -127,7 +127,7 @@ public class PartitionStripeProvider {
                 try {
                     deltaStripeWALStorage.load(partitionIndex, partitionCreator, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
-                    LOG.error("Failed while loading {} ", new Object[] { deltaStripeWALStorage }, x);
+                    LOG.error("Failed while loading {} ", new Object[]{deltaStripeWALStorage}, x);
                     throw new RuntimeException(x);
                 }
             }));
@@ -193,14 +193,14 @@ public class PartitionStripeProvider {
         return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
             return tx.tx(
                 new TxPartitionStripe() {
-                    @Override
-                    public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
-                        return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
-                            PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
-                            return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
-                        });
-                    }
-                },
+                @Override
+                public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
+                    return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
+                        PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
+                        return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
+                    });
+                }
+            },
                 highwaterStorage,
                 versionedAquarium1);
         });
@@ -274,11 +274,11 @@ public class PartitionStripeProvider {
 
     public void expunged(VersionedPartitionName versionedPartitionName) throws Exception {
 
-        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider);
+        takeCoordinator.expunged(versionedPartitionName);
 
+        VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider);
         LOG.info("Removing storage versions for composted partition: {}", versionedPartitionName);
         transactor.doWithAll(versionedAquarium, (versionedAquarium1) -> {
-
             awaitNotify.notifyChange(versionedPartitionName.getPartitionName(), () -> {
                 versionedAquarium1.delete();
                 storageVersionProvider.remove(rootRingMember, versionedAquarium1.getVersionedPartitionName());
@@ -286,7 +286,6 @@ public class PartitionStripeProvider {
             });
             return null;
         });
-        takeCoordinator.expunged(versionedPartitionName);
 
     }
 

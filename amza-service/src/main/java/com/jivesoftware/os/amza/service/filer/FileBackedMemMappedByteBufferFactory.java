@@ -65,7 +65,10 @@ public class FileBackedMemMappedByteBufferFactory implements ByteBufferFactory {
             for (ByteBufferBackedFiler filer : filers) {
                 filer.close();
             }
-            DirectBufferCleaner.clean(filers[0].buffer);
+            ByteBuffer bb = filers[0].buffer;
+            if (bb != null) {
+                DirectBufferCleaner.clean(bb);
+            }
         }
     }
 

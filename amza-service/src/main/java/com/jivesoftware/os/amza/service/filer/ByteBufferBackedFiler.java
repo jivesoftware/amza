@@ -8,8 +8,8 @@
  */
 package com.jivesoftware.os.amza.service.filer;
 
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.filer.IFiler;
-import com.jivesoftware.os.filer.io.DirectBufferCleaner;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
@@ -23,7 +23,7 @@ public class ByteBufferBackedFiler implements IFiler {
     final ByteBuffer buffer;
 
     public ByteBufferBackedFiler(ByteBuffer buffer) {
-        this.buffer = buffer;
+        this.buffer = Preconditions.checkNotNull(buffer);
     }
 
     @Override

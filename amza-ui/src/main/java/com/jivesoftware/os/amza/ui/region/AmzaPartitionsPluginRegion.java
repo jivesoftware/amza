@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
+import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -195,7 +196,9 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         return null;
                     });
                 } catch (PartitionIsDisposedException e) {
-                    row.put("highwaters", "disposed");
+                    row.put("highwaters", "partition-disposed");
+                } catch (PropertiesNotPresentException e) {
+                    row.put("highwaters", "properties-disposed");
                 }
 
                 rows.add(row);

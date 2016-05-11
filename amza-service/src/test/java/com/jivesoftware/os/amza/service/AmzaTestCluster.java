@@ -269,7 +269,7 @@ public class AmzaTestCluster {
 
             },
             availableRowsTaker,
-            () -> updateTaker,
+            (name) -> updateTaker,
             absent,
             (RowsChanged changes) -> {
             });
@@ -457,7 +457,7 @@ public class AmzaTestCluster {
                     return null;
                 });
                 submit.get();
-                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner);
+                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner, "main", 60_000);
                 return streamingTakesConsumer.consume(new DataInputStream(new SnappyInputStream(new ByteArrayInputStream(bytesOut.toByteArray()))), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);

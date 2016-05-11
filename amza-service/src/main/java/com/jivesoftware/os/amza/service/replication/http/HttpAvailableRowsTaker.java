@@ -44,8 +44,8 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpAvailableRowsTaker(BAInterner interner) {
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+    public HttpAvailableRowsTaker(BAInterner interner, String name, long interruptBlockingReadsIfLingersForNMillis) {
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, name, interruptBlockingReadsIfLingersForNMillis);
     }
 
     @Override

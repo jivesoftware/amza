@@ -41,4 +41,7 @@ public interface AmzaConfig extends Config {
     @LongDefault(1024 * 1024 * 1024)
     long getRebalanceIfImbalanceGreaterThanNBytes();
 
+    @LongDefault(60_000)
+    long getInterruptBlockingReadsIfLingersForNMillis();
+
 }

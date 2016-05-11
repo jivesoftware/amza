@@ -126,6 +126,8 @@ public class AmzaServiceInitializer {
         public long rebalanceableEveryNMillis = TimeUnit.HOURS.toMillis(1);
         public long rebalanceIfImbalanceGreaterThanNBytes = 1024 * 1024 * 1024;
 
+        public long interruptBlockingReadsIfLingersForNMillis = 60_000;
+
     }
 
     public interface IndexProviderRegistryCallback {
@@ -425,11 +427,11 @@ public class AmzaServiceInitializer {
             ringStoreReader,
             systemReady,
             ringHost,
-            rowsTakerFactory.create(),
+            rowsTakerFactory.create("systemRowsTaker"),
             partitionStripeProvider,
             availableRowsTaker,
             Executors.newFixedThreadPool(config.numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),
-            rowsTakerFactory.create(),
+            rowsTakerFactory.create("rowsTaker"),
             new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, highwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),

@@ -166,6 +166,7 @@ public class AmzaMain {
             amzaServiceConfig.tombstoneCompactionFactor = amzaConfig.getTombstoneCompactionFactor();
             amzaServiceConfig.rebalanceIfImbalanceGreaterThanNBytes = amzaConfig.getRebalanceIfImbalanceGreaterThanNBytes();
             amzaServiceConfig.rebalanceableEveryNMillis = amzaConfig.getRebalanceableEveryNMillis();
+            amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis = amzaConfig.getInterruptBlockingReadsIfLingersForNMillis();
 
             final AmzaStats amzaStats = new AmzaStats();
             final SickThreads sickThreads = new SickThreads();
@@ -175,7 +176,8 @@ public class AmzaMain {
             deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
 
             BAInterner interner = new BAInterner();
-            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner);
+            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, "mainTaker",
+                amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis);
 
             final ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -238,7 +240,7 @@ public class AmzaMain {
 
                 },
                 availableRowsTaker,
-                () -> new HttpRowsTaker(amzaStats, interner),
+                (name) -> new HttpRowsTaker(amzaStats, interner, name, amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis),
                 Optional.<TakeFailureListener>absent(),
                 (RowsChanged changes) -> {
                 });

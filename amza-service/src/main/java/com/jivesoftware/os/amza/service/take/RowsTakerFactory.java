@@ -6,5 +6,5 @@ package com.jivesoftware.os.amza.service.take;
  */
 public interface RowsTakerFactory {
 
-    RowsTaker create();
+    RowsTaker create(String name);
 }

@@ -51,9 +51,9 @@ public class HttpRowsTaker implements RowsTaker {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner) {
+    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner, String name, long interruptBlockingReadsIfLingersForNMillis) {
         this.amzaStats = amzaStats;
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, name, interruptBlockingReadsIfLingersForNMillis);
     }
 
     /**

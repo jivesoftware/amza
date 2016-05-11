@@ -123,7 +123,7 @@ public class Main {
         amzaServiceConfig.workingDirectories = workingDirs;
 
         BAInterner interner = new BAInterner();
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner);
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, "main", 60_000); // TODO config
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
@@ -172,7 +172,7 @@ public class Main {
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            () -> new HttpRowsTaker(amzaStats, interner),
+            (name) -> new HttpRowsTaker(amzaStats, interner, name, 60_000), // TODO config
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });

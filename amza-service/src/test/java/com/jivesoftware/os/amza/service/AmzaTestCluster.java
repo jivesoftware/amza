@@ -270,7 +270,7 @@ public class AmzaTestCluster {
 
             },
             availableRowsTaker,
-            (name) -> updateTaker,
+            () -> updateTaker,
             absent,
             (RowsChanged changes) -> {
             });

@@ -49,6 +49,7 @@ import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaReplicati
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -166,6 +167,7 @@ public class AmzaMain {
             amzaServiceConfig.tombstoneCompactionFactor = amzaConfig.getTombstoneCompactionFactor();
             amzaServiceConfig.rebalanceIfImbalanceGreaterThanNBytes = amzaConfig.getRebalanceIfImbalanceGreaterThanNBytes();
             amzaServiceConfig.rebalanceableEveryNMillis = amzaConfig.getRebalanceableEveryNMillis();
+            amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis = amzaConfig.getInterruptBlockingReadsIfLingersForNMillis();
 
             final AmzaStats amzaStats = new AmzaStats();
             final SickThreads sickThreads = new SickThreads();
@@ -175,7 +177,10 @@ public class AmzaMain {
             deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
 
             BAInterner interner = new BAInterner();
-            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner);
+            Interruptables interruptables = new Interruptables("main", amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis);
+            interruptables.start();
+
+            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, interruptables);
 
             final ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -238,7 +243,7 @@ public class AmzaMain {
 
                 },
                 availableRowsTaker,
-                () -> new HttpRowsTaker(amzaStats, interner),
+                () -> new HttpRowsTaker(amzaStats, interner, interruptables),
                 Optional.<TakeFailureListener>absent(),
                 (RowsChanged changes) -> {
                 });

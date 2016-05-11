@@ -126,6 +126,8 @@ public class AmzaServiceInitializer {
         public long rebalanceableEveryNMillis = TimeUnit.HOURS.toMillis(1);
         public long rebalanceIfImbalanceGreaterThanNBytes = 1024 * 1024 * 1024;
 
+        public long interruptBlockingReadsIfLingersForNMillis = 60_000;
+
     }
 
     public interface IndexProviderRegistryCallback {

@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer.StreamingTakeConsumed;
@@ -51,9 +52,9 @@ public class HttpRowsTaker implements RowsTaker {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner) {
+    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner, Interruptables interruptables) {
         this.amzaStats = amzaStats;
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, interruptables);
     }
 
     /**

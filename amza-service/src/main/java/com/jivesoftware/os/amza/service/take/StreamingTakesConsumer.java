@@ -20,28 +20,36 @@ public class StreamingTakesConsumer {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final BAInterner interner;
+    private final Interruptables interruptables;
 
-    public StreamingTakesConsumer(BAInterner interner) {
+    public StreamingTakesConsumer(BAInterner interner, Interruptables interruptables) {
         this.interner = interner;
+        this.interruptables = interruptables;
     }
 
     public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream) throws Exception {
-        while (dis.read() == 1) {
-            int partitionNameLength = dis.readInt();
-            if (partitionNameLength == 0) {
-                // this is a ping
-                continue;
+        try {
+            Interruptables.Interruptable interruptable = interruptables.aquire();
+            while (dis.read() == 1) {
+                interruptable.alive();
+                int partitionNameLength = dis.readInt();
+                if (partitionNameLength == 0) {
+                    // this is a ping
+                    continue;
+                }
+                byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
+                dis.readFully(versionedPartitionNameBytes);
+                long txId = dis.readLong();
+                try {
+                    updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes, 0, interner), txId);
+                } catch (PropertiesNotPresentException e) {
+                    LOG.warn(e.getMessage());
+                } catch (Throwable t) {
+                    LOG.error("Encountered problem while streaming available rows", t);
+                }
             }
-            byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
-            dis.readFully(versionedPartitionNameBytes);
-            long txId = dis.readLong();
-            try {
-                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes, 0, interner), txId);
-            } catch (PropertiesNotPresentException e) {
-                LOG.warn(e.getMessage());
-            } catch (Throwable t) {
-                LOG.error("Encountered problem while streaming available rows", t);
-            }
+        } finally {
+            interruptables.release();
         }
     }
 
@@ -51,31 +59,38 @@ public class StreamingTakesConsumer {
         long partitionVersion;
         boolean isOnline;
         long bytes = 0;
-        try (DataInputStream dis = is) {
-            leadershipToken = dis.readLong();
-            partitionVersion = dis.readLong();
-            isOnline = dis.readByte() == 1;
-            while (dis.readByte() == 1) {
-                byte[] ringMemberBytes = new byte[dis.readInt()];
-                dis.readFully(ringMemberBytes);
-                long highwaterMark = dis.readLong();
-                neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner), highwaterMark);
-                bytes += 1 + 4 + ringMemberBytes.length + 8;
-            }
-            while (dis.readByte() == 1) {
-                long rowTxId = dis.readLong();
-                RowType rowType = RowType.fromByte(dis.readByte());
-                byte[] rowBytes = new byte[dis.readInt()];
-                dis.readFully(rowBytes);
-                bytes += 1 + 8 + 1 + 4 + rowBytes.length;
-                if (rowType != null) {
-                    if (!tookRowUpdates.row(-1, rowTxId, rowType, rowBytes)) {
-                        break;
+        try {
+            Interruptables.Interruptable interruptable = interruptables.aquire();
+            try (DataInputStream dis = is) {
+                leadershipToken = dis.readLong();
+                partitionVersion = dis.readLong();
+                isOnline = dis.readByte() == 1;
+                while (dis.readByte() == 1) {
+                    interruptable.alive();
+                    byte[] ringMemberBytes = new byte[dis.readInt()];
+                    dis.readFully(ringMemberBytes);
+                    long highwaterMark = dis.readLong();
+                    neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner), highwaterMark);
+                    bytes += 1 + 4 + ringMemberBytes.length + 8;
+                }
+                while (dis.readByte() == 1) {
+                    interruptable.alive();
+                    long rowTxId = dis.readLong();
+                    RowType rowType = RowType.fromByte(dis.readByte());
+                    byte[] rowBytes = new byte[dis.readInt()];
+                    dis.readFully(rowBytes);
+                    bytes += 1 + 8 + 1 + 4 + rowBytes.length;
+                    if (rowType != null) {
+                        if (!tookRowUpdates.row(-1, rowTxId, rowType, rowBytes)) {
+                            break;
+                        }
                     }
                 }
             }
+            return new StreamingTakeConsumed(leadershipToken, partitionVersion, isOnline, neighborsHighwaterMarks, bytes);
+        } finally {
+            interruptables.release();
         }
-        return new StreamingTakeConsumed(leadershipToken, partitionVersion, isOnline, neighborsHighwaterMarks, bytes);
     }
 
     public static class StreamingTakeConsumed {

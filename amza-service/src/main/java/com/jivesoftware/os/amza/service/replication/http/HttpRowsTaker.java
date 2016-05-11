@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer.StreamingTakeConsumed;
@@ -51,10 +50,12 @@ public class HttpRowsTaker implements RowsTaker {
     private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
+    private final int socketTimeoutInMillis;
 
-    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner, Interruptables interruptables) {
+    public HttpRowsTaker(AmzaStats amzaStats, BAInterner interner, int socketTimeoutInMillis) {
         this.amzaStats = amzaStats;
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, interruptables);
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.socketTimeoutInMillis = socketTimeoutInMillis;
     }
 
     /**
@@ -78,7 +79,7 @@ public class HttpRowsTaker implements RowsTaker {
 
         HttpStreamResponse httpStreamResponse;
         try {
-            httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
+            httpStreamResponse = getRequestHelper(remoteRingHost, socketTimeoutInMillis).executeStreamingPostRequest(null,
                 "/amza/rows/stream/" + localRingMember.getMember()
                 + "/" + remoteVersionedPartitionName.toBase64()
                 + "/" + remoteTxId
@@ -109,7 +110,7 @@ public class HttpRowsTaker implements RowsTaker {
         long txId,
         long localLeadershipToken) {
         try {
-            return getRequestHelper(remoteRingHost).executeRequest(null,
+            return getRequestHelper(remoteRingHost, socketTimeoutInMillis).executeRequest(null,
                 "/amza/rows/taken/" + localRingMember.getMember()
                 + "/" + takeSessionId
                 + "/" + versionedPartitionName.toBase64()
@@ -123,12 +124,15 @@ public class HttpRowsTaker implements RowsTaker {
         }
     }
 
-    HttpRequestHelper getRequestHelper(RingHost ringHost) {
-        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort()));
+    HttpRequestHelper getRequestHelper(RingHost ringHost, int socketTimeoutInMillis) {
+        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort(), socketTimeoutInMillis));
     }
 
-    HttpRequestHelper buildRequestHelper(String host, int port) {
-        HttpClientConfig httpClientConfig = HttpClientConfig.newBuilder().build();
+    static HttpRequestHelper buildRequestHelper(String host, int port, int socketTimeoutInMillis) {
+        HttpClientConfig httpClientConfig = HttpClientConfig
+            .newBuilder()
+            .setSocketTimeoutInMillis(socketTimeoutInMillis)
+            .build();
         HttpClientFactory httpClientFactory = new HttpClientFactoryProvider()
             .createHttpClientFactory(Arrays.<HttpClientConfiguration>asList(httpClientConfig));
         HttpClient httpClient = httpClientFactory.createClient(host, port);

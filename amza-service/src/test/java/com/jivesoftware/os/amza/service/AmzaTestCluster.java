@@ -48,7 +48,6 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
-import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer.StreamingTakeConsumed;
@@ -298,10 +297,8 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        Interruptables interruptables = new Interruptables("main", 60_000);
-        interruptables.start();
-
-        service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions, interruptables);
+        
+        service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
 
         cluster.put(localRingMember, service);
 
@@ -318,7 +315,6 @@ public class AmzaTestCluster {
         private final TimestampedOrderIdProvider orderIdProvider;
         final SickThreads sickThreads;
         final SickPartitions sickPartitions;
-        final Interruptables interruptables;
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
@@ -331,8 +327,7 @@ public class AmzaTestCluster {
             AmzaService amzaService,
             TimestampedOrderIdProvider orderIdProvider,
             SickThreads sickThreads,
-            SickPartitions sickPartitions,
-            Interruptables interruptables) {
+            SickPartitions sickPartitions) {
 
             this.interner = interner;
             this.ringMember = ringMember;
@@ -342,7 +337,6 @@ public class AmzaTestCluster {
             this.orderIdProvider = orderIdProvider;
             this.sickThreads = sickThreads;
             this.sickPartitions = sickPartitions;
-            this.interruptables = interruptables;
         }
 
         @Override
@@ -362,7 +356,6 @@ public class AmzaTestCluster {
         public void stop() throws Exception {
             amzaService.stop();
             asIfOverTheWire.shutdownNow();
-            interruptables.stop();
         }
 
         public void create(Consistency consistency, PartitionName partitionName, String indexClassName, RowType rowType) throws Exception {
@@ -466,7 +459,7 @@ public class AmzaTestCluster {
                 });
                 submit.get();
 
-                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner, interruptables);
+                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner);
                 return streamingTakesConsumer.consume(new DataInputStream(new SnappyInputStream(new ByteArrayInputStream(bytesOut.toByteArray()))), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);

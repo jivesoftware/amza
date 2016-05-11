@@ -48,6 +48,7 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer.StreamingTakeConsumed;
@@ -124,7 +125,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.aquariumLivelinessFeedEveryMillis = 500;
         config.maxUpdatesBeforeDeltaStripeCompaction = 10;
         config.deltaStripeCompactionIntervalInMillis = 1000;
@@ -262,9 +263,9 @@ public class AmzaTestCluster {
                 LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
 
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
-                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                        partitionStripeFunction,
-                        workingIndexDirectories),
+                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                    partitionStripeFunction,
+                    workingIndexDirectories),
                     persistentRowIOProvider);
 
             },
@@ -297,7 +298,10 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
+        Interruptables interruptables = new Interruptables("main", 60_000);
+        interruptables.start();
+
+        service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions, interruptables);
 
         cluster.put(localRingMember, service);
 
@@ -314,6 +318,7 @@ public class AmzaTestCluster {
         private final TimestampedOrderIdProvider orderIdProvider;
         final SickThreads sickThreads;
         final SickPartitions sickPartitions;
+        final Interruptables interruptables;
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
@@ -326,7 +331,8 @@ public class AmzaTestCluster {
             AmzaService amzaService,
             TimestampedOrderIdProvider orderIdProvider,
             SickThreads sickThreads,
-            SickPartitions sickPartitions) {
+            SickPartitions sickPartitions,
+            Interruptables interruptables) {
 
             this.interner = interner;
             this.ringMember = ringMember;
@@ -336,6 +342,7 @@ public class AmzaTestCluster {
             this.orderIdProvider = orderIdProvider;
             this.sickThreads = sickThreads;
             this.sickPartitions = sickPartitions;
+            this.interruptables = interruptables;
         }
 
         @Override
@@ -355,6 +362,7 @@ public class AmzaTestCluster {
         public void stop() throws Exception {
             amzaService.stop();
             asIfOverTheWire.shutdownNow();
+            interruptables.stop();
         }
 
         public void create(Consistency consistency, PartitionName partitionName, String indexClassName, RowType rowType) throws Exception {
@@ -457,7 +465,8 @@ public class AmzaTestCluster {
                     return null;
                 });
                 submit.get();
-                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner, "main", 60_000);
+
+                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner, interruptables);
                 return streamingTakesConsumer.consume(new DataInputStream(new SnappyInputStream(new ByteArrayInputStream(bytesOut.toByteArray()))), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -490,7 +499,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = { 0 };
+                    int[] count = {0};
                     partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -611,7 +620,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

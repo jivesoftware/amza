@@ -52,6 +52,7 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -123,7 +124,10 @@ public class Main {
         amzaServiceConfig.workingDirectories = workingDirs;
 
         BAInterner interner = new BAInterner();
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, "main", 60_000); // TODO config
+        Interruptables interruptables = new Interruptables("main", 60_000);
+        interruptables.start();
+
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, interruptables); // TODO config
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
@@ -172,7 +176,7 @@ public class Main {
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            (name) -> new HttpRowsTaker(amzaStats, interner, name, 60_000), // TODO config
+            () -> new HttpRowsTaker(amzaStats, interner, interruptables),
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });

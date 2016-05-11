@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -44,8 +45,8 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpAvailableRowsTaker(BAInterner interner, String name, long interruptBlockingReadsIfLingersForNMillis) {
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, name, interruptBlockingReadsIfLingersForNMillis);
+    public HttpAvailableRowsTaker(BAInterner interner, Interruptables interruptables) {
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, interruptables);
     }
 
     @Override

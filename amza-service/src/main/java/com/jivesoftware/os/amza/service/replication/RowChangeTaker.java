@@ -370,7 +370,11 @@ public class RowChangeTaker implements RowChanges {
                     if (x.getCause() instanceof InterruptedException) {
                         return;
                     }
-                    LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
+                    } else {
+                        LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember});
+                    }
                     try {
                         Thread.sleep(1_000);
                     } catch (InterruptedException ie) {
@@ -751,23 +755,39 @@ public class RowChangeTaker implements RowChanges {
                                     Math.max(highwaterMark, takeRowStream.largestFlushedTxId()),
                                     leadershipToken);
                             } catch (Exception x) {
-                                LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                                if (LOG.isDebugEnabled()) {
+                                    LOG.debug("Failed to ack for member:{} host:{} partition:{}",
+                                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                                } else {
+                                    LOG.warn("Failed to ack for member:{} host:{} partition:{}",
+                                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName});
+                                }
+
                             }
                         } finally {
                             LOG.stopTimer("take>all");
                         }
 
                     } catch (Exception x) {
-                        LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                            new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Failed to take from member:{} host:{} partition:{}",
+                                new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
+                        } else {
+                            LOG.warn("Failed to take from member:{} host:{} partition:{}",
+                                new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName});
+                        }
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
             } catch (Exception x) {
-                LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Failed to take from member:{} host:{} partition:{}",
+                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                } else {
+                    LOG.error("Failed to take from member:{} host:{} partition:{}",
+                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName});
+                }
                 onError.error(this, x);
             }
         }
@@ -874,9 +894,6 @@ public class RowChangeTaker implements RowChanges {
                         Thread.sleep(100); // TODO configure!
                         amzaStats.backPressure.incrementAndGet();
                         amzaStats.pushBacks.incrementAndGet();
-                    } catch (Exception x) {
-                        LOG.error("Failed while flushing.", x);
-                        throw x;
                     }
                 }
             }

@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
-import com.jivesoftware.os.amza.service.take.Interruptables;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -44,9 +43,11 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
+    private final int socketTimeoutInMillis;
 
-    public HttpAvailableRowsTaker(BAInterner interner, Interruptables interruptables) {
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner, interruptables);
+    public HttpAvailableRowsTaker(BAInterner interner, int socketTimeoutInMillis) {
+        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.socketTimeoutInMillis = socketTimeoutInMillis;
     }
 
     @Override
@@ -59,7 +60,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         long timeoutMillis,
         AvailableStream availableStream) throws Exception {
 
-        HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
+        HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost, socketTimeoutInMillis).executeStreamingPostRequest(null,
             "/amza/rows/available"
             + "/" + localRingMember.getMember()
             + "/" + localTimestampedRingHost.ringHost.toCanonicalString()
@@ -76,12 +77,15 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         }
     }
 
-    HttpRequestHelper getRequestHelper(RingHost ringHost) {
-        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort()));
+    HttpRequestHelper getRequestHelper(RingHost ringHost, int socketTimeoutInMillis) {
+        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort(), socketTimeoutInMillis));
     }
 
-    HttpRequestHelper buildRequestHelper(String host, int port) {
-        HttpClientConfig httpClientConfig = HttpClientConfig.newBuilder().build();
+    static HttpRequestHelper buildRequestHelper(String host, int port, int socketTimeoutInMillis) {
+        HttpClientConfig httpClientConfig = HttpClientConfig
+            .newBuilder()
+            .setSocketTimeoutInMillis(socketTimeoutInMillis)
+            .build();
         HttpClientFactory httpClientFactory = new HttpClientFactoryProvider()
             .createHttpClientFactory(Arrays.<HttpClientConfiguration>asList(httpClientConfig));
         HttpClient httpClient = httpClientFactory.createClient(host, port);

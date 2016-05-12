@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.ListMultimap;
+import com.google.common.collect.SetMultimap;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -160,7 +160,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
 
-        ListMultimap<String, RingMemberAndHost> subRackMembers = ArrayListMultimap.create();
+        SetMultimap<String, RingMemberAndHost> subRackMembers = HashMultimap.create();
         RingTopology subRing = ringStoreReader.getRing(ringName);
         for (RingMemberAndHost entry : subRing.entries) {
             subRackMembers.put(entry.ringHost.getRack(), entry);

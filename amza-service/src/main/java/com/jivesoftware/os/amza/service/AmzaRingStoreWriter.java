@@ -234,9 +234,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         ringsCache.remove(ringName);
         //ringsCache.remove(new IBA(ringName));
 
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Ring update:{} -> {}", new String(ringName), members);
-        }
+        LOG.info("Ring update:{} -> {}", new String(ringName), members);
     }
 
     @Override

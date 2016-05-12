@@ -303,7 +303,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Getting route for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 } catch (PartitionIsDisposedException e) {
-                    LOG.info("Being asked for a route to a disposed partition:{}", partitionName);
+                    LOG.warn("Being asked for a route to a disposed partition:{}", partitionName);
                     disposed = true;
                     break;
                 }

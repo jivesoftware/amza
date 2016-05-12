@@ -400,7 +400,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
                         } else {
-                            LOG.info("Committing before swap: {}", name.getPrimaryName());
+                            LOG.debug("Committing before swap: {}", name.getPrimaryName());
 
                             boolean compactedNonEmpty = rename(compactionStripe, Type.compacting, Type.compacted, false);
 
@@ -440,7 +440,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 new LABRawhide());
 
                             currentStripe = compactionStripe;
-                            LOG.info("Committing after swap: {}", name.getPrimaryName());
+                            LOG.debug("Committing after swap: {}", name.getPrimaryName());
                         }
                     } finally {
                         lock.release(numPermits);

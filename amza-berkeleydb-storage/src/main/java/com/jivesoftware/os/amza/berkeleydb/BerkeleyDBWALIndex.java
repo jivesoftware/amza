@@ -530,7 +530,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
                         } else {
-                            LOG.info("Committing before swap: {}", name.getPrimaryName());
+                            LOG.debug("Committing before swap: {}", name.getPrimaryName());
 
                             renameDatabase(compactionStripe, Type.compacting, Type.compacted);
 
@@ -555,7 +555,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                             prefixDb = environments[compactionStripe].openDatabase(null, name.getPrefixName(), prefixDbConfig);
                             environments[compactionStripe].flushLog(true);
                             currentStripe = compactionStripe;
-                            LOG.info("Committing after swap: {}", name.getPrimaryName());
+                            LOG.debug("Committing after swap: {}", name.getPrimaryName());
                         }
                     } finally {
                         lock.release(numPermits);

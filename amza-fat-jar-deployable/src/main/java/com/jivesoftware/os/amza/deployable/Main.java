@@ -123,7 +123,7 @@ public class Main {
         amzaServiceConfig.workingDirectories = workingDirs;
 
         BAInterner interner = new BAInterner();
-        
+
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, 60_000); // TODO config
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
@@ -192,10 +192,12 @@ public class Main {
             }
         };
         TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().initialize(
-            new TenantsServiceConnectionDescriptorProvider<>("",
+            new TenantsServiceConnectionDescriptorProvider<>(Executors.newScheduledThreadPool(1),
+                "",
                 connectionsProvider,
                 "",
-                ""),
+                "",
+                10_000), // TODO config
             new HttpDeliveryClientHealthProvider("", null, "", 5000, 100),
             10,
             10_000); //TODO expose to conf

@@ -53,7 +53,7 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
     public void run() {
         try {
             TenantRoutingProvider tenantRoutingProvider = deployable.getTenantRoutingProvider();
-            TenantsServiceConnectionDescriptorProvider connections = tenantRoutingProvider.getConnections(serviceName, "main");
+            TenantsServiceConnectionDescriptorProvider connections = tenantRoutingProvider.getConnections(serviceName, "main", discoveryIntervalMillis);
             ConnectionDescriptors selfConnections = connections.getConnections("");
             for (ConnectionDescriptor connectionDescriptor : selfConnections.getConnectionDescriptors()) {
 

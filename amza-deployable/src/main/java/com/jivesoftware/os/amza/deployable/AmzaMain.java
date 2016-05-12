@@ -251,7 +251,7 @@ public class AmzaMain {
 
             TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
             TenantAwareHttpClient<String> httpClient = tenantRoutingHttpClientInitializer.initialize(
-                deployable.getTenantRoutingProvider().getConnections(instanceConfig.getServiceName(), "main"),
+                deployable.getTenantRoutingProvider().getConnections(instanceConfig.getServiceName(), "main", 10_000), // TODO config
                 clientHealthProvider,
                 10,
                 10_000); // TODO expose to conf

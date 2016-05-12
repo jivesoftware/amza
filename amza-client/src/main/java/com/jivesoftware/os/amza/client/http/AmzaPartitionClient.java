@@ -188,7 +188,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                             return false;
                         }
                     }
-                    LOG.info("Merged {}", answers.size());
+                    LOG.debug("Merged {}", answers.size());
                     return true;
 
                 } else if (size == 1) {

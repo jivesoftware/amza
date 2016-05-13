@@ -57,6 +57,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     private final ConcurrentBAHash<CacheId<RingTopology>> ringsCache;
     private final ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache;
     private final AtomicLong nodeCacheId;
+    private final boolean rackDistributionEnabled;
 
     public AmzaRingStoreWriter(AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
@@ -64,7 +65,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         WALUpdated walUpdated,
         ConcurrentBAHash<CacheId<RingTopology>> ringsCache,
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache,
-        AtomicLong nodeCacheId) {
+        AtomicLong nodeCacheId,
+        boolean rackDistributionEnabled) {
         this.ringStoreReader = ringStoreReader;
         this.systemWALStorage = systemWALStorage;
         this.orderIdProvider = orderIdProvider;
@@ -72,6 +74,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         this.ringsCache = ringsCache;
         this.ringMemberRingNamesCache = ringMemberRingNamesCache;
         this.nodeCacheId = nodeCacheId;
+        this.rackDistributionEnabled = rackDistributionEnabled;
     }
 
     @Override
@@ -163,12 +166,14 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         SetMultimap<String, RingMemberAndHost> subRackMembers = HashMultimap.create();
         RingTopology subRing = ringStoreReader.getRing(ringName);
         for (RingMemberAndHost entry : subRing.entries) {
-            subRackMembers.put(entry.ringHost.getRack(), entry);
+            String rack = rackDistributionEnabled ? entry.ringHost.getRack() : "";
+            subRackMembers.put(rack, entry);
         }
 
         Map<String, List<RingMemberAndHost>> systemRackMembers = new HashMap<>();
         for (RingMemberAndHost entry : systemRing.entries) {
-            systemRackMembers.computeIfAbsent(entry.ringHost.getRack(), (key) -> new ArrayList<>()).add(entry);
+            String rack = rackDistributionEnabled ? entry.ringHost.getRack() : "";
+            systemRackMembers.computeIfAbsent(rack, (key) -> new ArrayList<>()).add(entry);
         }
 
         Random random = new Random(new Random(Arrays.hashCode(ringName)).nextLong());

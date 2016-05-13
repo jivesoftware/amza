@@ -128,6 +128,7 @@ public class AmzaServiceInitializer {
 
         public long interruptBlockingReadsIfLingersForNMillis = 60_000;
 
+        public boolean rackDistributionEnabled = true;
     }
 
     public interface IndexProviderRegistryCallback {
@@ -386,7 +387,8 @@ public class AmzaServiceInitializer {
             walUpdated,
             ringsCache,
             ringMemberRingNamesCache,
-            nodeCacheId);
+            nodeCacheId,
+            config.rackDistributionEnabled);
         amzaSystemPartitionWatcher.watch(PartitionCreator.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaSystemPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
 

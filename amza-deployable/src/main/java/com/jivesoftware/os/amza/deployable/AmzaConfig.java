@@ -44,4 +44,6 @@ public interface AmzaConfig extends Config {
     @LongDefault(60_000)
     long getInterruptBlockingReadsIfLingersForNMillis();
 
+    @BooleanDefault(true)
+    boolean getRackDistributionEnabled();
 }

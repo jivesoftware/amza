@@ -259,6 +259,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             throw new NotARingMemberException("Not a member of the ring for partition: " + partitionName);
         }
 
+        boolean online = false;
+        String errorMessage = null;
         long endAfterTimestamp = System.currentTimeMillis() + timeoutMillis;
         do {
             try {
@@ -274,12 +276,24 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     versionedAquarium.awaitOnline(Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
                     return null;
                 });
+                online = true;
                 break;
             } catch (PartitionIsExpungedException e) {
                 LOG.warn("Awaiting online for expunged partition {}, we will compost and retry", partitionName);
+                errorMessage = e.getMessage();
                 partitionComposter.compostPartitionIfNecessary(partitionName);
+            } catch (PropertiesNotPresentException e) {
+                errorMessage = e.getMessage();
+                long timeRemaining = endAfterTimestamp - System.currentTimeMillis();
+                if (timeRemaining > 0) {
+                    Thread.sleep(Math.min(100, Math.max(timeRemaining / 2, 10))); //TODO this is stupid
+                }
             }
         } while (System.currentTimeMillis() < endAfterTimestamp);
+
+        if (!online) {
+            throw new TimeoutException(errorMessage != null ? errorMessage : "Timed out waiting for the partition to come online");
+        }
     }
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName, long waitForLeaderInMillis) throws Exception {

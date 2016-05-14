@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
@@ -113,6 +114,9 @@ public class AmzaClientRestEndpoints {
         } catch (TimeoutException e) {
             LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
+        } catch (NotARingMemberException e) {
+            LOG.warn("Not a ring member for {}", partitionName);
+            return ResponseHelper.INSTANCE.errorResponse(Status.CONFLICT, "Not a ring member.", e);
         } catch (Exception e) {
             LOG.error("Failed while attempting to ensurePartition:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
@@ -143,7 +147,7 @@ public class AmzaClientRestEndpoints {
             return chunkedOutput;
         } catch (Exception e) {
             LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while getting ring.", e);
         }
     }
 
@@ -175,7 +179,7 @@ public class AmzaClientRestEndpoints {
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
             LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while awaiting ring leader.", e);
         }
     }
 

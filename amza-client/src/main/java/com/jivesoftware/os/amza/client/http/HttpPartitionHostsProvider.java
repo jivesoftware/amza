@@ -18,10 +18,13 @@ import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import com.jivesoftware.os.routing.bird.http.client.RoundRobinStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.shared.ClientCall;
+import com.jivesoftware.os.routing.bird.shared.ClientCall.ClientResponse;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.NextClientStrategy;
 import java.io.IOException;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
+import org.apache.http.HttpStatus;
 
 /**
  * @author jonathan.colt
@@ -42,8 +45,29 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
         this.mapper = mapper;
     }
 
+    private static class RingMembersChangedException extends RuntimeException {
+
+        public RingMembersChangedException(String message) {
+            super(message);
+        }
+    }
+
     @Override
     public void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
+        long timeoutAfterTimestamp = System.currentTimeMillis() + 30_000; //TODO config
+        while (System.currentTimeMillis() < timeoutAfterTimestamp) {
+            try {
+                ensure(partitionName, desiredRingSize, partitionProperties);
+                return;
+            } catch (RingMembersChangedException e) {
+                LOG.warn("Ring membership for {} has changed, retrying...", partitionName);
+                Thread.sleep(10); //TODO config
+            }
+        }
+        throw new TimeoutException("Failed to ensure partition: " + partitionName);
+    }
+
+    private void ensure(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
         String base64PartitionName = partitionName.toBase64();
         String partitionPropertiesString = mapper.writeValueAsString(partitionProperties);
         byte[] intBuffer = new byte[4];
@@ -94,19 +118,22 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
                 partitionPropertiesString, null);
 
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
-                return new ClientCall.ClientResponse<>(null, true);
+                return new ClientResponse<>(null, true);
+            } else if (got.getStatusCode() == HttpStatus.SC_CONFLICT) {
+                throw new RingMembersChangedException("Ring members have changed");
+            } else {
+                throw new RuntimeException("Failed to ensure partition: " + partitionName);
             }
-            throw new RuntimeException("Failed to ensure partition:" + partitionName);
         });
     }
 
     @Override
     public Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws HttpClientException {
 
-        NextClientStrategy strategy = useHost.map(
-            (RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[]{
-            new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
-        })).orElse(roundRobinStrategy);
+        NextClientStrategy strategy = useHost.map((ringMemberAndHost) -> {
+            HostPort[] hostPorts = { new HostPort(ringMemberAndHost.ringHost.getHost(), ringMemberAndHost.ringHost.getPort()) };
+            return (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(hostPorts);
+        }).orElse(roundRobinStrategy);
         byte[] intBuffer = new byte[4];
         Ring leaderlessRing = tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 

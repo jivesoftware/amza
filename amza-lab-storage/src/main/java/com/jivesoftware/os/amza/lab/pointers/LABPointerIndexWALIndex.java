@@ -477,6 +477,16 @@ public class LABPointerIndexWALIndex implements WALIndex {
         environments[stripe].remove(name.typeName(type).getPrefixName());
     }
 
+    public void flush(boolean fsync) throws Exception {
+        lock.acquire();
+        try {
+            primaryDb.commit(fsync);
+            prefixDb.commit(fsync);
+        } finally {
+            lock.release();
+        }
+    }
+
     @Override
     public void updatedProperties(Map<String, String> properties) {
     }
@@ -492,11 +502,6 @@ public class LABPointerIndexWALIndex implements WALIndex {
             + ", commits=" + commits
             + ", compactingTo=" + compactingTo
             + '}';
-    }
-
-    public void flush(boolean fsync) throws Exception {
-        primaryDb.commit(fsync);
-        prefixDb.commit(fsync);
     }
 
 }

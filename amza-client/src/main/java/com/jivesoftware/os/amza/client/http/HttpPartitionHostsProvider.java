@@ -122,7 +122,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
             } else if (got.getStatusCode() == HttpStatus.SC_CONFLICT) {
                 throw new RingMembersChangedException("Ring members have changed");
             } else {
-                throw new RuntimeException("Failed to ensure partition: " + partitionName);
+                throw new RuntimeException("Failed to ensure partition: " + partitionName + " statusCode: " + got.getStatusCode());
             }
         });
     }

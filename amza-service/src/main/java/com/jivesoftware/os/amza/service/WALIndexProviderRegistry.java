@@ -17,7 +17,7 @@ public class WALIndexProviderRegistry {
     private final ConcurrentHashMap<String, RowIOProvider> rowIORegistry = new ConcurrentHashMap<>();
 
     public WALIndexProviderRegistry(MemoryBackedRowIOProvider ephemeralRowIOProvider, BinaryRowIOProvider persistentRowIOProvider) {
-    //public WALIndexProviderRegistry(String[] workingDirectories, IoStats ioStats, int corruptionParanoiaFactor, boolean useMemMap) {
+        //public WALIndexProviderRegistry(String[] workingDirectories, IoStats ioStats, int corruptionParanoiaFactor, boolean useMemMap) {
         register(new MemoryWALIndexProvider("memory_ephemeral"), ephemeralRowIOProvider);
         register(new MemoryWALIndexProvider("memory_persistent"), persistentRowIOProvider);
         register(new NoOpWALIndexProvider("noop_persistent"), persistentRowIOProvider);
@@ -36,5 +36,17 @@ public class WALIndexProviderRegistry {
     final public void register(WALIndexProvider<?> indexProvider, RowIOProvider rowIOProvider) {
         indexRegistry.put(indexProvider.getName(), indexProvider);
         rowIORegistry.put(indexProvider.getName(), rowIOProvider);
+    }
+
+    public void start() {
+        for (WALIndexProvider<?> provider : indexRegistry.values()) {
+            provider.start();
+        }
+    }
+
+    public void stop() {
+        for (WALIndexProvider<?> provider : indexRegistry.values()) {
+            provider.stop();
+        }
     }
 }

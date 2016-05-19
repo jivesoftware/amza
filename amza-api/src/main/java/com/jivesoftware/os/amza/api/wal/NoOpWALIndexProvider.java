@@ -31,4 +31,12 @@ public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
     @Override
     public void flush(Iterable<NoOpWALIndex> partitionNames, boolean fsync) throws Exception {
     }
+
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void stop() {
+    }
 }

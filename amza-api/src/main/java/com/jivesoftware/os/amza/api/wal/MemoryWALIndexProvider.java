@@ -31,4 +31,12 @@ public class MemoryWALIndexProvider implements WALIndexProvider<MemoryWALIndex> 
     @Override
     public void flush(Iterable<MemoryWALIndex> indexes, boolean fsync) throws Exception {
     }
+
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void stop() {
+    }
 }

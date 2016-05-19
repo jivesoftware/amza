@@ -8,12 +8,14 @@ import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.jive.utils.collections.bah.LRUConcurrentBAHLinkedHash;
 import com.jivesoftware.os.lab.LABEnvironment;
+import com.jivesoftware.os.lab.LabHeapPressure;
 import com.jivesoftware.os.lab.guts.Leaps;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -37,6 +39,8 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         this.name = name;
         this.environments = new LABEnvironment[numberOfStripes];
 
+        LabHeapPressure labHeapPressure = new LabHeapPressure(config.getGlobalMaxHeapPressureInBytes(), new AtomicLong());
+
         ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
         this.leapCache = LABEnvironment.buildLeapsCache((int) config.getLeapCacheMaxCapacity(), config.getConcurrency());
@@ -54,6 +58,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 destroyThreadPool,
                 active,
                 config.getUseMemMap(),
+                labHeapPressure,
                 config.getMinMergeDebt(),
                 config.getMaxMergeDebt(),
                 leapCache);
@@ -100,6 +105,63 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         }
     }
 
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public void start() {
+        leapCache.start(name, config.getLeapCacheCleanupIntervalInMillis(), new LRUConcurrentBAHLinkedHash.CleanerExceptionCallback() {
+            @Override
+            public boolean exception(Throwable thrwbl) {
+                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+            }
+        });
+    }
+
+    @Override
+    public void stop() {
+        leapCache.stop();
+    }
+
+    @Override
+    public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+        int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
+        LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(modulo,
+            Type.active,
+            String.valueOf(versionedPartitionName.getPartitionVersion()));
+        //TODO config flush interval
+        return new LABPointerIndexWALIndex(name,
+            versionedPartitionName,
+            environments,
+            stripe,
+            indexName,
+            config);
+    }
+
+    @Override
+    public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+        int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
+        LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(modulo,
+            LABPointerIndexWALIndexName.Type.active,
+            String.valueOf(versionedPartitionName.getPartitionVersion()));
+        LABEnvironment env = environments[stripe];
+        for (LABPointerIndexWALIndexName n : name.all()) {
+            env.remove(n.getPrimaryName());
+            LOG.info("Removed database: {}", n.getPrimaryName());
+            env.remove(n.getPrefixName());
+            LOG.info("Removed database: {}", n.getPrefixName());
+        }
+    }
+
+    @Override
+    public void flush(Iterable<LABPointerIndexWALIndex> indexes, boolean fsync) throws Exception {
+        for (LABPointerIndexWALIndex index : indexes) {
+            index.flush(fsync); // So call me maybe?
+        }
+    }
+
     private final static long randMult = 0x5DEECE66DL;
     private final static long randAdd = 0xBL;
     private final static long randMask = (1L << 48) - 1;
@@ -142,47 +204,4 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             new File("/example/prefix-active-123"),
             new BAInterner()));
     }
-
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
-        LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(modulo,
-            Type.active,
-            String.valueOf(versionedPartitionName.getPartitionVersion()));
-        //TODO config flush interval
-        return new LABPointerIndexWALIndex(name,
-            versionedPartitionName,
-            environments,
-            stripe,
-            indexName,
-            config);
-    }
-
-    @Override
-    public void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
-        LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(modulo,
-            LABPointerIndexWALIndexName.Type.active,
-            String.valueOf(versionedPartitionName.getPartitionVersion()));
-        LABEnvironment env = environments[stripe];
-        for (LABPointerIndexWALIndexName n : name.all()) {
-            env.remove(n.getPrimaryName());
-            LOG.info("Removed database: {}", n.getPrimaryName());
-            env.remove(n.getPrefixName());
-            LOG.info("Removed database: {}", n.getPrefixName());
-        }
-    }
-
-    @Override
-    public void flush(Iterable<LABPointerIndexWALIndex> indexes, boolean fsync) throws Exception {
-        for (LABPointerIndexWALIndex index : indexes) {
-            index.flush(fsync); // So call me maybe?
-        }
-    }
-
 }

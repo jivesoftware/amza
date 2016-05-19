@@ -75,6 +75,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;
     private final int numberOfStripes;
+    private final WALIndexProviderRegistry indexProviderRegistry;
     private final StorageVersionProvider storageVersionProvider;
     private final AmzaRingStoreReader ringStoreReader;
     private final AmzaRingStoreWriter ringStoreWriter;
@@ -98,6 +99,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaStats amzaStats,
         int numberOfStripes,
+        WALIndexProviderRegistry indexProviderRegistry,
         StorageVersionProvider storageVersionProvider,
         AmzaRingStoreReader ringReader,
         AmzaRingStoreWriter amzaHostRing,
@@ -120,6 +122,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         this.amzaStats = amzaStats;
         this.numberOfStripes = numberOfStripes;
+        this.indexProviderRegistry = indexProviderRegistry;
         this.storageVersionProvider = storageVersionProvider;
         this.orderIdProvider = orderIdProvider;
         this.ringStoreReader = ringReader;
@@ -184,6 +187,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public void start(RingMember ringMember, RingHost ringHost) throws Exception {
 
+        indexProviderRegistry.start();
         partitionCreator.init(storageVersionProvider);
         ringStoreReader.start(partitionIndex);
 
@@ -220,6 +224,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         partitionComposter.stop();
         takeCoordinator.stop();
         ringStoreReader.stop();
+        indexProviderRegistry.stop();
 
     }
 

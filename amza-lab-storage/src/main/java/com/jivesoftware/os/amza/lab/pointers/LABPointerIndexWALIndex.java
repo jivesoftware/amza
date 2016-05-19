@@ -73,14 +73,14 @@ public class LABPointerIndexWALIndex implements WALIndex {
         this.currentStripe = currentStripe;
         this.primaryDb = environments[currentStripe].open(name.getPrimaryName(),
             config.getEntriesBetweenLeaps(),
-            config.getMaxUpdatesBeforeFlush(),
+            config.getMaxHeapPressureInBytes(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
             new LABRawhide());
         this.prefixDb = environments[currentStripe].open(name.getPrefixName(),
             config.getEntriesBetweenLeaps(),
-            config.getMaxUpdatesBeforeFlush(),
+            config.getMaxHeapPressureInBytes(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
@@ -425,7 +425,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
                             primaryDb = environments[compactionStripe].open(name.getPrimaryName(),
                                 config.getEntriesBetweenLeaps(),
-                                config.getMaxUpdatesBeforeFlush(),
+                                config.getMaxHeapPressureInBytes(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
@@ -433,7 +433,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
                             prefixDb = environments[compactionStripe].open(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
-                                config.getMaxUpdatesBeforeFlush(),
+                                config.getMaxHeapPressureInBytes(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),

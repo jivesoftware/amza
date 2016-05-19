@@ -16,9 +16,6 @@ public interface LABPointerIndexConfig extends Config {
     @BooleanDefault(false)
     boolean getUseMemMap();
 
-    @IntDefault(1000000)
-    int getMaxUpdatesBeforeFlush();
-
     @IntDefault(4096)
     int getEntriesBetweenLeaps();
 

@@ -453,6 +453,7 @@ public class AmzaServiceInitializer {
         return new AmzaService(orderIdProvider,
             amzaStats,
             numberOfStripes,
+            indexProviderRegistry,
             storageVersionProvider,
             ringStoreReader,
             amzaRingWriter,

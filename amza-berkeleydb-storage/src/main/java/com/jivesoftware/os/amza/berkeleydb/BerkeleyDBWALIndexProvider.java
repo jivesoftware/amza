@@ -85,4 +85,12 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
         }
     }
 
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void stop() {
+    }
+
 }

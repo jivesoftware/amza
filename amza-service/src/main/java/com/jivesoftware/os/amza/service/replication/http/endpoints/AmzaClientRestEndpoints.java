@@ -370,14 +370,14 @@ public class AmzaClientRestEndpoints {
             try {
                 in.close();
             } catch (Exception x) {
-                LOG.warn("Failed to close input stream for {} {}", context, x);
+                LOG.error("Failed to close input stream for {}", new Object[] { context }, x);
             }
         }
         if (out != null) {
             try {
                 out.close();
             } catch (Exception x) {
-                LOG.warn("Failed to close output stream for {} {}", context, x);
+                LOG.error("Failed to close output stream for {}", new Object[] { context }, x);
             }
         }
     }

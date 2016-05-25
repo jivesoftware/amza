@@ -21,7 +21,6 @@ import java.io.IOException;
 import org.glassfish.jersey.server.ChunkedOutput;
 
 /**
- *
  * @author jonathan.colt
  */
 class ChunkedOutputFiler implements IWriteable {
@@ -48,7 +47,9 @@ class ChunkedOutputFiler implements IWriteable {
     public void close() throws IOException {
         flushChunk(true);
         filer.close();
-        chunkedOutput.close();
+        if (!chunkedOutput.isClosed()) {
+            chunkedOutput.close();
+        }
     }
 
     private void flushChunk(boolean force) throws IOException {

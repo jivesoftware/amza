@@ -13,4 +13,8 @@ public class NoOpCloseable implements Closeable {
     public void close() throws Exception {
     }
 
+    @Override
+    public String toString() {
+        return "NoOpCloseable{}";
+    }
 }

@@ -120,8 +120,8 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
 
         if (consistency.requiresLeader()) {
             Future<A> future = null;
+            RingMemberAndHost leader = ring.leader();
             try {
-                RingMemberAndHost leader = ring.leader();
                 A answer = null;
                 try {
                     try {
@@ -160,26 +160,26 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     future.cancel(true);
                 }
                 if (consistency == Consistency.leader) {
-                    LOG.error("Timed out reading from leader.", x);
+                    LOG.error("Timed out reading from leader {} for {}", new Object[] { leader, partitionName }, x);
                     throw x;
                 } else {
                     LOG.inc("timeout>read>" + consistency.name());
-                    LOG.warn("Timed out reading from leader.", x);
+                    LOG.warn("Timed out reading from leader {} for {}, will retry at quorum", leader, partitionName);
                 }
             } catch (IllegalArgumentException x) {
                 if (future != null) {
                     future.cancel(true);
                 }
-                LOG.error("Illegal argument, there is likely a problem with the request.", x);
+                LOG.error("Illegal argument, there is likely a problem with the request to leader {} for {}", new Object[] { leader, partitionName }, x);
                 throw x;
             } catch (Exception x) {
                 partitionRoutingCache.invalidate(partitionName);
                 if (consistency == Consistency.leader) {
-                    LOG.error("Failed to read from leader.", x);
+                    LOG.error("Failed to read from leader {} for {}", new Object[] { leader, partitionName }, x);
                     throw x;
                 } else {
                     LOG.inc("failover>read>" + consistency.name());
-                    LOG.warn("Failed to read from leader.", x);
+                    LOG.warn("Failed to read from leader {} for {}, will retry at quorum", new Object[] { leader, partitionName }, x);
                 }
             }
 
@@ -352,7 +352,8 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 try {
                     closeable.close();
                 } catch (Throwable t) {
-                    LOG.warn("Failed to close {}", new Object[] { closeable }, t);
+                    LOG.warn("Failed to close {} using leader {} hosts {} for {}",
+                        new Object[] { closeable, leader, Arrays.toString(ringMemberAndHosts), partitionName }, t);
                 }
             }
         }

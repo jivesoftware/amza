@@ -130,8 +130,7 @@ public class PartitionStore implements RangeScannable {
         long ttlCompactVersion = 0;
         if (properties != null) {
             if (properties.tombstoneTimestampAgeInMillis > 0) {
-                tombstoneCheckTimestamp = getTimestampId(
-                    properties.tombstoneTimestampAgeInMillis + properties.tombstoneTimestampIntervalMillis);
+                tombstoneCheckTimestamp = getTimestampId(properties.tombstoneTimestampAgeInMillis + properties.tombstoneTimestampIntervalMillis);
                 tombstoneCompactTimestamp = getTimestampId(properties.tombstoneTimestampAgeInMillis);
             }
             if (properties.tombstoneVersionAgeInMillis > 0) {
@@ -184,8 +183,7 @@ public class PartitionStore implements RangeScannable {
     }
 
     private long getTimestampId(long timeAgoInMillis) {
-        //TODO configurable timestamp provider per partition
-        return orderIdProvider.getApproximateId(System.currentTimeMillis() - timeAgoInMillis);
+        return System.currentTimeMillis() - timeAgoInMillis;
     }
 
     private long getVersion(long timeAgoInMillis) {

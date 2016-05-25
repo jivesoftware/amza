@@ -77,10 +77,26 @@ public interface WALTx {
         public final long clobberCount;
         public final long tombstoneCount;
         public final long ttlCount;
+
+        public final long oldestTimestamp;
+        public final long oldestVersion;
+        public final long oldestTombstonedTimestamp;
+        public final long oldestTombstonedVersion;
+
         public final long duration;
 
-        public CommittedCompacted(III index, long sizeBeforeCompaction, long sizeAfterCompaction, long keyCount, long removeCount,
-            long tombstoneCount, long ttlCount, long duration) {
+        public CommittedCompacted(III index,
+            long sizeBeforeCompaction,
+            long sizeAfterCompaction,
+            long keyCount,
+            long removeCount,
+            long tombstoneCount,
+            long ttlCount,
+            long oldestTimestamp,
+            long oldestVersion,
+            long oldestTombstonedTimestamp,
+            long oldestTombstonedVersion,
+            long duration) {
             this.index = index;
             this.sizeBeforeCompaction = sizeBeforeCompaction;
             this.sizeAfterCompaction = sizeAfterCompaction;
@@ -88,6 +104,10 @@ public interface WALTx {
             this.clobberCount = removeCount;
             this.tombstoneCount = tombstoneCount;
             this.ttlCount = ttlCount;
+            this.oldestTimestamp = oldestTimestamp;
+            this.oldestVersion = oldestVersion;
+            this.oldestTombstonedTimestamp = oldestTombstonedTimestamp;
+            this.oldestTombstonedVersion = oldestTombstonedVersion;
             this.duration = duration;
         }
 

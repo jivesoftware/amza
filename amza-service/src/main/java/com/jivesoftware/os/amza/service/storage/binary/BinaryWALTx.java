@@ -373,6 +373,10 @@ public class BinaryWALTx implements WALTx {
                     clobberCount.longValue(),
                     tombstoneCount.longValue(),
                     ttlCount.longValue(),
+                    oldestTimestamp.longValue() == Long.MAX_VALUE ? -1 : oldestTimestamp.longValue(),
+                    oldestVersion.longValue() == Long.MAX_VALUE ? -1 : oldestVersion.longValue(),
+                    oldestTombstonedTimestamp.longValue() == Long.MAX_VALUE ? -1 : oldestTombstonedTimestamp.longValue(),
+                    oldestTombstonedVersion.longValue() == Long.MAX_VALUE ? -1 : oldestTombstonedVersion.longValue(),
                     (System.currentTimeMillis() - start));
             } catch (Exception x) {
                 LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to end of WAL",

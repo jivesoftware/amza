@@ -296,6 +296,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 walIndex.set(compacted.index);
                 keyCount.set(compacted.keyCount);
                 clobberCount.set(0);
+                oldestTimestamp.set(compacted.oldestTimestamp);
+                oldestVersion.set(compacted.oldestVersion);
+                oldestTombstonedTimestamp.set(compacted.oldestTombstonedTimestamp);
+                oldestTombstonedVersion.set(compacted.oldestTombstonedVersion);
 
                 LOG.info("Completed compaction: {}", compacted);
                 return compacted.sizeAfterCompaction;

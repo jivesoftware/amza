@@ -25,4 +25,11 @@ public class CloseableHttpStreamResponse implements CloseableStreamResponse {
         return response.getInputStream();
     }
 
+    @Override
+    public String toString() {
+        return "CloseableHttpStreamResponse{" +
+            "statusCode=" + response.getStatusCode() +
+            ", reasonPhrase='" + response.getStatusReasonPhrase() + '\'' +
+            '}';
+    }
 }

@@ -137,4 +137,14 @@ public class InMemoryPartitionClient implements PartitionClient {
         Optional<List<String>> solutionLog) throws Exception {
         throw new UnsupportedOperationException("Not yet");
     }
+
+    @Override
+    public long getApproximateCount(Consistency consistency,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        return index.size();
+    }
+
 }

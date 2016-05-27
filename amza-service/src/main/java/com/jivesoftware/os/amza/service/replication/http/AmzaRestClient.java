@@ -41,6 +41,8 @@ public interface AmzaRestClient {
 
     void takePrefixFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception;
 
+    long approximateCount(PartitionName partitionName) throws Exception;
+
     class RingLeader {
 
         final RingTopology ringTopology;

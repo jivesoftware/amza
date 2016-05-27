@@ -44,6 +44,12 @@ public class EmbeddedPartitionClient implements PartitionClient {
     }
 
     @Override
+    public long getApproximateCount(Consistency consistency, long additionalSolverAfterNMillis, long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return partition.approximateCount();
+    }
+
+    @Override
     public boolean get(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,
@@ -110,4 +116,5 @@ public class EmbeddedPartitionClient implements PartitionClient {
         long txId = memberTxIds.getOrDefault(rootRingMember, -1L);
         return partition.takePrefixFromTransactionId(prefix, txId, highwaters, stream);
     }
+
 }

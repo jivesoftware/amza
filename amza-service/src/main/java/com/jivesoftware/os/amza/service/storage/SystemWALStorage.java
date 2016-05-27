@@ -194,4 +194,9 @@ public class SystemWALStorage {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().count(keyStream -> true);
     }
+
+     public long approximateCount(VersionedPartitionName versionedPartitionName) throws Exception {
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().approximateCount();
+    }
 }

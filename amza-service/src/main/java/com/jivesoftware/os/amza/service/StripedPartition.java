@@ -264,6 +264,15 @@ public class StripedPartition implements Partition {
     }
 
     @Override
+    public long approximateCount() throws Exception {
+        return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+            return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                return partitionStripe.approximateCount(versionedAquarium);
+            });
+        });
+    }
+
+    @Override
     public long highestTxId() throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {

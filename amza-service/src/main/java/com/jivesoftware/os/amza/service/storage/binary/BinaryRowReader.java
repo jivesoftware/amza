@@ -105,8 +105,10 @@ public class BinaryRowReader implements WALReader {
                         }
                     }
                     if (seekTo == 0) {
-                        LOG.warn("Truncating entire WAL");
-                        truncate(preTruncationNotifier, 0);
+                        if (truncateToLastRowFp) {
+                            LOG.warn("Truncating entire WAL");
+                            truncate(preTruncationNotifier, 0);
+                        }
                         return;
                     }
                 }

@@ -904,6 +904,15 @@ public class DeltaStripeWALStorage {
         }
     }
 
+    public long approximateCount(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
+        acquireOne();
+        try {
+            return storage.approximateCount() + getPartitionDelta(versionedPartitionName).size();
+        } finally {
+            releaseOne();
+        }
+    }
+
     static class LatestKeyValueStream implements KeyValueStream {
 
         private final DeltaPeekableElmoIterator iterator;

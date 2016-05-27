@@ -46,6 +46,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -96,7 +97,7 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (Exception e) {
-            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[] { partitionName, partitionProperties, ringSize }, e);
+            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[]{partitionName, partitionProperties, ringSize}, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
         }
     }
@@ -112,13 +113,13 @@ public class AmzaClientRestEndpoints {
             client.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
-            LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (NotARingMemberException e) {
             LOG.warn("Not a ring member for {}", partitionName);
             return ResponseHelper.INSTANCE.errorResponse(Status.CONFLICT, "Not a ring member.", e);
         } catch (Exception e) {
-            LOG.error("Failed while attempting to ensurePartition:{}", new Object[] { partitionName }, e);
+            LOG.error("Failed while attempting to ensurePartition:{}", new Object[]{partitionName}, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
@@ -146,7 +147,7 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (Exception e) {
-            LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
+            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while getting ring.", e);
         }
     }
@@ -175,10 +176,10 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (TimeoutException e) {
-            LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
-            LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
+            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while awaiting ring leader.", e);
         }
     }
@@ -211,7 +212,7 @@ public class AmzaClientRestEndpoints {
             LOG.warn("FailedToAchieveQuorumException for {} {}", base64PartitionName, x);
             return ResponseHelper.INSTANCE.errorResponse(Status.ACCEPTED, "Failed to achieve quorum exception.");
         } catch (Exception x) {
-            Object[] vals = new Object[] { partitionName, consistencyName };
+            Object[] vals = new Object[]{partitionName, consistencyName};
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
@@ -370,14 +371,14 @@ public class AmzaClientRestEndpoints {
             try {
                 in.close();
             } catch (Exception x) {
-                LOG.error("Failed to close input stream for {}", new Object[] { context }, x);
+                LOG.error("Failed to close input stream for {}", new Object[]{context}, x);
             }
         }
         if (out != null) {
             try {
                 out.close();
             } catch (Exception x) {
-                LOG.error("Failed to close output stream for {}", new Object[] { context }, x);
+                LOG.error("Failed to close output stream for {}", new Object[]{context}, x);
             }
         }
     }
@@ -405,4 +406,28 @@ public class AmzaClientRestEndpoints {
         return null;
     }
 
+    @GET
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("/getApproximateCount/{base64PartitionName}/{consistency}/{checkLeader}")
+    public Object getApproximateCount(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader) {
+
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+        StateMessageCause stateMessageCause = client.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
+        }
+
+        try {
+            return Response.ok().entity(String.valueOf(client.approximateCount(partitionName))).build();
+        } catch (Exception x) {
+            LOG.error("Failure while getting approximate count for {}", new Object[]{partitionName}, x);
+            return Response.serverError().build();
+        }
+    }
 }

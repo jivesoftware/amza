@@ -203,6 +203,12 @@ public class AmzaClientService implements AmzaRestClient {
         take(out, partition, true, prefix, txId, intLongBuffer);
     }
 
+    @Override
+    public long approximateCount(PartitionName partitionName) throws Exception {
+        Partition partition = partitionProvider.getPartition(partitionName);
+        return partition.approximateCount();
+    }
+
     private void take(IWriteable out,
         Partition partition,
         boolean usePrefix,
@@ -283,7 +289,7 @@ public class AmzaClientService implements AmzaRestClient {
                         State.not_the_leader, "Leader has changed.", null);
                 }
             } catch (Exception x) {
-                Object[] vals = new Object[] { partitionName, consistency };
+                Object[] vals = new Object[]{partitionName, consistency};
                 LOG.warn("Failed while determining leader {} at {}. ", vals, x);
                 return new StateMessageCause(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis,
                     State.error, "Failed while determining leader: " + Arrays.toString(vals), x);

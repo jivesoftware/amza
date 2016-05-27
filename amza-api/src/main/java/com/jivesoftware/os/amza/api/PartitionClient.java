@@ -36,6 +36,12 @@ public interface PartitionClient {
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception;
 
+    long getApproximateCount(Consistency consistency,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception;
+
     boolean get(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,

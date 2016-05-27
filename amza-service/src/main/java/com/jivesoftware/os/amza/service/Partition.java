@@ -36,11 +36,19 @@ public interface Partition {
     // TODO fix or deprecate: Currently know to be broken. Only accurate if you never delete.
     long count() throws Exception;
 
+    /**
+     Inaccurate by the number of un merged changes on the delta WAL
+    @return
+    @throws Exception
+     */
+    long approximateCount() throws Exception;
+
     long highestTxId() throws Exception;
 
     LivelyEndState livelyEndState() throws Exception;
 
     class ScanRange {
+
         public static final ScanRange ROW_SCAN = new ScanRange(null, null, null, null);
 
         public final byte[] fromPrefix;

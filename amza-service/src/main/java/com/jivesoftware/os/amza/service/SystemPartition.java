@@ -195,6 +195,11 @@ public class SystemPartition implements Partition {
     }
 
     @Override
+    public long approximateCount() throws Exception {
+        return systemWALStorage.approximateCount(versionedPartitionName);
+    }
+
+    @Override
     public long highestTxId() throws Exception {
         return systemWALStorage.highestPartitionTxId(versionedPartitionName);
     }

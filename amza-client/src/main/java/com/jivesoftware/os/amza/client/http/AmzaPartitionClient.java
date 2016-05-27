@@ -60,7 +60,6 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         long additionalSolverAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        byte[] lengthBuffer = new byte[4];
 
         partitionCallRouter.write(solutionLog.orElse(null), partitionName, consistency, "commit",
             (leader, ringMember, client) -> {
@@ -69,6 +68,34 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
             answer -> true,
             awaitLeaderElectionForNMillis,
             additionalSolverAfterNMillis,
+            abandonSolutionAfterNMillis);
+    }
+
+    @Override
+    public long getApproximateCount(Consistency consistency,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+
+        return partitionCallRouter.read(solutionLog.orElse(null),
+            partitionName,
+            consistency,
+            "appriximateCount",
+            (leader, ringMember, client) -> {
+                PartitionResponse<CloseableLong> approximateCount = remotePartitionCaller.getApproximateCount(leader, ringMember, client);
+                return approximateCount;
+            }, (answers) -> {
+                long maxApproximateCount = -1;
+                for (RingMemberAndHostAnswer<CloseableLong> answer : answers) {
+                    CloseableLong a = answer.getAnswer();
+                    maxApproximateCount = Math.max(maxApproximateCount, a.getLong());
+                }
+                return maxApproximateCount;
+            },
+            awaitLeaderElectionForNMillis,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis);
     }
 

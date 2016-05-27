@@ -28,6 +28,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         this.client = client;
     }
 
+
     public static interface CommitLatency extends TimerHealthCheckConfig {
 
         @StringDefault("client>commit>latency")
@@ -350,6 +351,34 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
             client.takePrefixFromTransactionId(partitionName, in, out);
         } finally {
             takeFromWithPrefixLatency.stopTimer("Ensure", "Check cluster health.");
+        }
+    }
+
+
+    public static interface ApproximateCountLatency extends TimerHealthCheckConfig {
+
+        @StringDefault("client>approximateCount>latency")
+        @Override
+        String getName();
+
+        @StringDefault("How long its taking to get approximate count.")
+        @Override
+        String getDescription();
+
+        @DoubleDefault(3600000d)
+        @Override
+        Double get95ThPecentileMax();
+    }
+
+    private static final HealthTimer approximateCountLatency = HealthFactory.getHealthTimer(TakeFromLatency.class, TimerHealthChecker.FACTORY);
+
+    @Override
+    public long approximateCount(PartitionName partitionName) throws Exception {
+        try {
+            approximateCountLatency.startTimer();
+            return client.approximateCount(partitionName);
+        } finally {
+            approximateCountLatency.stopTimer("Ensure", "Check cluster health.");
         }
     }
 

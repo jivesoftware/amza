@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
@@ -328,6 +327,18 @@ public class PartitionStripe {
             return storage.count(versionedPartitionName, partitionStore.getWalStorage());
         }
 
+    }
+
+     public long approximateCount(VersionedAquarium versionedAquarium) throws Exception {
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+
+        // any state is OK!
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+        if (partitionStore == null) {
+            throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+        } else {
+            return storage.approximateCount(versionedPartitionName, partitionStore.getWalStorage());
+        }
     }
 
     public boolean containsKeys(VersionedAquarium versionedAquarium, byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {

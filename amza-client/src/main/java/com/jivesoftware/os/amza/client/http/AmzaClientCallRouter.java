@@ -63,7 +63,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         long awaitLeaderElectionForNMillis,
         long additionalSolverAfterNMillis,
         long abandonSolutionAfterNMillis) throws Exception {
-
+        
         Ring ring = ring(partitionName, consistency, Optional.empty(), awaitLeaderElectionForNMillis);
 
         if (consistency.requiresLeader()) {

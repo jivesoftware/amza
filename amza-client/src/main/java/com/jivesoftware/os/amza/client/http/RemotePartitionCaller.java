@@ -47,4 +47,8 @@ public interface RemotePartitionCaller<C, E extends Throwable> {
         byte[] prefix,
         Map<RingMember, Long> membersTxId,
         TxKeyValueStream stream) throws E;
+
+    PartitionResponse<CloseableLong> getApproximateCount(RingMember leader,
+        RingMember ringMember,
+        C client) throws E;
 }

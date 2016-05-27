@@ -117,6 +117,17 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
     }
 
     @Override
+    public PartitionResponse<CloseableLong> getApproximateCount(RingMember leader, RingMember ringMember, HttpClient client) throws
+        HttpClientException {
+        HttpResponse got = client.get("/amza/v1/getApproximateCount/" + base64PartitionName + "/" + Consistency.none + "/" + ringMember.equals(leader), null);
+        if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+            return new PartitionResponse<>(new CloseableLong(Long.parseLong(new String(got.getResponseBody()))), true);
+        } else {
+            return new PartitionResponse<>(new CloseableLong(-1), false);
+        }
+    }
+
+    @Override
     public PartitionResponse<CloseableStreamResponse> scan(RingMember leader,
         RingMember ringMember,
         HttpClient client,
@@ -225,4 +236,5 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
             }
         }
     }
+
 }

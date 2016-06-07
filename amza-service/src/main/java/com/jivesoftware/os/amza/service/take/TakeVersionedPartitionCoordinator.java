@@ -85,37 +85,26 @@ public class TakeVersionedPartitionCoordinator {
         lastOfferedMillis = System.currentTimeMillis();
         callCount++;
 
-        try {
-            return partitionStripeProvider.txPartition(versionedPartitionName.getPartitionName(),
-                (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-                    VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                    Stable stable = stableTaker(ringMember, takeSessionId, versionedAquarium);
-                    if (stable.isDormant()) {
-                        return Long.MAX_VALUE;
-                    } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                        long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
-                        return streamHighestTxId(versionedAquarium,
-                            highestTxId,
-                            takeSessionId,
-                            versionedRing,
-                            ringMember,
-                            stable.isOnline(),
-                            availableStream);
-                    } else {
-                        LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
-                        return Long.MAX_VALUE;
-                    }
-                });
-        } catch (PartitionIsDisposedException e) {
-            LOG.warn("Partition {} was disposed when streaming available rows", versionedPartitionName);
-            return Long.MAX_VALUE;
-        } catch (PropertiesNotPresentException e) {
-            LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
-            return Long.MAX_VALUE;
-        } catch (NotARingMemberException e) {
-            LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
-            return Long.MAX_VALUE;
-        }
+        return partitionStripeProvider.txPartition(versionedPartitionName.getPartitionName(),
+            (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+                VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                Stable stable = stableTaker(ringMember, takeSessionId, versionedAquarium);
+                if (stable.isDormant()) {
+                    return Long.MAX_VALUE;
+                } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
+                    long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
+                    return streamHighestTxId(versionedAquarium,
+                        highestTxId,
+                        takeSessionId,
+                        versionedRing,
+                        ringMember,
+                        stable.isOnline(),
+                        availableStream);
+                } else {
+                    LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
+                    return Long.MAX_VALUE;
+                }
+            });
     }
 
     private long highestPartitionTx(TxPartitionStripe txPartitionStripe,

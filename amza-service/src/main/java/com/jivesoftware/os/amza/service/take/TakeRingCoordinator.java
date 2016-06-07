@@ -1,9 +1,13 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.NotARingMemberException;
+import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
+import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
@@ -16,7 +20,10 @@ import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -109,17 +116,32 @@ public class TakeRingCoordinator {
         callCount++;
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing;
-        for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
-            coordinator.versionedPartitionProperties = versionedPartitionProvider.getVersionedProperties(coordinator.versionedPartitionName.getPartitionName(),
+        Iterator<Entry<VersionedPartitionName, TakeVersionedPartitionCoordinator>> iter = partitionCoordinators.entrySet().iterator();
+        while (iter.hasNext()) {
+            Entry<VersionedPartitionName, TakeVersionedPartitionCoordinator> entry = iter.next();
+            VersionedPartitionName versionedPartitionName = entry.getKey();
+            TakeVersionedPartitionCoordinator coordinator = entry.getValue();
+            coordinator.versionedPartitionProperties = versionedPartitionProvider.getVersionedProperties(versionedPartitionName.getPartitionName(),
                 coordinator.versionedPartitionProperties);
             PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
             if (properties.replicated) {
-                long timeout = coordinator.availableRowsStream(partitionStripeProvider,
-                    takeSessionId,
-                    ring,
-                    ringMember,
-                    availableStream);
-                suggestedWaitInMillis = Math.min(suggestedWaitInMillis, timeout);
+                try {
+                    long timeout = coordinator.availableRowsStream(partitionStripeProvider,
+                        takeSessionId,
+                        ring,
+                        ringMember,
+                        availableStream);
+                    suggestedWaitInMillis = Math.min(suggestedWaitInMillis, timeout);
+                } catch (PartitionIsDisposedException e) {
+                    LOG.warn("Partition {} was disposed when streaming available rows", versionedPartitionName);
+                    iter.remove();
+                } catch (PropertiesNotPresentException e) {
+                    LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
+                    // do not discard
+                } catch (NotARingMemberException e) {
+                    LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
+                    iter.remove();
+                }
             }
         }
         return suggestedWaitInMillis;

@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -29,6 +30,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -52,6 +54,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final RingMembership ringMembership;
     private final File[] workingIndexDirectories;
     private final long[] stripeVersions;
+    private final long stripeMaxFreeWithinNBytes;
     private final DeltaStripeWALStorage[] deltaStripeWALStorages;
     private final WALUpdated walUpdated;
     private final AwaitNotify<PartitionName> awaitNotify;
@@ -67,6 +70,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         RingMembership ringMembership,
         File[] workingIndexDirectories,
         long[] stripeVersions,
+        long stripeMaxFreeWithinNBytes,
         DeltaStripeWALStorage[] deltaStripeWALStorages,
         WALUpdated walUpdated,
         AwaitNotify<PartitionName> awaitNotify) {
@@ -78,6 +82,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         this.ringMembership = ringMembership;
         this.workingIndexDirectories = workingIndexDirectories;
         this.stripeVersions = stripeVersions;
+        this.stripeMaxFreeWithinNBytes = stripeMaxFreeWithinNBytes;
         this.deltaStripeWALStorages = deltaStripeWALStorages;
         this.walUpdated = walUpdated;
         this.awaitNotify = awaitNotify;
@@ -136,16 +141,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 stickyStorage = getStickyStorage(partitionName);
                 stripeIndex = (stickyStorage.storageVersion == null) ? -1 : getStripeIndex(stickyStorage.storageVersion.stripeVersion);
                 if (stripeIndex == -1) {
-
-                    long maxFree = 0;
-                    for (int i = 0; i < workingIndexDirectories.length; i++) {
-                        long free = workingIndexDirectories[i].getFreeSpace();
-                        if (free > maxFree) {
-                            stripeIndex = i;
-                            maxFree = free;
-                        }
-                    }
-
                     if (versionedPartitionProvider.isPartitionDisposed(partitionName)) {
                         throw new PartitionIsDisposedException("Partition " + partitionName + " is disposed");
                     }
@@ -155,6 +150,29 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
                         throw new NotARingMemberException("Not a member of ring for " + partitionName);
                     }
+
+                    long maxFree = 0;
+                    long[] free = new long[workingIndexDirectories.length];
+                    for (int i = 0; i < workingIndexDirectories.length; i++) {
+                        free[i] = workingIndexDirectories[i].getFreeSpace();
+                        if (free[i] > maxFree) {
+                            maxFree = free[i];
+                        }
+                    }
+
+                    List<Integer> eligible = Lists.newArrayList();
+                    for (int i = 0; i < workingIndexDirectories.length; i++) {
+                        long nearMaxFree = maxFree - free[i];
+                        if (nearMaxFree <= stripeMaxFreeWithinNBytes) {
+                            eligible.add(i);
+                        }
+                    }
+                    if (eligible.isEmpty()) {
+                        throw new IllegalStateException("No disk free");
+                    }
+
+                    Random r = new Random();
+                    stripeIndex = eligible.get(r.nextInt(eligible.size()));
                     updateStickyStorage(partitionName, stickyStorage, orderIdProvider.nextId(), stripeIndex);
                 }
             } finally {

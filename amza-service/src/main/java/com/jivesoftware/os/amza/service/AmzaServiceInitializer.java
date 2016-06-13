@@ -110,7 +110,7 @@ public class AmzaServiceInitializer {
         public boolean hardFsync = false;
         public long flushHighwatersAfterNUpdates = 10_000;
 
-        public boolean useMemMap = false;
+        public boolean useMemMap = true;
 
         public long takeCyaIntervalInMillis = 1_000;
         public long takeSlowThresholdInMillis = 1_000 * 60;
@@ -293,6 +293,7 @@ public class AmzaServiceInitializer {
             allRowChanges,
             interner);
 
+        long stripeMaxFreeWithinNBytes = config.rebalanceIfImbalanceGreaterThanNBytes / 2; //TODO config separately
         StorageVersionProvider storageVersionProvider = new StorageVersionProvider(interner,
             orderIdProvider,
             ringMember,
@@ -301,6 +302,7 @@ public class AmzaServiceInitializer {
             ringStoreReader,
             workingIndexDirectories,
             stripeVersions,
+            stripeMaxFreeWithinNBytes,
             deltaStripeWALStorages,
             walUpdated,
             awaitOnline);

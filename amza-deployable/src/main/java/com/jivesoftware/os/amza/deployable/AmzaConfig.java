@@ -26,7 +26,7 @@ public interface AmzaConfig extends Config {
     @LongDefault(1_000L)
     long getAsyncFsyncIntervalMillis();
 
-    @BooleanDefault(false)
+    @BooleanDefault(true)
     boolean getUseMemMap();
 
     @IntDefault(2)

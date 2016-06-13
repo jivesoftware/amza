@@ -13,7 +13,7 @@ public interface LABPointerIndexConfig extends Config {
     @IntDefault(16)
     int getMaxMergeDebt();
 
-    @BooleanDefault(false)
+    @BooleanDefault(true)
     boolean getUseMemMap();
 
     @IntDefault(4096)

@@ -46,4 +46,7 @@ public interface AmzaConfig extends Config {
 
     @BooleanDefault(true)
     boolean getRackDistributionEnabled();
+
+    @IntDefault(1_000_000)
+    int getMaxUpdatesBeforeDeltaStripeCompaction();
 }

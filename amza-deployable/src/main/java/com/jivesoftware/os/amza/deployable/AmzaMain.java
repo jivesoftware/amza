@@ -163,6 +163,7 @@ public class AmzaMain {
             amzaServiceConfig.asyncFsyncIntervalMillis = amzaConfig.getAsyncFsyncIntervalMillis();
             amzaServiceConfig.useMemMap = amzaConfig.getUseMemMap();
 
+            amzaServiceConfig.maxUpdatesBeforeDeltaStripeCompaction = amzaConfig.getMaxUpdatesBeforeDeltaStripeCompaction();
             amzaServiceConfig.tombstoneCompactionFactor = amzaConfig.getTombstoneCompactionFactor();
             amzaServiceConfig.rebalanceIfImbalanceGreaterThanNBytes = amzaConfig.getRebalanceIfImbalanceGreaterThanNBytes();
             amzaServiceConfig.rebalanceableEveryNMillis = amzaConfig.getRebalanceableEveryNMillis();

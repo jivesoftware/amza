@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
 public class SingleAutoGrowingByteBufferBackedFiler implements IFiler {
 
     public static final long MAX_BUFFER_SEGMENT_SIZE = UIO.chunkLength(30);
-    public static long MAX_POSITION = MAX_BUFFER_SEGMENT_SIZE * 100;
+    public static long MAX_POSITION = MAX_BUFFER_SEGMENT_SIZE * 10_000;
 
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;

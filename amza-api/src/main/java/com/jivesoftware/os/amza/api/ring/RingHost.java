@@ -18,10 +18,15 @@ package com.jivesoftware.os.amza.api.ring;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 
 public class RingHost {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     public static final RingHost UNKNOWN_RING_HOST = new RingHost("", "", "unknownRingHost", 0);
 
@@ -76,6 +81,7 @@ public class RingHost {
             String datacenter = new String(bytes, i, datacenterLength, StandardCharsets.UTF_8);
             return new RingHost(datacenter, rack, host, port);
         }
+        LOG.error("Bad RingHost bytes, bytes={}", new Object[] { Arrays.toString(bytes) }, new Throwable());
         return null; // Sorry caller
     }
 

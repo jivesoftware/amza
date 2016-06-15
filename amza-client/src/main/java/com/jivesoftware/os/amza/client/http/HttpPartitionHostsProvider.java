@@ -191,14 +191,6 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
 
                 } catch (Exception x) {
                     throw new RuntimeException("Failed loading routes for " + partitionName, x);
-                } finally {
-                    if (fis != null) {
-                        try {
-                            fis.close();
-                        } catch (IOException e) {
-                            LOG.warn("Failed to close input stream", e);
-                        }
-                    }
                 }
             }
         } finally {

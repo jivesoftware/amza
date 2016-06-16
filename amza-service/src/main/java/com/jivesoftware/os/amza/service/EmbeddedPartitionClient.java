@@ -69,6 +69,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
 
     @Override
     public boolean scan(Consistency consistency,
+        boolean compressed,
         PrefixedKeyRanges ranges,
         KeyValueTimestampStream scan,
         long additionalSolverAfterNMillis,

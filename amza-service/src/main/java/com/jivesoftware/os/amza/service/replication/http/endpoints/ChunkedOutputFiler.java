@@ -24,11 +24,14 @@ import org.glassfish.jersey.server.ChunkedOutput;
  * @author jonathan.colt
  */
 class ChunkedOutputFiler implements IWriteable {
+
+    private final int bufferSize;
     private final HeapFiler filer;
     private final ChunkedOutput<byte[]> chunkedOutput;
 
-    public ChunkedOutputFiler(HeapFiler filer, ChunkedOutput<byte[]> chunkedOutput) {
-        this.filer = filer;
+    public ChunkedOutputFiler(int bufferSize, ChunkedOutput<byte[]> chunkedOutput) {
+        this.bufferSize = bufferSize;
+        this.filer = new HeapFiler(bufferSize);
         this.chunkedOutput = chunkedOutput;
     }
 
@@ -53,7 +56,7 @@ class ChunkedOutputFiler implements IWriteable {
     }
 
     private void flushChunk(boolean force) throws IOException {
-        if (force || filer.getFilePointer() >= filer.length()) {
+        if (force || filer.getFilePointer() >= bufferSize) {
             chunkedOutput.write(filer.copyUsedBytes());
             filer.reset();
         }

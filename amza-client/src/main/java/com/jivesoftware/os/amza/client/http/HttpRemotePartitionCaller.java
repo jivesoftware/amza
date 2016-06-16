@@ -100,11 +100,11 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
                     FilerOutputStream fos = new FilerOutputStream(out);
                     UIO.writeByteArray(fos, prefix, "prefix", intLongBuffer);
                     keys.consume((key) -> {
-                        UIO.write(fos, new byte[]{0}, "eos");
+                        UIO.write(fos, new byte[] { 0 }, "eos");
                         UIO.writeByteArray(fos, key, "key", intLongBuffer);
                         return true;
                     });
-                    UIO.write(fos, new byte[]{1}, "eos");
+                    UIO.write(fos, new byte[] { 1 }, "eos");
                 } catch (Exception x) {
                     throw new RuntimeException("Failed while streaming keys.", x);
                 } finally {
@@ -132,12 +132,14 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         RingMember ringMember,
         HttpClient client,
         Consistency consistency,
+        boolean compressed,
         PrefixedKeyRanges ranges) throws HttpClientException {
 
         byte[] intLongBuffer = new byte[8];
 
+        String pathPrefix = compressed ? "/amza/v1/scanCompressed/" : "/amza/v1/scan/";
         HttpStreamResponse got = client.streamingPostStreamableRequest(
-            "/amza/v1/scan/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
+            pathPrefix + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
             (out) -> {
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);

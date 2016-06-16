@@ -55,6 +55,7 @@ public interface PartitionClient {
      * @param ranges the ranges (from key/prefix is nullable and inclusive, to key/prefix is nullable and exclusive)
      */
     boolean scan(Consistency consistency,
+        boolean compressed,
         PrefixedKeyRanges ranges,
         KeyValueTimestampStream scan,
         long additionalSolverAfterNMillis,

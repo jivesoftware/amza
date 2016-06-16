@@ -116,6 +116,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 final AtomicLong batch = new AtomicLong(input.batchSize);
                 long start = System.currentTimeMillis();
                 partition.scan(input.consistency,
+                    true,
                     stream -> stream.stream(getPrefix(input.prefix),
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),
                         getPrefix(input.toPrefix),
@@ -158,6 +159,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
 
                 long start = System.currentTimeMillis();
                 partition.scan(input.consistency,
+                    true,
                     stream -> stream.stream(getPrefix(input.prefix),
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),
                         getPrefix(input.toPrefix),
@@ -270,6 +272,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                     byte[][] lastPrefix = new byte[1][];
                     partition.scan(input.consistency,
+                        true,
                         stream -> stream.stream(getPrefix(input.prefix),
                             fromRawKeys.get(0),
                             getPrefix(input.toPrefix),

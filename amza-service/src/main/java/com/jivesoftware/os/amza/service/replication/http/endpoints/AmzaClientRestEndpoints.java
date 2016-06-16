@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
+import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
 import com.jivesoftware.os.amza.api.filer.ICloseable;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -30,7 +31,6 @@ import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient.RingLeader;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient.StateMessageCause;
@@ -38,6 +38,7 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
+import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
@@ -55,7 +56,9 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.StreamingOutput;
 import org.glassfish.jersey.server.ChunkedOutput;
+import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
 @Path("/amza/v1")
@@ -86,7 +89,7 @@ public class AmzaClientRestEndpoints {
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
-                    out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                    out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                     client.configPartition(ringTopology, out);
                     out.flush(true);
                 } catch (Exception x) {
@@ -97,7 +100,7 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (Exception e) {
-            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[]{partitionName, partitionProperties, ringSize}, e);
+            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[] { partitionName, partitionProperties, ringSize }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
         }
     }
@@ -113,13 +116,13 @@ public class AmzaClientRestEndpoints {
             client.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
-            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (NotARingMemberException e) {
             LOG.warn("Not a ring member for {}", partitionName);
             return ResponseHelper.INSTANCE.errorResponse(Status.CONFLICT, "Not a ring member.", e);
         } catch (Exception e) {
-            LOG.error("Failed while attempting to ensurePartition:{}", new Object[]{partitionName}, e);
+            LOG.error("Failed while attempting to ensurePartition:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
@@ -136,7 +139,7 @@ public class AmzaClientRestEndpoints {
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
-                    out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                    out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                     client.ring(ringLeader, out);
                     out.flush(true);
                 } catch (Exception x) {
@@ -147,7 +150,7 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (Exception e) {
-            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
+            LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while getting ring.", e);
         }
     }
@@ -165,7 +168,7 @@ public class AmzaClientRestEndpoints {
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
-                    out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                    out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                     client.ring(ringLeader, out);
                     out.flush(true);
                 } catch (Exception x) {
@@ -176,10 +179,10 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (TimeoutException e) {
-            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
-            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
+            LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while awaiting ring leader.", e);
         }
     }
@@ -212,7 +215,7 @@ public class AmzaClientRestEndpoints {
             LOG.warn("FailedToAchieveQuorumException for {} {}", base64PartitionName, x);
             return ResponseHelper.INSTANCE.errorResponse(Status.ACCEPTED, "Failed to achieve quorum exception.");
         } catch (Exception x) {
-            Object[] vals = new Object[]{partitionName, consistencyName};
+            Object[] vals = new Object[] { partitionName, consistencyName };
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
@@ -244,7 +247,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                 client.get(partitionName, Consistency.none, in, out);
                 out.flush(true);
             } catch (Exception x) {
@@ -302,7 +305,7 @@ public class AmzaClientRestEndpoints {
         chunkExecutors.submit(() -> {
             ChunkedOutputFiler out = null;
             try {
-                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                 client.scan(partitionName, ranges, out);
                 out.flush(true);
 
@@ -318,6 +321,68 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/scanCompressed/{base64PartitionName}/{consistency}/{checkLeader}")
+    public Object scanCompressed(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        InputStream inputStream) {
+
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+        StateMessageCause stateMessageCause = client.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
+        }
+
+        List<ScanRange> ranges = Lists.newArrayList();
+        FilerInputStream in = new FilerInputStream(inputStream);
+        try {
+            byte[] intLongBuffer = new byte[8];
+            while (UIO.readByte(in, "eos") == (byte) 1) {
+                byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
+                byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
+                byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
+                byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
+
+                byte[] from = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+                byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
+                if (from != null && to != null && KeyUtil.compare(from, to) > 0) {
+                    return Response.status(Status.BAD_REQUEST).entity("Invalid range").build();
+                }
+                ranges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to get ranges for compressed stream scan", e);
+            return Response.serverError().build();
+        } finally {
+            closeStreams("scan", in, null);
+        }
+
+        try {
+            StreamingOutput stream = os -> {
+                os.flush();
+                SnappyOutputStream sos = new SnappyOutputStream(new BufferedOutputStream(os, 8192));
+                FilerOutputStream fos = new FilerOutputStream(sos);
+                try {
+                    client.scan(partitionName, ranges, fos);
+                } catch (Exception x) {
+                    LOG.warn("Failed during compressed stream scan", x);
+                } finally {
+                    fos.close();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to compressed stream scan", e);
+            return Response.serverError().build();
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/takeFromTransactionId/{base64PartitionName}")
     public Object takeFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
         InputStream inputStream) {
@@ -328,7 +393,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                 client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), in, out);
                 out.flush(true);
             } catch (Exception x) {
@@ -354,7 +419,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
                 client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), in, out);
                 out.flush(true);
             } catch (Exception x) {
@@ -371,14 +436,14 @@ public class AmzaClientRestEndpoints {
             try {
                 in.close();
             } catch (Exception x) {
-                LOG.error("Failed to close input stream for {}", new Object[]{context}, x);
+                LOG.error("Failed to close input stream for {}", new Object[] { context }, x);
             }
         }
         if (out != null) {
             try {
                 out.close();
             } catch (Exception x) {
-                LOG.error("Failed to close output stream for {}", new Object[]{context}, x);
+                LOG.error("Failed to close output stream for {}", new Object[] { context }, x);
             }
         }
     }
@@ -426,7 +491,7 @@ public class AmzaClientRestEndpoints {
         try {
             return Response.ok().entity(String.valueOf(client.approximateCount(partitionName))).build();
         } catch (Exception x) {
-            LOG.error("Failure while getting approximate count for {}", new Object[]{partitionName}, x);
+            LOG.error("Failure while getting approximate count for {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
     }

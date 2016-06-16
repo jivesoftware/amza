@@ -66,6 +66,7 @@ import com.jivesoftware.os.routing.bird.health.api.ScheduledMinMaxHealthCheckCon
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.DiskFreeHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
+import com.jivesoftware.os.routing.bird.health.checkers.GCPauseHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
@@ -138,6 +139,7 @@ public class AmzaMain {
                 new HasUI.UI("Amza", "main", "/amza"))));
 
             deployable.buildStatusReporter(null).start();
+            deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));
             deployable.addHealthCheck(serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));

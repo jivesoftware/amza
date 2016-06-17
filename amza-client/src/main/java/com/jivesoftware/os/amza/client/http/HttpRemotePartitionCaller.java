@@ -212,6 +212,13 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
 
     private void handleLeaderStatusCodes(Consistency consistency, int statusCode, String statusReasonPhrase, Closeable closeable) {
         if (statusCode == HttpStatus.SC_BAD_REQUEST) {
+            try {
+                if (closeable != null) {
+                    closeable.close();
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to close {}", closeable);
+            }
             throw new IllegalArgumentException("Bad request: " + statusReasonPhrase);
         } else if (consistency.requiresLeader()) {
             if (statusCode == HttpStatus.SC_SERVICE_UNAVAILABLE) {

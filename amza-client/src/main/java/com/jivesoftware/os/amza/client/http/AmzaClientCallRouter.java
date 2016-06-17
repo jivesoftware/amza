@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author jonathan.colt
@@ -110,28 +111,6 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         partitionRoutingCache.invalidate(partitionName);
     }
 
-    private <A extends Closeable> void cleanup(Future<A> future) {
-        cleanupExecutor.submit(() -> {
-            try {
-                A answer = future.get();
-                answer.close();
-            } catch (Throwable t) {
-                LOG.warn("Failure cleaning up timeout future", t);
-            }
-        });
-    }
-
-    private <A extends Closeable> void cleanupRingMemberAndHostAnswer(Future<RingMemberAndHostAnswer<A>> future) {
-        cleanupExecutor.submit(() -> {
-            try {
-                RingMemberAndHostAnswer<A> ringMemberAndHostAnswer = future.get();
-                ringMemberAndHostAnswer.getAnswer().close();
-            } catch (Throwable t) {
-                LOG.warn("Failure cleaning up timeout future", t);
-            }
-        });
-    }
-
     public <R, A extends Closeable> R read(List<String> solutionLog,
         PartitionName partitionName,
         Consistency consistency,
@@ -147,45 +126,53 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
 
         if (consistency.requiresLeader()) {
             Future<A> future = null;
+            AtomicReference<Closeable> closeableRef = new AtomicReference<>();
             RingMemberAndHost leader = ring.leader();
             try {
                 A answer = null;
                 try {
-                    try {
-                        RingMemberAndHost initialLeader = leader;
-                        if (solutionLog != null) {
-                            solutionLog.add("Reading from " + initialLeader);
-                        }
-                        future = callerThreads.submit(() -> clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call));
-                        answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
-                    } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
-                        LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name());
-                        partitionRoutingCache.invalidate(partitionName);
-                        ring = ring(partitionName,
-                            consistency,
-                            (e instanceof ExecutionException) ? Optional.empty() : Optional.of(ring.leader()),
-                            awaitLeaderElectionForNMillis);
-                        leader = ring.leader();
-                        RingMemberAndHost nextLeader = leader;
-                        if (solutionLog != null) {
-                            solutionLog.add("Leader may have changed. Reattempting READ against " + leader);
-                        }
-                        if (future != null) {
-                            future.cancel(true);
-                        }
-                        future = callerThreads.submit(() -> clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call));
-                        answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
+                    RingMemberAndHost initialLeader = leader;
+                    if (solutionLog != null) {
+                        solutionLog.add("Reading from " + initialLeader);
                     }
-                    return merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
-                } finally {
-                    if (answer != null) {
-                        answer.close();
+                    future = callerThreads.submit(() -> {
+                        A clientAnswer = clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call);
+                        closeableRef.set(clientAnswer);
+                        return clientAnswer;
+                    });
+                    answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
+                } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
+                    LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name());
+                    partitionRoutingCache.invalidate(partitionName);
+                    ring = ring(partitionName,
+                        consistency,
+                        (e instanceof ExecutionException) ? Optional.empty() : Optional.of(ring.leader()),
+                        awaitLeaderElectionForNMillis);
+                    leader = ring.leader();
+                    RingMemberAndHost nextLeader = leader;
+                    if (solutionLog != null) {
+                        solutionLog.add("Leader may have changed. Reattempting READ against " + leader);
                     }
+                    if (future != null) {
+                        future.cancel(true);
+                    }
+                    Closeable closeable = closeableRef.getAndSet(null);
+                    if (closeable != null) {
+                        try {
+                            closeable.close();
+                        } catch (Throwable t) {
+                            LOG.warn("Failed to close: {}: {}", t.getClass().getSimpleName(), t.getMessage());
+                        }
+                    }
+                    future = callerThreads.submit(() -> {
+                        A clientAnswer = clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call);
+                        closeableRef.set(clientAnswer);
+                        return clientAnswer;
+                    });
+                    answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
                 }
+                return merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
             } catch (TimeoutException x) {
-                if (future != null) {
-                    cleanup(future);
-                }
                 if (consistency == Consistency.leader) {
                     LOG.error("Timed out reading from leader {} for {}", new Object[] { leader, partitionName }, x);
                     throw x;
@@ -194,15 +181,9 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     LOG.warn("Timed out reading from leader {} for {}, will retry at quorum", leader, partitionName);
                 }
             } catch (IllegalArgumentException x) {
-                if (future != null) {
-                    cleanup(future);
-                }
                 LOG.error("Illegal argument, there is likely a problem with the request to leader {} for {}", new Object[] { leader, partitionName }, x);
                 throw x;
             } catch (Exception x) {
-                if (future != null) {
-                    cleanup(future);
-                }
                 partitionRoutingCache.invalidate(partitionName);
                 if (consistency == Consistency.leader) {
                     LOG.error("Failed to read from leader {} for {}", new Object[] { leader, partitionName }, x);
@@ -210,6 +191,18 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 } else {
                     LOG.inc("failover>read>" + consistency.name());
                     LOG.warn("Failed to read from leader {} for {}, will retry at quorum", new Object[] { leader, partitionName }, x);
+                }
+            } finally {
+                if (future != null) {
+                    future.cancel(true);
+                }
+                Closeable closeable = closeableRef.get();
+                if (closeable != null) {
+                    try {
+                        closeable.close();
+                    } catch (Throwable t) {
+                        LOG.warn("Failed to close: {}: {}", t.getClass().getSimpleName(), t.getMessage());
+                    }
                 }
             }
 
@@ -397,10 +390,10 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         long addAdditionalSoverAfterNMillis,
         long abandonSolutionAfterNMillis) throws InterruptedException {
 
-        CompletionService<RingMemberAndHostAnswer<A>> completionService = new ExecutorCompletionService<>(executor);
         List<Future<RingMemberAndHostAnswer<A>>> futures = new ArrayList<>();
         List<RingMemberAndHostAnswer<A>> answers = new ArrayList<>();
         try {
+            CompletionService<RingMemberAndHostAnswer<A>> completionService = new ExecutorCompletionService<>(executor);
             int pending = 0;
             for (int i = 0; i < mandatory; i++) {
                 if (solvers.hasNext()) {
@@ -458,19 +451,9 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             if (answers.size() != mandatory) {
                 throw new NotSolveableException("Not currently solveable. desire:" + mandatory + " achieved:" + answers.size());
             }
-        } catch (Throwable t) {
-            for (Future<RingMemberAndHostAnswer<A>> f : futures) {
-                cleanupRingMemberAndHostAnswer(f);
-            }
-            futures = null;
-            throw t;
         } finally {
-            if (futures != null) {
-                for (Future<RingMemberAndHostAnswer<A>> f : futures) {
-                    if (!f.cancel(false)) {
-                        cleanupRingMemberAndHostAnswer(f);
-                    }
-                }
+            for (Future<RingMemberAndHostAnswer<A>> future : futures) {
+                future.cancel(true);
             }
         }
         return answers;

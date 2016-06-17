@@ -1156,6 +1156,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
+    public long keyCount() {
+        return keyCount.get();
+    }
+
+    public long clobberCount() {
+        return clobberCount.get();
+    }
+
     public long highestTxId() {
         return highestTxId.get();
     }

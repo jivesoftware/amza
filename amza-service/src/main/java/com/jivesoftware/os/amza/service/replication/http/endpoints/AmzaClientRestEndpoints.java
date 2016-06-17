@@ -357,7 +357,7 @@ public class AmzaClientRestEndpoints {
             LOG.error("Failed to get ranges for compressed stream scan", e);
             return Response.serverError().build();
         } finally {
-            closeStreams("scan", in, null);
+            closeStreams("scanCompressed", in, null);
         }
 
         try {

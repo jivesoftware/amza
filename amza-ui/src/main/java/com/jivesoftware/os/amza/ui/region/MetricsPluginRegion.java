@@ -336,6 +336,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                         if (includeCount) {
                             map.put("count", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.count(versionedAquarium)));
+                            map.put("keyCount", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.keyCount(versionedAquarium)));
+                            map.put("clobberCount", partitionStripe == null ? "-1" : numberFormat.format(partitionStripe.clobberCount(versionedAquarium)));
                         } else {
                             map.put("count", "(requires watch)");
                         }

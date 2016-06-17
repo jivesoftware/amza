@@ -79,7 +79,11 @@
             </td>
             <td>{$r.ringName}</td>
             <td>{$r.name}</td>
-            <td><b>{$r.count}</b></td>
+            <td>
+                <b>{$r.count}</b><br/>
+                {if $r.keyCount}Keys: {$r.keyCount}<br/>{/if}
+                {if $r.clobberCount}Clobbers: {$r.clobberCount}<br/>{/if}
+            </td>
             <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag} ms lag</i></td>
             <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag} ms lag</i></td>
             <td><b>{$r.directApplies}</b><i>{sp}{$r.directAppliesLag} ms lag</i></td>

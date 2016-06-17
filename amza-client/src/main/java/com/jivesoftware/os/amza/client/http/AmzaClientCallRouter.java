@@ -5,6 +5,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -26,6 +27,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -41,6 +43,9 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
     private final PartitionHostsProvider partitionHostsProvider;
     private final RingHostClientProvider<C, E> clientProvider;
     private final Cache<PartitionName, Ring> partitionRoutingCache;
+
+    private final ExecutorService cleanupExecutor = Executors.newSingleThreadExecutor(
+        new ThreadFactoryBuilder().setNameFormat("amza-client-cleanup-%d").build());
 
     public AmzaClientCallRouter(ExecutorService callerThreads,
         PartitionHostsProvider partitionHostsProvider,
@@ -63,7 +68,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         long awaitLeaderElectionForNMillis,
         long additionalSolverAfterNMillis,
         long abandonSolutionAfterNMillis) throws Exception {
-        
+
         Ring ring = ring(partitionName, consistency, Optional.empty(), awaitLeaderElectionForNMillis);
 
         if (consistency.requiresLeader()) {
@@ -103,6 +108,28 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
     @Override
     public void invalidateRouting(PartitionName partitionName) {
         partitionRoutingCache.invalidate(partitionName);
+    }
+
+    private <A extends Closeable> void cleanup(Future<A> future) {
+        cleanupExecutor.submit(() -> {
+            try {
+                A answer = future.get();
+                answer.close();
+            } catch (Throwable t) {
+                LOG.warn("Failure cleaning up timeout future", t);
+            }
+        });
+    }
+
+    private <A extends Closeable> void cleanupRingMemberAndHostAnswer(Future<RingMemberAndHostAnswer<A>> future) {
+        cleanupExecutor.submit(() -> {
+            try {
+                RingMemberAndHostAnswer<A> ringMemberAndHostAnswer = future.get();
+                ringMemberAndHostAnswer.getAnswer().close();
+            } catch (Throwable t) {
+                LOG.warn("Failure cleaning up timeout future", t);
+            }
+        });
     }
 
     public <R, A extends Closeable> R read(List<String> solutionLog,
@@ -157,7 +184,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 }
             } catch (TimeoutException x) {
                 if (future != null) {
-                    future.cancel(true);
+                    cleanup(future);
                 }
                 if (consistency == Consistency.leader) {
                     LOG.error("Timed out reading from leader {} for {}", new Object[] { leader, partitionName }, x);
@@ -168,11 +195,14 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 }
             } catch (IllegalArgumentException x) {
                 if (future != null) {
-                    future.cancel(true);
+                    cleanup(future);
                 }
                 LOG.error("Illegal argument, there is likely a problem with the request to leader {} for {}", new Object[] { leader, partitionName }, x);
                 throw x;
             } catch (Exception x) {
+                if (future != null) {
+                    cleanup(future);
+                }
                 partitionRoutingCache.invalidate(partitionName);
                 if (consistency == Consistency.leader) {
                     LOG.error("Failed to read from leader {} for {}", new Object[] { leader, partitionName }, x);
@@ -359,7 +389,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         }
     }
 
-    private <A> List<RingMemberAndHostAnswer<A>> solve(List<String> solutionLog,
+    private <A extends Closeable> List<RingMemberAndHostAnswer<A>> solve(List<String> solutionLog,
         Executor executor,
         Iterator<Callable<RingMemberAndHostAnswer<A>>> solvers,
         int mandatory,
@@ -428,9 +458,19 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             if (answers.size() != mandatory) {
                 throw new NotSolveableException("Not currently solveable. desire:" + mandatory + " achieved:" + answers.size());
             }
-        } finally {
+        } catch (Throwable t) {
             for (Future<RingMemberAndHostAnswer<A>> f : futures) {
-                f.cancel(true);
+                cleanupRingMemberAndHostAnswer(f);
+            }
+            futures = null;
+            throw t;
+        } finally {
+            if (futures != null) {
+                for (Future<RingMemberAndHostAnswer<A>> f : futures) {
+                    if (!f.cancel(false)) {
+                        cleanupRingMemberAndHostAnswer(f);
+                    }
+                }
             }
         }
         return answers;

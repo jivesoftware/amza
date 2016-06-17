@@ -329,7 +329,31 @@ public class PartitionStripe {
 
     }
 
-     public long approximateCount(VersionedAquarium versionedAquarium) throws Exception {
+    public long keyCount(VersionedAquarium versionedAquarium) throws Exception {
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+
+        // any state is OK!
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+        if (partitionStore == null) {
+            throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+        } else {
+            return partitionStore.getWalStorage().keyCount();
+        }
+    }
+
+    public long clobberCount(VersionedAquarium versionedAquarium) throws Exception {
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+
+        // any state is OK!
+        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+        if (partitionStore == null) {
+            throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+        } else {
+            return partitionStore.getWalStorage().clobberCount();
+        }
+    }
+
+    public long approximateCount(VersionedAquarium versionedAquarium) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
 
         // any state is OK!

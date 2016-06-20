@@ -299,8 +299,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
     private Ring ring(PartitionName partitionName,
         Consistency consistency,
         Optional<RingMemberAndHost> useHost,
-        long waitForLeaderElection) throws Exception, ExecutionException,
-        LeaderElectionInProgressException {
+        long waitForLeaderElection) throws Exception {
 
         Ring ring = partitionRoutingCache.getIfPresent(partitionName);
         if (ring == null || consistency.requiresLeader() && ring.leader() == null) {

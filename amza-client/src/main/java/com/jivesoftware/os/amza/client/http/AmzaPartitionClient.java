@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.commons.lang.mutable.MutableInt;
 import org.xerial.snappy.SnappyInputStream;
 
 /**
@@ -116,7 +117,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 return remotePartitionCaller.get(leader, ringMember, client, consistency, prefix, keys);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.newArrayList(
+                    Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream())));
                 int eosed = 0;
                 while (streams.size() > 0 && eosed == 0) {
                     byte[] latestPrefix = null;
@@ -185,14 +187,14 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 return remotePartitionCaller.scan(leader, ringMember, client, consistency, compressed, ranges);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> {
+                List<FilerInputStream> streams = Lists.newArrayList(Lists.transform(answers, input -> {
                     try {
                         InputStream inputStream = compressed ? new SnappyInputStream(input.getAnswer().getInputStream()) : input.getAnswer().getInputStream();
                         return new FilerInputStream(inputStream);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                });
+                }));
                 int size = streams.size();
                 if (merge && size > 1) {
                     boolean[] eos = new boolean[size];
@@ -264,7 +266,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 return remotePartitionCaller.takeFromTransactionId(leader, ringMember, client, membersTxId, stream);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.newArrayList(
+                    Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream())));
                 if (streams.isEmpty()) {
                     throw new RuntimeException("Failed to takeFromTransactionId.");
                 }
@@ -290,7 +293,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 return remotePartitionCaller.takePrefixFromTransactionId(leader, ringMember, client, prefix, membersTxId, stream);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.newArrayList(
+                    Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream())));
                 if (streams.isEmpty()) {
                     throw new RuntimeException("Failed to takePrefixFromTransactionId.");
                 }

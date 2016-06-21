@@ -44,7 +44,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
     private final long debugClientCount;
     private final long debugClientCountInterval;
 
-    private volatile long lastDebugClientCount = 0;
+    private volatile long lastDebugClientTime = 0;
 
     public AmzaPartitionClient(BAInterner interner,
         PartitionName partitionName,
@@ -92,10 +92,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
             partitionName,
             consistency,
             "appriximateCount",
-            (leader, ringMember, client) -> {
-                PartitionResponse<CloseableLong> approximateCount = remotePartitionCaller.getApproximateCount(leader, ringMember, client);
-                return approximateCount;
-            }, (answers) -> {
+            remotePartitionCaller::getApproximateCount,
+            (answers) -> {
                 long maxApproximateCount = -1;
                 for (RingMemberAndHostAnswer<CloseableLong> answer : answers) {
                     CloseableLong a = answer.getAnswer();
@@ -377,9 +375,9 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         if (debugClientCountInterval >= 0) {
             long activeCount = streamResponse.getActiveCount();
             if (activeCount >= debugClientCount) {
-                if (ctm - lastDebugClientCount >= debugClientCountInterval) {
+                if (ctm - lastDebugClientTime >= debugClientCountInterval) {
                     LOG.info("Active client count: {}", activeCount);
-                    lastDebugClientCount = ctm;
+                    lastDebugClientTime = ctm;
                 }
             }
         }

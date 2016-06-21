@@ -11,5 +11,7 @@ public interface PartitionClientFactory<C, E extends Throwable> {
 
     PartitionClient create(PartitionName partitionName,
         AmzaClientCallRouter<C, E> partitionCallRouter,
-        long awaitLeaderElectionForNMillis) throws Exception;
+        long awaitLeaderElectionForNMillis,
+        long debugClientCount,
+        long debugClientCountInterval) throws Exception;
 }

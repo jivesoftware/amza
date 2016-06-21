@@ -26,6 +26,11 @@ public class CloseableHttpStreamResponse implements CloseableStreamResponse {
     }
 
     @Override
+    public long getActiveCount() {
+        return response.getActiveCount();
+    }
+
+    @Override
     public String toString() {
         return "CloseableHttpStreamResponse{" +
             "statusCode=" + response.getStatusCode() +

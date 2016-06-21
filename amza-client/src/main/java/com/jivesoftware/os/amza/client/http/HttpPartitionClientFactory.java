@@ -21,10 +21,13 @@ public class HttpPartitionClientFactory implements PartitionClientFactory<HttpCl
     @Override
     public PartitionClient create(PartitionName partitionName,
         AmzaClientCallRouter<HttpClient, HttpClientException> partitionCallRouter,
-        long awaitLeaderElectionForNMillis) throws Exception {
+        long awaitLeaderElectionForNMillis,
+        long debugClientCount,
+        long debugClientCountInterval) throws Exception {
 
         HttpRemotePartitionCaller remotePartitionCaller = new HttpRemotePartitionCaller(partitionCallRouter, partitionName);
-        return new AmzaPartitionClient(interner, partitionName, partitionCallRouter, remotePartitionCaller, awaitLeaderElectionForNMillis);
+        return new AmzaPartitionClient<>(interner, partitionName, partitionCallRouter, remotePartitionCaller, awaitLeaderElectionForNMillis,
+            debugClientCount, debugClientCountInterval);
     }
 
 }

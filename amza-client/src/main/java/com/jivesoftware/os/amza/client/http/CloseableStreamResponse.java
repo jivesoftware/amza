@@ -9,4 +9,6 @@ import java.io.InputStream;
 public interface CloseableStreamResponse extends Closeable {
 
     InputStream getInputStream();
+
+    long getActiveCount();
 }

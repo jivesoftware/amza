@@ -37,7 +37,7 @@ public class AmzaPartitionClientTest {
         AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(),
             new TestRingHostClientProvider());
         AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(new BAInterner(), partitionName, router, new TestRemotePartitionCaller(),
-            10_000L);
+            10_000L, -1, -1);
 
         client.scan(Consistency.quorum,
             false,
@@ -130,6 +130,11 @@ public class AmzaPartitionClientTest {
                 @Override
                 public InputStream getInputStream() {
                     return inputStream;
+                }
+
+                @Override
+                public long getActiveCount() {
+                    return 0;
                 }
 
                 @Override

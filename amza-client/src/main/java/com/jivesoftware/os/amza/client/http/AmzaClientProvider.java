@@ -19,18 +19,24 @@ public class AmzaClientProvider<C, E extends Throwable> implements PartitionClie
     private final RingHostClientProvider<C, E> clientProvider;
     private final ExecutorService callerThreads;
     private final long awaitLeaderElectionForNMillis;
+    private final long debugClientCount;
+    private final long debugClientCountInterval;
     private final Map<PartitionName, PartitionClient> cache = new ConcurrentHashMap<>();
 
     public AmzaClientProvider(PartitionClientFactory<C, E> partitionClientFactory,
         PartitionHostsProvider partitionHostsProvider,
         RingHostClientProvider<C, E> clientProvider,
         ExecutorService callerThreads,
-        long awaitLeaderElectionForNMillis) {
+        long awaitLeaderElectionForNMillis,
+        long debugClientCount,
+        long debugClientCountInterval) {
         this.partitionClientFactory = partitionClientFactory;
         this.partitionHostsProvider = partitionHostsProvider;
         this.clientProvider = clientProvider;
         this.callerThreads = callerThreads;
         this.awaitLeaderElectionForNMillis = awaitLeaderElectionForNMillis;
+        this.debugClientCount = debugClientCount;
+        this.debugClientCountInterval = debugClientCountInterval;
     }
 
     @Override
@@ -41,7 +47,7 @@ public class AmzaClientProvider<C, E extends Throwable> implements PartitionClie
         }
         AmzaClientCallRouter<C, E> partitionCallRouter = new AmzaClientCallRouter<>(callerThreads, partitionHostsProvider, clientProvider);
 
-        return partitionClientFactory.create(partitionName, partitionCallRouter, awaitLeaderElectionForNMillis);
+        return partitionClientFactory.create(partitionName, partitionCallRouter, awaitLeaderElectionForNMillis, debugClientCount, debugClientCountInterval);
     }
 
     @Override
@@ -53,7 +59,7 @@ public class AmzaClientProvider<C, E extends Throwable> implements PartitionClie
             try {
                 partitionHostsProvider.ensurePartition(partitionName, ringSize, partitionProperties);
                 AmzaClientCallRouter<C, E> partitionCallRouter = new AmzaClientCallRouter<>(callerThreads, partitionHostsProvider, clientProvider);
-                return partitionClientFactory.create(key, partitionCallRouter, awaitLeaderElectionForNMillis);
+                return partitionClientFactory.create(key, partitionCallRouter, awaitLeaderElectionForNMillis, debugClientCount, debugClientCountInterval);
             } catch (Exception x) {
                 throw new RuntimeException(x);
             }

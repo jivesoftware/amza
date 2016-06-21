@@ -207,7 +207,9 @@ public class Main {
             new HttpPartitionHostsProvider(interner, httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
             Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
-            10_000); //TODO expose to conf
+            10_000, //TODO expose to conf
+            -1,
+            -1);
 
         final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
             .addEndpoint(AmzaEndpoints.class)

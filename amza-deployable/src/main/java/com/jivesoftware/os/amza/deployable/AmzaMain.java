@@ -265,7 +265,9 @@ public class AmzaMain {
                 new HttpPartitionHostsProvider(interner, httpClient, mapper),
                 new RingHostHttpClientProvider(httpClient),
                 Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
-                10_000); //TODO expose to conf
+                10_000, //TODO expose to conf
+                -1,
+                -1);
 
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|      Tcp Replication Service Online");

@@ -56,7 +56,8 @@ class ChunkedOutputFiler implements IWriteable {
     }
 
     private void flushChunk(boolean force) throws IOException {
-        if (force || filer.getFilePointer() >= bufferSize) {
+        long fp = filer.getFilePointer();
+        if (force && fp > 0 || fp >= bufferSize) {
             chunkedOutput.write(filer.copyUsedBytes());
             filer.reset();
         }

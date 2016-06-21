@@ -135,20 +135,18 @@ public class AmzaClientRestEndpoints {
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
             RingLeader ringLeader = client.ring(partitionName);
-            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-            chunkExecutors.submit(() -> {
-                ChunkedOutputFiler out = null;
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
                 try {
-                    out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                    client.ring(ringLeader, out);
-                    out.flush(true);
+                    client.ring(ringLeader, fos);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
                 } finally {
-                    closeStreams("commit", null, out);
+                    fos.close();
                 }
-            });
-            return chunkedOutput;
+            };
+            return Response.ok(stream).build();
         } catch (Exception e) {
             LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while getting ring.", e);
@@ -164,20 +162,18 @@ public class AmzaClientRestEndpoints {
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
             RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
-            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-            chunkExecutors.submit(() -> {
-                ChunkedOutputFiler out = null;
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
                 try {
-                    out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                    client.ring(ringLeader, out);
-                    out.flush(true);
+                    client.ring(ringLeader, fos);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
                 } finally {
-                    closeStreams("commit", null, out);
+                    fos.close();
                 }
-            });
-            return chunkedOutput;
+            };
+            return Response.ok(stream).build();
         } catch (TimeoutException e) {
             LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);

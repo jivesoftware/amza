@@ -16,6 +16,11 @@ public class CloseableHttpStreamResponse implements CloseableStreamResponse {
     }
 
     @Override
+    public void abort() throws Exception {
+        response.abort();
+    }
+
+    @Override
     public void close() throws Exception {
         response.close();
     }

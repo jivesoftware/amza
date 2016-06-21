@@ -6,7 +6,7 @@ import java.io.InputStream;
  *
  * @author jonathan.colt
  */
-public interface CloseableStreamResponse extends Closeable {
+public interface CloseableStreamResponse extends Abortable {
 
     InputStream getInputStream();
 

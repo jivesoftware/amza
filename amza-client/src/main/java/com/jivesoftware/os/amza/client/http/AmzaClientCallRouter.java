@@ -60,7 +60,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             .build();
     }
 
-    public <R, A extends Closeable> R write(List<String> solutionLog,
+    public <R, A extends Abortable> R write(List<String> solutionLog,
         PartitionName partitionName,
         Consistency consistency,
         String family,
@@ -111,7 +111,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         partitionRoutingCache.invalidate(partitionName);
     }
 
-    public <R, A extends Closeable> R read(List<String> solutionLog,
+    public <R, A extends Abortable> R read(List<String> solutionLog,
         PartitionName partitionName,
         Consistency consistency,
         String family,
@@ -126,7 +126,8 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
 
         if (consistency.requiresLeader()) {
             Future<A> future = null;
-            AtomicReference<Closeable> closeableRef = new AtomicReference<>();
+            boolean closeable = false;
+            AtomicReference<Abortable> abortableRef = new AtomicReference<>();
             RingMemberAndHost leader = ring.leader();
             try {
                 A answer = null;
@@ -137,10 +138,11 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     }
                     future = callerThreads.submit(() -> {
                         A clientAnswer = clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call);
-                        closeableRef.set(clientAnswer);
+                        abortableRef.set(clientAnswer);
                         return clientAnswer;
                     });
                     answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
+                    closeable = true;
                 } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
                     LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name());
                     partitionRoutingCache.invalidate(partitionName);
@@ -156,20 +158,21 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     if (future != null) {
                         future.cancel(true);
                     }
-                    Closeable closeable = closeableRef.getAndSet(null);
-                    if (closeable != null) {
+                    Abortable abortable = abortableRef.getAndSet(null);
+                    if (abortable != null) {
                         try {
-                            closeable.close();
+                            abortable.close();
                         } catch (Throwable t) {
                             LOG.warn("Failed to close: {}: {}", t.getClass().getSimpleName(), t.getMessage());
                         }
                     }
                     future = callerThreads.submit(() -> {
                         A clientAnswer = clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call);
-                        closeableRef.set(clientAnswer);
+                        abortableRef.set(clientAnswer);
                         return clientAnswer;
                     });
                     answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
+                    closeable = true;
                 }
                 return merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
             } catch (TimeoutException x) {
@@ -196,10 +199,14 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 if (future != null) {
                     future.cancel(true);
                 }
-                Closeable closeable = closeableRef.get();
-                if (closeable != null) {
+                Abortable abortable = abortableRef.get();
+                if (abortable != null) {
                     try {
-                        closeable.close();
+                        if (closeable) {
+                            abortable.close();
+                        } else {
+                            abortable.abort();
+                        }
                     } catch (Throwable t) {
                         LOG.warn("Failed to close: {}: {}", t.getClass().getSimpleName(), t.getMessage());
                     }
@@ -280,7 +287,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         }
     }
 
-    public <R, A extends Closeable> R take(List<String> solutionLog,
+    public <R, A extends Abortable> R take(List<String> solutionLog,
         PartitionName partitionName,
         List<RingMember> membersInOrder,
         String family,
@@ -314,7 +321,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         return ring;
     }
 
-    private <R, A extends Closeable> R solve(List<String> solutionLog,
+    private <R, A extends Abortable> R solve(List<String> solutionLog,
         PartitionName partitionName,
         String family,
         PartitionCall<C, A, E> partitionCall,
@@ -326,7 +333,9 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         RingMember leader,
         RingMemberAndHost... ringMemberAndHosts) throws Exception {
         long start = System.currentTimeMillis();
-        List<Closeable> closeables = Collections.synchronizedList(Lists.newArrayListWithCapacity(mandatory));
+        List<Abortable> abortables = Collections.synchronizedList(Lists.newArrayListWithCapacity(mandatory));
+        List<Abortable> closeables = Lists.newArrayListWithCapacity(mandatory);
+        boolean closeable = false;
         try {
             if (solutionLog != null) {
                 solutionLog.add("Solving...");
@@ -346,16 +355,21 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     }
                     return () -> {
                         A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
-                        closeables.add(answer);
+                        abortables.add(answer);
                         return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);
                     };
                 });
             List<RingMemberAndHostAnswer<A>> solutions = solve(solutionLog, callerThreads, callOrder.iterator(), mandatory,
                 addNewSolverOnTimeout, addAdditionalSolverAfterNMillis, abandonSolutionAfterNMillis);
+            for (RingMemberAndHostAnswer<A> solution : solutions) {
+                closeables.add(solution.getAnswer());
+                abortables.remove(solution.getAnswer());
+            }
             R result = merger.merge(solutions);
             if (solutionLog != null) {
                 solutionLog.add("Solved. " + (System.currentTimeMillis() - start) + "millis");
             }
+            closeable = true;
             return result;
         } catch (NotSolveableException nse) {
             LOG.inc("notSolveable");
@@ -370,23 +384,35 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             }
             throw t;
         } finally {
-            for (Closeable closeable : closeables) {
+            for (Abortable abortable : abortables) {
                 try {
-                    closeable.close();
+                    abortable.abort();
                 } catch (Throwable t) {
-                    LOG.warn("Failed to close {} using leader {} hosts {} for {}",
-                        new Object[] { closeable, leader, Arrays.toString(ringMemberAndHosts), partitionName }, t);
+                    LOG.warn("Failed to abort {} using leader {} hosts {} for {}",
+                        new Object[] { abortable, leader, Arrays.toString(ringMemberAndHosts), partitionName }, t);
+                }
+            }
+            for (Abortable abortable : closeables) {
+                try {
+                    if (closeable) {
+                        abortable.close();
+                    } else {
+                        abortable.abort();
+                    }
+                } catch (Throwable t) {
+                    LOG.warn("Failed to close {} using leader {} hosts {} for {} closeable:{}",
+                        new Object[] { abortable, leader, Arrays.toString(ringMemberAndHosts), partitionName, closeable }, t);
                 }
             }
         }
     }
 
-    private <A extends Closeable> List<RingMemberAndHostAnswer<A>> solve(List<String> solutionLog,
+    private <A extends Abortable> List<RingMemberAndHostAnswer<A>> solve(List<String> solutionLog,
         Executor executor,
         Iterator<Callable<RingMemberAndHostAnswer<A>>> solvers,
         int mandatory,
         boolean addNewSolverOnTimeout,
-        long addAdditionalSoverAfterNMillis,
+        long addAdditionalSolverAfterNMillis,
         long abandonSolutionAfterNMillis) throws InterruptedException {
 
         List<Future<RingMemberAndHostAnswer<A>>> futures = new ArrayList<>();
@@ -415,7 +441,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     }
                     throw new RuntimeException("Abandoned solution because it took more than " + abandonSolutionAfterNMillis + "millis.");
                 }
-                Future<RingMemberAndHostAnswer<A>> future = completionService.poll(Math.min(remaining, addAdditionalSoverAfterNMillis), TimeUnit.MILLISECONDS);
+                Future<RingMemberAndHostAnswer<A>> future = completionService.poll(Math.min(remaining, addAdditionalSolverAfterNMillis), TimeUnit.MILLISECONDS);
                 if (future == null) {
                     if (addNewSolverOnTimeout) {
                         if (solvers.hasNext()) {

@@ -4,7 +4,7 @@ package com.jivesoftware.os.amza.client.http;
  *
  * @author jonathan.colt
  */
-public class CloseableLong implements Closeable {
+public class CloseableLong implements Abortable {
 
     private final long l;
 
@@ -14,6 +14,10 @@ public class CloseableLong implements Closeable {
 
     long getLong() {
         return l;
+    }
+
+    @Override
+    public void abort() throws Exception {
     }
 
     @Override

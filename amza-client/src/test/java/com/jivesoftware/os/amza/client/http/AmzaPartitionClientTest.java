@@ -138,6 +138,10 @@ public class AmzaPartitionClientTest {
                 }
 
                 @Override
+                public void abort() throws Exception {
+                }
+
+                @Override
                 public void close() throws Exception {
                 }
             }, true);

@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -129,6 +130,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             boolean closeable = false;
             AtomicReference<Abortable> abortableRef = new AtomicReference<>();
             RingMemberAndHost leader = ring.leader();
+            AtomicBoolean complete = new AtomicBoolean(false);
             try {
                 A answer = null;
                 try {
@@ -139,6 +141,10 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     future = callerThreads.submit(() -> {
                         A clientAnswer = clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call);
                         abortableRef.set(clientAnswer);
+                        if (complete.get()) {
+                            clientAnswer.abort();
+                            throw new InterruptedException("Aborted future");
+                        }
                         return clientAnswer;
                     });
                     answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
@@ -169,6 +175,10 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     future = callerThreads.submit(() -> {
                         A clientAnswer = clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call);
                         abortableRef.set(clientAnswer);
+                        if (complete.get()) {
+                            clientAnswer.abort();
+                            throw new InterruptedException("Aborted future");
+                        }
                         return clientAnswer;
                     });
                     answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
@@ -199,6 +209,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 if (future != null) {
                     future.cancel(true);
                 }
+                complete.set(true);
                 Abortable abortable = abortableRef.get();
                 if (abortable != null) {
                     try {
@@ -335,6 +346,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
         long start = System.currentTimeMillis();
         List<Abortable> abortables = Collections.synchronizedList(Lists.newArrayListWithCapacity(mandatory));
         List<Abortable> closeables = Lists.newArrayListWithCapacity(mandatory);
+        AtomicBoolean complete = new AtomicBoolean(false);
         boolean closeable = false;
         try {
             if (solutionLog != null) {
@@ -356,6 +368,10 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     return () -> {
                         A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
                         abortables.add(answer);
+                        if (complete.get()) {
+                            answer.abort();
+                            throw new InterruptedException("Aborted future");
+                        }
                         return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);
                     };
                 });
@@ -384,6 +400,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             }
             throw t;
         } finally {
+            complete.set(true);
             for (Abortable abortable : abortables) {
                 try {
                     abortable.abort();

@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.filer;
 
-import com.jivesoftware.os.filer.io.DirectBufferCleaner;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;

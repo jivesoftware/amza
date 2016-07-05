@@ -65,11 +65,14 @@ import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.ScheduledMinMaxHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.DiskFreeHealthChecker;
+import com.jivesoftware.os.routing.bird.health.checkers.FileDescriptorCountHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCPauseHealthChecker;
+import com.jivesoftware.os.routing.bird.health.checkers.LoadAverageHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
+import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
@@ -141,6 +144,10 @@ public class AmzaMain {
             deployable.buildStatusReporter(null).start();
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));
+            deployable.addHealthCheck(new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)));
+            deployable.addHealthCheck(new LoadAverageHealthChecker(deployable.config(LoadAverageHealthChecker.LoadAverageHealthCheckerConfig.class)));
+            deployable.addHealthCheck(
+                new FileDescriptorCountHealthChecker(deployable.config(FileDescriptorCountHealthChecker.FileDescriptorCountHealthCheckerConfig.class)));
             deployable.addHealthCheck(serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
             deployable.buildManageServer().start();
@@ -285,16 +292,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                @Override
-                public void addEndpoint(Class clazz) {
-                    deployable.addEndpoints(clazz);
-                }
+                    @Override
+                    public void addEndpoint(Class clazz) {
+                        deployable.addEndpoints(clazz);
+                    }
 
-                @Override
-                public void addInjectable(Class clazz, Object instance) {
-                    deployable.addInjectables(clazz, instance);
-                }
-            });
+                    @Override
+                    public void addInjectable(Class clazz, Object instance) {
+                        deployable.addInjectables(clazz, instance);
+                    }
+                });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

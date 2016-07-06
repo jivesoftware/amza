@@ -245,6 +245,11 @@ public class DiskBackedWALFiler implements WALFiler {
             synchronized (fileLock) {
                 if (!channel.isOpen()) {
                     LOG.warn("File channel is closed and must be reopened for {}", fileName);
+                    try {
+                        randomAccessFile.close();
+                    } catch (IOException e) {
+                        LOG.error("Failed to close existing random access file while reacquiring channel");
+                    }
                     randomAccessFile = new RandomAccessFile(fileName, mode);
                     channel = randomAccessFile.getChannel();
                     randomAccessFile.seek(size.get());

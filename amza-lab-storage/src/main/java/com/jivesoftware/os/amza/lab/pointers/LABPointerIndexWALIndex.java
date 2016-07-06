@@ -21,6 +21,8 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.lab.LABEnvironment;
 import com.jivesoftware.os.lab.LABRawhide;
+import com.jivesoftware.os.lab.api.FormatTransformerProvider;
+import com.jivesoftware.os.lab.api.RawEntryFormat;
 import com.jivesoftware.os.lab.api.ValueIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -77,14 +79,18 @@ public class LABPointerIndexWALIndex implements WALIndex {
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-            new LABRawhide());
+            FormatTransformerProvider.NO_OP,
+            new LABRawhide(),
+            RawEntryFormat.MEMORY);
         this.prefixDb = environments[currentStripe].open(name.getPrefixName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxHeapPressureInBytes(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-            new LABRawhide());
+            FormatTransformerProvider.NO_OP,
+            new LABRawhide(),
+            RawEntryFormat.MEMORY);
     }
 
     @Override
@@ -429,7 +435,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-                                new LABRawhide());
+                                FormatTransformerProvider.NO_OP,
+                                new LABRawhide(),
+                                RawEntryFormat.MEMORY);
 
                             prefixDb = environments[compactionStripe].open(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
@@ -437,7 +445,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-                                new LABRawhide());
+                                FormatTransformerProvider.NO_OP,
+                                new LABRawhide(),
+                                RawEntryFormat.MEMORY);
 
                             currentStripe = compactionStripe;
                             LOG.debug("Committing after swap: {}", name.getPrimaryName());

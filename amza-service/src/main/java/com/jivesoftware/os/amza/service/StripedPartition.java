@@ -184,7 +184,7 @@ public class StripedPartition implements Partition {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 for (ScanRange range : ranges) {
                     if (range.fromKey == null && range.toKey == null) {
-                        partitionStripe.rowScan(versionedAquarium, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                        partitionStripe.rowScan(versionedAquarium, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
                             -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
                     } else {
                         partitionStripe.rangeScan(versionedAquarium,
@@ -192,7 +192,7 @@ public class StripedPartition implements Partition {
                             range.fromKey,
                             range.toPrefix,
                             range.toKey,
-                            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
                                 -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
                     }
                 }

@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.api.wal;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Arrays;
 
 public class WALPointer {
 
@@ -24,17 +25,23 @@ public class WALPointer {
     private final boolean tombstoned;
     private final long version;
     private final long fp;
+    private final boolean hasValue;
+    private final byte[] value;
 
     @JsonCreator
     public WALPointer(
         @JsonProperty("fp") long fp,
         @JsonProperty("timestamp") long timestamp,
         @JsonProperty("tombstoned") boolean tombstoned,
-        @JsonProperty("version") long version) {
+        @JsonProperty("version") long version,
+        @JsonProperty("hasValue") boolean hasValue,
+        @JsonProperty("value") byte[] value) {
         this.fp = fp;
         this.timestamp = timestamp;
         this.tombstoned = tombstoned;
         this.version = version;
+        this.hasValue = hasValue;
+        this.value = value;
     }
 
     public long getTimestampId() {
@@ -53,45 +60,33 @@ public class WALPointer {
         return fp;
     }
 
+    public boolean getHasValue() {
+        return hasValue;
+    }
+
+    public byte[] getValue() {
+        return value;
+    }
+
     @Override
     public String toString() {
-        return "WALPointer{"
-            + "timestamp=" + timestamp
-            + ", tombstoned=" + tombstoned
-            + ", version=" + version
-            + ", fp=" + fp
-            + '}';
+        return "WALPointer{" +
+            "timestamp=" + timestamp +
+            ", tombstoned=" + tombstoned +
+            ", version=" + version +
+            ", fp=" + fp +
+            ", hasValue=" + hasValue +
+            ", value=" + Arrays.toString(value) +
+            '}';
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        WALPointer that = (WALPointer) o;
-
-        if (timestamp != that.timestamp) {
-            return false;
-        }
-        if (tombstoned != that.tombstoned) {
-            return false;
-        }
-        if (version != that.version) {
-            return false;
-        }
-        return fp == that.fp;
+        throw new UnsupportedOperationException("NOPE");
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (timestamp ^ (timestamp >>> 32));
-        result = 31 * result + (tombstoned ? 1 : 0);
-        result = 31 * result + (int) (version ^ (version >>> 32));
-        result = 31 * result + (int) (fp ^ (fp >>> 32));
-        return result;
+        throw new UnsupportedOperationException("NOPE");
     }
 }

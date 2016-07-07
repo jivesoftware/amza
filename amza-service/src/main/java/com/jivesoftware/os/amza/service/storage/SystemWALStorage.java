@@ -81,11 +81,11 @@ public class SystemWALStorage {
         KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.getSystemPartition(versionedPartitionName).streamValues(prefix, keys,
-            (rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+            (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (valueTimestamp == -1) {
-                    return stream.stream(rowType, prefix, key, null, -1, false, -1);
+                    return stream.stream(prefix, key, null, -1, false, -1);
                 } else {
-                    return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                 }
             });
     }

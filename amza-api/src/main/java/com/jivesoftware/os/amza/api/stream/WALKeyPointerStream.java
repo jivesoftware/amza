@@ -11,6 +11,8 @@ public interface WALKeyPointerStream {
         long timestamp,
         boolean tombstoned,
         long version,
-        long fp) throws Exception;
+        long fp,
+        boolean hasValue,
+        byte[] value) throws Exception;
 
 }

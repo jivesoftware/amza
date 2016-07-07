@@ -109,6 +109,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                             false,
                             input.rowType,
                             input.indexClassName,
+                            -1,
                             null,
                             -1,
                             -1));

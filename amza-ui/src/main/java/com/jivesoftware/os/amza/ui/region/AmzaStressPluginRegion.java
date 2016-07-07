@@ -366,6 +366,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             false,
             rowType,
             indexClassName,
+            24, //TODO configure, this is enough always to permit (b+"v"+batch) in the index
             null,
             -1,
             -1);

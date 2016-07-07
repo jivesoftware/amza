@@ -6,8 +6,7 @@ package com.jivesoftware.os.amza.api.stream;
  */
 public interface KeyValuePointerStream {
 
-    boolean stream(RowType rowType,
-        byte[] prefix,
+    boolean stream(byte[] prefix,
         byte[] key,
         byte[] value,
         long valueTimestamp,

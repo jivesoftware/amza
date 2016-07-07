@@ -147,13 +147,13 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                     },
                     indexKeyStream -> {
                         for (KeyValueHighwater kvh : keyValueHighwaters) {
-                            if (!indexKeyStream.stream(kvh.prefix, kvh.key, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion)) {
+                            if (!indexKeyStream.stream(kvh.prefix, kvh.key, kvh.value, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion)) {
                                 return false;
                             }
                         }
                         return true;
                     },
-                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
+                    (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
                         fps[fpIndex.intValue()] = fp;
                         fpIndex.increment();
                         return true;
@@ -190,7 +190,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                     return true;
                 },
                 (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, rowType, row))),
-            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 HeapFiler filer = HeapFiler.fromBytes(value, value.length);
                 byte[] deltaRow = primaryRowMarshaller.toRow(rowType,
                     key,
@@ -233,14 +233,14 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         try {
             return WALKey.decompose(
                 decomposeStream -> {
-                    return primaryRowMarshaller.fromRows(fpRowStream -> wal.tx(
-                        io -> io.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
+                    return primaryRowMarshaller.fromRows(
+                        fpRowStream -> wal.tx(io -> io.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
                         (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
-                            return decomposeStream.stream(-1, fp, rowType, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
+                            return decomposeStream.stream(-1, fp, rowType, key, true, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
                         });
                 },
-                (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
+                (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
                     return fpKeyValueStream.stream(fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                 });
         } catch (Exception x) {
@@ -254,7 +254,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
             fpRowStream -> wal.tx(
                 io -> io.read(fps,
                     (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, rowType, row))),
-            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 try {
                     HeapFiler filer = HeapFiler.fromBytes(value, value.length);
                     byte[] hydrateValue = UIO.readByteArray(filer, "value", intBuffer);

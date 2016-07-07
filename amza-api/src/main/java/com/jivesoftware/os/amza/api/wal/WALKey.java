@@ -67,18 +67,28 @@ public class WALKey {
     public interface TxFpRawKeyValueEntryStream<E> {
 
         boolean stream(long txId, long fp, RowType rowType, byte[] rawKey,
-            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, E entry) throws Exception;
+            boolean hasValue, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, E entry) throws Exception;
     }
 
     public interface TxFpKeyValueEntryStream<E> {
 
         boolean stream(long txId, long fp, RowType rowType, byte[] prefix, byte[] key,
-            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, E entry) throws Exception;
+            boolean hasValue, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, E entry) throws Exception;
     }
 
     public static <E> boolean decompose(TxFpRawKeyValueEntries<E> keyEntries, TxFpKeyValueEntryStream<E> stream) throws Exception {
-        return keyEntries.consume((txId, fp, rowType, rawKey, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
-            return stream.stream(txId, fp, rowType, rawKeyPrefix(rawKey), rawKeyKey(rawKey), value, valueTimestamp, valueTombstoned, valueVersion, entry);
+        return keyEntries.consume((txId, fp, rowType, rawKey, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
+            return stream.stream(txId,
+                fp,
+                rowType,
+                rawKeyPrefix(rawKey),
+                rawKeyKey(rawKey),
+                hasValue,
+                value,
+                valueTimestamp,
+                valueTombstoned,
+                valueVersion,
+                entry);
         });
     }
 

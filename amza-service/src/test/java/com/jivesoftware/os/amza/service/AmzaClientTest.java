@@ -109,7 +109,7 @@ public class AmzaClientTest {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
-                            node.create(Consistency.quorum, partitionName, "memory_persistent", RowType.primary);
+                            node.create(Consistency.quorum, partitionName, "memory_persistent", -1, RowType.primary);
                             boolean tombstone = random.nextBoolean();
                             String prefix = "a";
                             String key = String.valueOf(random.nextInt(maxFields));

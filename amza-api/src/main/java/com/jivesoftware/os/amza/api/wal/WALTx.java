@@ -20,6 +20,7 @@ public interface WALTx {
     <I extends CompactableWALIndex> I openIndex(File baseKey,
         WALIndexProvider<I> walIndexProvider,
         VersionedPartitionName partitionName,
+        int maxValueSizeInIndex,
         int stripe) throws Exception;
 
     long length() throws Exception;

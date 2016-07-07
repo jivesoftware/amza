@@ -39,7 +39,7 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
-        return pointers.consume((txId, prefix, key, timestamp, tombstoned, version, fp) -> {
+        return pointers.consume((txId, prefix, key, value, timestamp, tombstoned, version, fp) -> {
             if (stream != null) {
                 if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, prefix, key, timestamp, tombstoned, version, fp)) {
                     return false;
@@ -51,18 +51,18 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception {
-        return stream.stream(prefix, key, -1, false, -1, -1);
+        return stream.stream(prefix, key, -1, false, -1, -1, false, null);
     }
 
     @Override
     public boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception {
-        return keys.consume((key) -> stream.stream(prefix, key, -1, false, -1, -1));
+        return keys.consume((key) -> stream.stream(prefix, key, -1, false, -1, -1, false, null));
     }
 
     @Override
     public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
-            -> stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1));
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
+            -> stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1));
     }
 
     @Override
@@ -78,7 +78,7 @@ public class NoOpWALIndex implements WALIndex {
     @Override
     public long deltaCount(WALKeyPointers keyPointers) throws Exception {
         long[] delta = new long[1];
-        boolean completed = keyPointers.consume((prefix, key, timestamp, tombstoned, version, fp) -> {
+        boolean completed = keyPointers.consume((prefix, key, timestamp, tombstoned, version, fp, hasValue, value) -> {
             if (!tombstoned) {
                 delta[0]++;
             }
@@ -90,7 +90,7 @@ public class NoOpWALIndex implements WALIndex {
         return delta[0];
     }
 
-//    @Override
+    //    @Override
 //    public long size() throws Exception {
 //        return 0;
 //    }

@@ -329,7 +329,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
 
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
-            (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
 
                     int o = 0;

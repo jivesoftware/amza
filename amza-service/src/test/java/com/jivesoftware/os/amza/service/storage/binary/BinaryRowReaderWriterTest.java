@@ -40,7 +40,7 @@ import org.testng.annotations.Test;
 public class BinaryRowReaderWriterTest {
 
     private final WALWriter.IndexableKeys indexableKeys = stream -> true;
-    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true;
+    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, fp) -> true;
 
     @Test
     public void testValidateDiskBacked() throws Exception {

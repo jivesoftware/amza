@@ -81,9 +81,9 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
                 long version = UIO.readLong(filer, "version", intLongBuffer);
                 byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
                 byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
-                return stream.stream(-1, fp, rowType, uncompress(rowType, pk), uncompress(rowType, value), timestamp, tombstone, version, row);
+                return stream.stream(-1, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
-            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row)
+            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
                 -> fpKeyValueStream.stream(fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
     }
 
@@ -98,9 +98,9 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
                 long version = UIO.readLong(filer, "version", intLongBuffer);
                 byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
                 byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
-                return stream.stream(txId, fp, rowType, uncompress(rowType, pk), uncompress(rowType, value), timestamp, tombstone, version, row);
+                return stream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
-            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row)
+            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
                 -> txKeyValueStream.stream(txId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
     }
 
@@ -115,9 +115,9 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
                 long version = UIO.readLong(filer, "version", intLongBuffer);
                 byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
                 byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
-                return stream.stream(txId, fp, rowType, uncompress(rowType, pk), uncompress(rowType, value), timestamp, tombstone, version, row);
+                return stream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
-            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row)
+            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
                 -> txKeyValueStream.row(txId, key, value, valueTimestamp, valueTombstoned, valueVersion));
     }
 
@@ -132,8 +132,8 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
                 long version = UIO.readLong(filer, "version", intLongBuffer);
                 byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
                 byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
-                return txFpRawKeyValueEntryStream.stream(txId, fp, rowType, uncompress(rowType, pk), uncompress(rowType, value), timestamp, tombstone, version,
-                    row);
+                return txFpRawKeyValueEntryStream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value),
+                    timestamp, tombstone, version, row);
             }),
             txFpKeyValueStream);
     }

@@ -58,7 +58,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        return partition.get(consistency, prefix, keys, (rowType, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+        return partition.get(consistency, prefix, keys, (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (valueTimestamp == -1 || valueTombstoned) {
                 return valuesStream.stream(prefix1, key, null, -1, -1);
             } else {

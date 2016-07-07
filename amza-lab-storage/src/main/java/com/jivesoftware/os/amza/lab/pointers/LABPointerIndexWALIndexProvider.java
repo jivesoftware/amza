@@ -126,13 +126,14 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
     }
 
     @Override
-    public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+    public LABPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxValueSizeInIndex, int stripe) throws Exception {
         int modulo = (int) (hash(versionedPartitionName.getPartitionVersion()) % 1024);
         LABPointerIndexWALIndexName indexName = new LABPointerIndexWALIndexName(modulo,
             Type.active,
             String.valueOf(versionedPartitionName.getPartitionVersion()));
         //TODO config flush interval
         return new LABPointerIndexWALIndex(name,
+            maxValueSizeInIndex,
             versionedPartitionName,
             environments,
             stripe,

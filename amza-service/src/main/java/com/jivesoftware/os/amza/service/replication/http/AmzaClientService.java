@@ -146,7 +146,7 @@ public class AmzaClientService implements AmzaRestClient {
                 }
                 return true;
             },
-            (rowType, prefix1, key, value, timestamp, tombstoned, version) -> {
+            (prefix1, key, value, timestamp, tombstoned, version) -> {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, prefix1, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, key, "key", intLongBuffer);

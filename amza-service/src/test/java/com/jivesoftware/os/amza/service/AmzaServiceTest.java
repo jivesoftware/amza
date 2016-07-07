@@ -26,6 +26,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -56,6 +57,7 @@ public class AmzaServiceTest {
         //String indexClassType = BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME;
         //String indexClassType = LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME;
         String indexClassType = "memory_persistent";
+        int maxValueSizeInIndex = -1;
 
         File createTempDir = Files.createTempDir();
         AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
@@ -68,6 +70,7 @@ public class AmzaServiceTest {
             maxNumberOfServices,
             new PartitionName(false, "test".getBytes(), "partition1".getBytes()),
             indexClassType,
+            maxValueSizeInIndex,
             RowType.primary,
             Consistency.quorum,
             Consistency.quorum);
@@ -76,6 +79,7 @@ public class AmzaServiceTest {
             maxNumberOfServices,
             new PartitionName(false, "test".getBytes(), "partition2".getBytes()),
             indexClassType,
+            maxValueSizeInIndex,
             RowType.snappy_primary,
             Consistency.quorum, Consistency.quorum);
 
@@ -126,13 +130,16 @@ public class AmzaServiceTest {
             maxNumberOfServices,
             new PartitionName(false, "test".getBytes(), "partition1".getBytes()),
             indexClassType,
+            maxValueSizeInIndex,
             RowType.primary,
             Consistency.quorum,
             Consistency.quorum);
 
-        testRowType(cluster, maxNumberOfServices,
+        testRowType(cluster,
+            maxNumberOfServices,
             new PartitionName(false, "test".getBytes(), "partition2".getBytes()),
             indexClassType,
+            maxValueSizeInIndex,
             RowType.snappy_primary,
             Consistency.quorum,
             Consistency.quorum);
@@ -237,6 +244,7 @@ public class AmzaServiceTest {
         int maxNumberOfServices,
         PartitionName partitionName,
         String indexClassType,
+        int maxValueSizeInIndex,
         RowType rowType,
         Consistency readConsistency,
         Consistency writeConsistency
@@ -298,7 +306,7 @@ public class AmzaServiceTest {
                 public Void call() throws Exception {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     if (node != null) {
-                        node.create(writeConsistency, partitionName, indexClassType, rowType);
+                        node.create(writeConsistency, partitionName, indexClassType, maxValueSizeInIndex, rowType);
                         boolean tombstone = random.nextBoolean();
                         String prefix = "a";
                         String key = String.valueOf(random.nextInt(maxFields));

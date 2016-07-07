@@ -358,7 +358,11 @@ public class AmzaTestCluster {
             asIfOverTheWire.shutdownNow();
         }
 
-        public void create(Consistency consistency, PartitionName partitionName, String indexClassName, RowType rowType) throws Exception {
+        public void create(Consistency consistency,
+            PartitionName partitionName,
+            String indexClassName,
+            int maxValueSizeInIndex,
+            RowType rowType) throws Exception {
             // TODO test other consistencies and durabilities and .... Hehe
             PartitionProperties properties = new PartitionProperties(Durability.fsync_never,
                 0, 0, 0, 0, 0, 0, 0, 0,
@@ -369,6 +373,7 @@ public class AmzaTestCluster {
                 false,
                 rowType,
                 indexClassName,
+                maxValueSizeInIndex,
                 null,
                 -1,
                 -1);
@@ -600,7 +605,7 @@ public class AmzaTestCluster {
                             byte[][] bvalue = new byte[1][];
                             long[] bversion = new long[1];
                             b.get(consistency, prefix, stream -> stream.stream(key),
-                                (rowType, _prefix, _key, value, timestamp, tombstoned, version) -> {
+                                (_prefix, _key, value, timestamp, tombstoned, version) -> {
                                     if (timestamp != -1 && !tombstoned) {
                                         btimestamp[0] = timestamp;
                                         bvalue[0] = value;

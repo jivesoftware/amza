@@ -52,11 +52,18 @@ public interface WALWriter {
 
     interface IndexableKeyStream {
 
-        boolean stream(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws Exception;
+        boolean stream(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws Exception;
     }
 
     interface TxKeyPointerFpStream {
 
-        boolean stream(long txId, byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, long fp) throws Exception;
+        boolean stream(long txId,
+            byte[] prefix,
+            byte[] key,
+            byte[] value,
+            long valueTimestamp,
+            boolean valueTombstoned,
+            long valueVersion,
+            long fp) throws Exception;
     }
 }

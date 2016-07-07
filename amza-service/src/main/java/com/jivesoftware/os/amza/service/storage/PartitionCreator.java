@@ -94,6 +94,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         false,
         RowType.primary,
         "memory_persistent",
+        8,
         null,
         -1,
         -1);
@@ -107,6 +108,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         false,
         RowType.primary,
         "memory_persistent",
+        8,
         null,
         Integer.MAX_VALUE,
         -1);
@@ -120,6 +122,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         false,
         RowType.primary,
         "memory_ephemeral",
+        8,
         null,
         16,
         4);
@@ -286,7 +289,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
     @Override
     public Iterable<PartitionName> getMemberPartitions(RingMembership ringMembership) throws Exception {
         List<PartitionName> partitionNames = Lists.newArrayList();
-        systemWALStorage.rowScan(REGION_INDEX, (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+        systemWALStorage.rowScan(REGION_INDEX, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned && valueTimestamp != -1 && value != null) {
                 PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                 if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName())) {
@@ -299,7 +302,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
     }
 
     public void streamAllParitions(PartitionPropertiesStream partitionStream) throws Exception {
-        systemWALStorage.rowScan(REGION_PROPERTIES, (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+        systemWALStorage.rowScan(REGION_PROPERTIES, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned) {
                 PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
                 PartitionProperties properties = partitionPropertyMarshaller.fromBytes(value);

@@ -40,10 +40,10 @@ public class DirectBufferCleaner {
     }
 
     static public void clean(ByteBuffer bb) {
-        if (available && directBufferClass.isAssignableFrom(bb.getClass())) {
+        if (available && cleanMethod != null && directBufferClass.isAssignableFrom(bb.getClass())) {
             try {
                 Object cleaner = directBufferCleanerMethod.invoke(bb);
-                if (cleanMethod != null) {
+                if (cleaner != null) {
                     cleanMethod.invoke(cleaner);
                 }
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {

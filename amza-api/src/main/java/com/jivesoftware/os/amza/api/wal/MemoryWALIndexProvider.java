@@ -20,8 +20,8 @@ public class MemoryWALIndexProvider implements WALIndexProvider<MemoryWALIndex> 
     }
 
     @Override
-    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
-        return new MemoryWALIndex(name, stripe);
+    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxValueSizeInIndex, int stripe) throws Exception {
+        return new MemoryWALIndex(name, maxValueSizeInIndex, stripe);
     }
 
     @Override

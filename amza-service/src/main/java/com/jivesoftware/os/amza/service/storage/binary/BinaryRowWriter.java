@@ -71,8 +71,8 @@ public class BinaryRowWriter implements WALWriter {
         }
 
         TLongIterator iter = offsets.iterator();
-        indexableKeys.consume((prefix, key, valueTimestamp, valueTombstones, valueVersion)
-            -> stream.stream(txId, prefix, key, valueTimestamp, valueTombstones, valueVersion, startFp + iter.next()));
+        indexableKeys.consume((prefix, key, value, valueTimestamp, valueTombstones, valueVersion)
+            -> stream.stream(txId, prefix, key, value, valueTimestamp, valueTombstones, valueVersion, startFp + iter.next()));
         return offsets.size();
     }
 
@@ -93,8 +93,8 @@ public class BinaryRowWriter implements WALWriter {
             1,
             row.length,
             stream -> stream.stream(row),
-            stream -> stream.stream(null, null, -1, false, -1),
-            (txId, prefix, key, valueTimestamp, valueTombstoned, valueVerion, fp) -> {
+            stream -> stream.stream(null, null, null, -1, false, -1),
+            (txId, prefix, key, value, valueTimestamp, valueTombstoned, valueVerion, fp) -> {
                 fps[0] = fp;
                 return true;
             },

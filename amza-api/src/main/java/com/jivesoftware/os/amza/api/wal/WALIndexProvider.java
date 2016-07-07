@@ -21,7 +21,7 @@ public interface WALIndexProvider<T> {
 
     String getName();
 
-    T createIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception;
+    T createIndex(VersionedPartitionName versionedPartitionName, int maxValueSizeInIndex, int stripe) throws Exception;
 
     void deleteIndex(VersionedPartitionName versionedPartitionName, int stripe) throws Exception;
 

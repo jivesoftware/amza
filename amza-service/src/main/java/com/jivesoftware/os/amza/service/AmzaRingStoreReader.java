@@ -138,7 +138,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                         from,
                         null,
                         WALKey.prefixUpperExclusive(from),
-                        (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                        (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                             if (!valueTombstone) {
                                 RingMember ringMember = keyToRingMember(key);
                                 return stream.stream(ringMember.toBytes());
@@ -146,7 +146,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                                 return true;
                             }
                         }),
-                    (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
                         if (ringMember.equals(rootRingMember)) {
                             rootMemberIndex[0] = orderedRing.size();
@@ -173,7 +173,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
 
-        nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+        nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
             if (value != null && !valueTombstoned) {
                 if (!stream.stream(new RingMemberAndHost(ringMember, RingHost.fromBytes(value)))) {
@@ -212,7 +212,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             from,
             null,
             WALKey.prefixUpperExclusive(from),
-            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (!valueTombstone) {
                     RingMember ringMember = keyToRingMember(key);
                     if (!ringMember.equals(rootRingMember)) {
@@ -237,7 +237,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             try {
                 ConcurrentBAHash<byte[]> ringNames = new ConcurrentBAHash<>(13, false, 1);
                 try {
-                    ringIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                    ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (!valueTombstone) {
                             int o = 0;
                             int ringNameLength = UIO.bytesInt(key, o);
@@ -283,7 +283,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
-        nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+        nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
                 RingHost ringHost = RingHost.fromBytes(value);
@@ -292,7 +292,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             return true;
         });
 
-        ringIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+        ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 int o = 0;
                 int ringNameLength = UIO.bytesInt(key, o);

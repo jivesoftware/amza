@@ -34,6 +34,7 @@ public class PartitionProperties {
     public RowType rowType = RowType.primary;
 
     public String indexClassName;
+    public int maxValueSizeInIndex = -1;
     public Map<String, String> indexProperties;
     public int updatesBetweenLeaps = -1;
     public int maxLeaps = -1;
@@ -57,6 +58,7 @@ public class PartitionProperties {
         boolean disabled,
         RowType rowType,
         String indexClassName,
+        int maxValueSizeInIndex,
         Map<String, String> indexProperties,
         int updatesBetweenLeaps,
         int maxLeaps) {
@@ -79,6 +81,7 @@ public class PartitionProperties {
         this.disabled = disabled;
         this.rowType = rowType;
         this.indexClassName = indexClassName;
+        this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.indexProperties = indexProperties;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
         this.maxLeaps = maxLeaps;
@@ -88,8 +91,8 @@ public class PartitionProperties {
     public PartitionProperties copy() {
         return new PartitionProperties(durability, tombstoneTimestampAgeInMillis, tombstoneTimestampIntervalMillis, tombstoneVersionAgeInMillis,
             tombstoneVersionIntervalMillis, ttlTimestampAgeInMillis, ttlTimestampIntervalMillis, ttlVersionAgeInMillis, ttlVersionIntervalMillis,
-            forceCompactionOnStartup, consistency, requireConsistency, replicated, disabled, rowType, indexClassName,
-            indexProperties == null ? indexProperties : Maps.newHashMap(indexProperties),
+            forceCompactionOnStartup, consistency, requireConsistency, replicated, disabled, rowType, indexClassName, maxValueSizeInIndex,
+            indexProperties == null ? null : Maps.newHashMap(indexProperties),
             updatesBetweenLeaps,
             maxLeaps);
     }
@@ -113,6 +116,7 @@ public class PartitionProperties {
             + ", disabled=" + disabled
             + ", rowType=" + rowType
             + ", indexClassName='" + indexClassName + '\''
+            + ", maxValueSizeInIndex=" + maxValueSizeInIndex
             + ", indexProperties=" + indexProperties
             + ", updatesBetweenLeaps=" + updatesBetweenLeaps
             + ", maxLeaps=" + maxLeaps

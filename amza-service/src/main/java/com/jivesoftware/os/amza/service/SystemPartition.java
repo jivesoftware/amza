@@ -122,7 +122,7 @@ public class SystemPartition implements Partition {
         for (ScanRange range : ranges) {
             if (range.fromKey == null && range.toKey == null) {
                 boolean result = systemWALStorage.rowScan(versionedPartitionName,
-                    (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
                         -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
                 if (!result) {
                     return false;
@@ -133,7 +133,7 @@ public class SystemPartition implements Partition {
                     range.fromKey,
                     range.toPrefix,
                     range.toKey,
-                    (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
+                    (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
                         -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
                 if (!result) {
                     return false;

@@ -81,7 +81,7 @@ public class PartitionStore implements RangeScannable {
         }
         boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
-        walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stripe);
+        walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, properties.maxValueSizeInIndex, stripe);
         if (properties.forceCompactionOnStartup) {
             compactTombstone(true, baseKey, baseKey, stripe,
                 (transitionToCompacted) -> {
@@ -166,6 +166,7 @@ public class PartitionStore implements RangeScannable {
                         tombstoneCompactVersion,
                         ttlCompactTimestamp,
                         ttlCompactVersion,
+                        properties.maxValueSizeInIndex,
                         stripe,
                         expectedEndOfMerge,
                         transitionToCompacted);

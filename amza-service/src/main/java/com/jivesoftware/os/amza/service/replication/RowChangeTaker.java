@@ -845,7 +845,7 @@ public class RowChangeTaker implements RowChanges {
                 }
 
                 primaryRowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(txId, rowFP, rowType, row),
-                    (rowTxId, fp, rowType2, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, _row) -> {
+                    (rowTxId, fp, rowType2, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, _row) -> {
                         streamed.incrementAndGet();
                         if (highWaterMark.longValue() < txId) {
                             highWaterMark.setValue(txId);

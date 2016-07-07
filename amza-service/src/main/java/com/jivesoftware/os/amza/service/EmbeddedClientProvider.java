@@ -58,7 +58,7 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
         public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
             // TODO impl quorum reads?
             partitionProvider.getPartition(partitionName).get(consistency, prefix, keys,
-                (rowType, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueTimestamp == -1 || valueTombstoned) {
                         return valuesStream.stream(prefix1, key, null, -1, -1);
                     } else {

@@ -158,7 +158,7 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (rowType, _prefix, _key, value, timestamp, tombstoned, version) -> {
+                (_prefix, _key, value, timestamp, tombstoned, version) -> {
                     if (timestamp != -1 && !tombstoned) {
                         got.add(new String(value, StandardCharsets.UTF_8));
                     }
@@ -211,6 +211,7 @@ public class AmzaEndpoints {
                 false,
                 RowType.primary,
                 indexClassName,
+                -1,
                 null,
                 -1,
                 -1));

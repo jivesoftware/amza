@@ -15,7 +15,6 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALPrefix;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
@@ -84,6 +83,15 @@ class PartitionDelta {
                         WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
                         if (got == null) {
                             return mergingKeyStream.stream(key);
+                        } else if (got.getHasValue()) {
+                            return fpKeyValueStream.stream(got.getFp(),
+                                null,
+                                prefix,
+                                key,
+                                got.getValue(),
+                                got.getTimestampId(),
+                                got.getTombstoned(),
+                                got.getVersion());
                         } else {
                             return fpStream.stream(got.getFp());
                         }
@@ -94,6 +102,15 @@ class PartitionDelta {
                     WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
                     if (got == null) {
                         return fpKeyValueStream.stream(-1, null, prefix, key, null, -1, false, -1);
+                    } else if (got.getHasValue()) {
+                        return fpKeyValueStream.stream(got.getFp(),
+                            null,
+                            prefix,
+                            key,
+                            got.getValue(),
+                            got.getTimestampId(),
+                            got.getTombstoned(),
+                            got.getVersion());
                     } else {
                         return fpStream.stream(got.getFp());
                     }
@@ -119,13 +136,13 @@ class PartitionDelta {
     }
 
     boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             WALPointer pointer = getPointer(prefix, key);
             if (pointer != null) {
-                return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion,
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion,
                     pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp());
             } else {
-                return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
             }
         });
     }
@@ -161,7 +178,7 @@ class PartitionDelta {
         boolean valueTombstone,
         long valueVersion) {
 
-        WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion);
+        WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion, false, null); //TODO store values in delta index?
         byte[] walKey = WALKey.compose(prefix, key);
         pointerIndex.put(walKey, pointer);
         orderedIndex.put(walKey, pointer);
@@ -188,7 +205,8 @@ class PartitionDelta {
                         pointer.getFp(),
                         null,
                         entry.getKey(),
-                        null,
+                        pointer.getHasValue(),
+                        pointer.getValue(),
                         pointer.getTimestampId(),
                         pointer.getTombstoned(),
                         pointer.getVersion(),
@@ -198,8 +216,8 @@ class PartitionDelta {
                 }
                 return true;
             },
-            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry)
-                -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
+            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, entry)
+                -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp, hasValue, value));
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
@@ -421,7 +439,7 @@ class PartitionDelta {
                                             + " for: " + versionedPartitionName);
                                     }
                                     if (pointer.getFp() == fp) {
-                                        if (!txFpRawKeyValueStream.stream(txId, fp, rowType, key, value, valueTimestamp, valueTombstone, valueVersion,
+                                        if (!txFpRawKeyValueStream.stream(txId, fp, rowType, key, true, value, valueTimestamp, valueTombstone, valueVersion,
                                             null)) {
                                             return false;
                                         }
@@ -431,7 +449,7 @@ class PartitionDelta {
                                     }
                                     return true;
                                 }),
-                            (_txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                            (_txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                                 if (!scan.row(txId, key, value, valueTimestamp, valueTombstoned, valueVersion)) {
                                     eos.setValue(true);
                                     return false;

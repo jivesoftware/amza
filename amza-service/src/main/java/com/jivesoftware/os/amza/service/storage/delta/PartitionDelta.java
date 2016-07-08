@@ -140,9 +140,9 @@ class PartitionDelta {
             WALPointer pointer = getPointer(prefix, key);
             if (pointer != null) {
                 return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion,
-                    pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp());
+                    pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp(), pointer.getHasValue(), pointer.getValue());
             } else {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1, false, null);
             }
         });
     }

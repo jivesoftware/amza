@@ -569,17 +569,17 @@ public class DeltaStripeWALStorage {
                     }
                     return true;
                 },
-                (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+                (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion, ptrTimestamp, ptrTombstoned, ptrVersion, ptrFp, ptrHasValue, ptrValue) -> {
                     WALKey walKey = new WALKey(prefix, key);
                     WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion);
-                    if (pointerFp == -1) {
+                    if (ptrFp == -1 && !ptrHasValue) {
                         apply.put(walKey, walValue);
-                    } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
+                    } else if (CompareTimestampVersions.compare(ptrTimestamp, ptrVersion, valueTimestamp, valueVersion) < 0) {
                         apply.put(walKey, walValue);
-                        WALTimestampId walTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
+                        WALTimestampId walTimestampId = new WALTimestampId(ptrTimestamp, ptrTombstoned);
                         KeyedTimestampId keyedTimestampId = new KeyedTimestampId(prefix, key, walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
                         clobbers.add(keyedTimestampId);
-                        if (valueTombstone && !pointerTombstoned) {
+                        if (valueTombstone && !ptrTombstoned) {
                             removes.add(keyedTimestampId);
                         }
                     } else {
@@ -786,26 +786,27 @@ public class DeltaStripeWALStorage {
         KeyValues keyValues,
         KeyValuePointerStream stream) throws Exception {
 
-        return storage.streamPointers((storageStream) -> {
-            PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
-            return partitionDelta.getPointers(keyValues,
-                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
-                    pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
-                    if (pointerFp == -1) {
-                        return storageStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
-                    } else {
-                        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
-                            pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp);
-                    }
-                });
-        }, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
-            if (pointerFp == -1) {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1);
-            } else {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
-                    pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp);
-            }
-        });
+        return storage.streamPointers(
+            (storageStream) -> {
+                PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
+                return partitionDelta.getPointers(keyValues,
+                    (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, pTimestamp, pTombstoned, pVersion, pFp, pHasValue, pValue) -> {
+                        if (pFp == -1 && !pHasValue) {
+                            return storageStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                        } else {
+                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
+                                pTimestamp, pTombstoned, pVersion, pFp, pHasValue, pValue);
+                        }
+                    });
+            },
+            (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, ptrTimestamp, ptrTombstoned, ptrVersion, ptrFp, ptrHasValue, ptrValue) -> {
+                if (ptrFp == -1 && !ptrHasValue) {
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1, false, null);
+                } else {
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
+                        ptrTimestamp, ptrTombstoned, ptrVersion, ptrFp, ptrHasValue, ptrValue);
+                }
+            });
 
     }
 

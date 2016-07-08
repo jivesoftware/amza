@@ -687,21 +687,21 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         }
                         return true;
                     },
-                    (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+                    (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pTimestamp, pTombstoned, pVersion, pFp, pHasValue, pValue) -> {
                         WALKey walKey = new WALKey(prefix, key);
                         WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion);
-                        if (pointerFp == -1) {
+                        if (pFp == -1 && !pHasValue) {
                             apply.put(walKey, walValue);
-                        } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
+                        } else if (CompareTimestampVersions.compare(pTimestamp, pVersion, valueTimestamp, valueVersion) < 0) {
                             apply.put(walKey, walValue);
-                            WALTimestampId currentTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
+                            WALTimestampId currentTimestampId = new WALTimestampId(pTimestamp, pTombstoned);
                             KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.prefix,
                                 walKey.key,
                                 currentTimestampId.getTimestampId(),
                                 currentTimestampId.getTombstoned());
                             if (generateRowsChanged) {
                                 clobbers.add(keyedTimestampId);
-                                if (valueTombstone && !pointerTombstoned) {
+                                if (valueTombstone && !pTombstoned) {
                                     removes.add(keyedTimestampId);
                                 }
                             }
@@ -902,7 +902,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }
             TimestampedValue[] values = new TimestampedValue[1];
             wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp, hasValue, value) -> {
-                if (fp != -1 && !tombstoned) {
+                if ((fp != -1 || hasValue) && !tombstoned) {
                     if (!hasValue) {
                         byte[] hydrateRowIndexValue = hydrateRowIndexValue(fp);
                         RowType rowType = RowType.fromByte(hydrateRowIndexValue[0]);
@@ -917,26 +917,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             releaseOne();
         }
     }
-//
-//    public WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
-//        acquireOne();
-//        try {
-//            WALIndex wali = walIndex.get();
-//            if (wali == null) {
-//                return null;
-//            }
-//            WALPointer[] pointer = new WALPointer[1];
-//            wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
-//                if (fp != -1 && !tombstoned) {
-//                    pointer[0] = new WALPointer(fp, timestamp, tombstoned, version);
-//                }
-//                return true;
-//            });
-//            return pointer[0];
-//        } finally {
-//            releaseOne();
-//        }
-//    }
 
     public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
@@ -944,7 +924,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             WALIndex wali = walIndex.get();
             return wali == null || wali.getPointers(prefix, keys,
                 (_prefix, key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp, pointerHasValue, pointerValue) -> {
-                    if (pointerFp != -1) {
+                    if (pointerFp != -1 || pointerHasValue) {
                         byte[] value;
                         if (pointerTombstoned) {
                             value = null;
@@ -983,7 +963,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         long largestTimestamp = getLargestTimestampForKeyStripe(prefix, key, keyHighwaterTimestamps);
                         if (valueTimestamp > largestTimestamp) {
-                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
+                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1, false, null);
                         } else {
                             return indexStream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                         }

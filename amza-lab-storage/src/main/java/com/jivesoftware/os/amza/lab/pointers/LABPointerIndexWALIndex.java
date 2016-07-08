@@ -8,7 +8,6 @@ import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.api.stream.KeyValues;
 import com.jivesoftware.os.amza.api.stream.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxFpStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointers;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -101,12 +100,6 @@ public class LABPointerIndexWALIndex implements WALIndex {
         return currentStripe;
     }
 
-    private boolean entryToWALPointer(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
-        long timestamp, boolean tombstoned, long version, long pointer,
-        KeyValuePointerStream stream) throws Exception {
-        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, pointer);
-    }
-
     @Override
     public String getProviderName() {
         return providerName;
@@ -184,17 +177,20 @@ public class LABPointerIndexWALIndex implements WALIndex {
         }
     }
 
-    private static byte PAYLOAD_NULL_VALUE = 0;
-    private static byte PAYLOAD_VALUE = 1;
+    private static byte PAYLOAD_NULL = -1;
+    private static byte PAYLOAD_NONNULL = -2;
 
     private byte[] toPayload(long fp, byte[] value) {
+        if (fp < 0) {
+            throw new IllegalArgumentException("Negative fp " + fp);
+        }
         int valueLength = (value == null) ? 0 : value.length;
         if (maxValueSizeInIndex >= 0 && maxValueSizeInIndex >= valueLength) {
-            byte[] payload = new byte[8 + 1 + (value == null ? 0 : value.length)];
-            UIO.longBytes(fp, payload, 0);
-            payload[8] = (value == null) ? PAYLOAD_NULL_VALUE : PAYLOAD_VALUE;
+            // leverage the fact that fp cannot be negative by using a negative leading byte
+            byte[] payload = new byte[1 + (value == null ? 0 : value.length)];
+            payload[0] = (value == null) ? PAYLOAD_NULL : PAYLOAD_NONNULL;
             if (value != null && value.length > 0) {
-                System.arraycopy(value, 0, payload, 8 + 1, value.length);
+                System.arraycopy(value, 0, payload, 1, value.length);
             }
             return payload;
         } else {
@@ -203,12 +199,12 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     private boolean fromPayload(long txId, long fp, byte[] payload, TxFpStream txFpStream) throws Exception {
-        if (payload != null && payload.length >= 8 + 1) {
-            if (payload[8] == PAYLOAD_NULL_VALUE) {
+        if (payload != null && payload[0] < 0) {
+            if (payload[0] == PAYLOAD_NULL) {
                 return txFpStream.stream(txId, fp, true, null);
-            } else if (payload[8] == PAYLOAD_VALUE) {
-                byte[] value = new byte[payload.length - (8 + 1)];
-                System.arraycopy(payload, 8 + 1, value, 0, value.length);
+            } else if (payload[0] == PAYLOAD_NONNULL) {
+                byte[] value = new byte[payload.length - 1];
+                System.arraycopy(payload, 1, value, 0, value.length);
                 return txFpStream.stream(txId, fp, true, value);
             }
         }
@@ -222,17 +218,45 @@ public class LABPointerIndexWALIndex implements WALIndex {
         long version,
         byte[] payload,
         WALKeyPointerStream stream) throws Exception {
-        long fp = (payload == null) ? -1 : UIO.bytesLong(payload);
-        if (payload != null && payload.length >= 8 + 1) {
-            if (payload[8] == PAYLOAD_NULL_VALUE) {
+        long fp = -1;
+        if (payload != null) {
+            if (payload[0] == PAYLOAD_NULL) {
                 return stream.stream(prefix, key, timestamp, tombstoned, version, fp, true, null);
-            } else if (payload[8] == PAYLOAD_VALUE) {
-                byte[] value = new byte[payload.length - 1 - 8];
-                System.arraycopy(payload, 8 + 1, value, 0, value.length);
+            } else if (payload[0] == PAYLOAD_NONNULL) {
+                byte[] value = new byte[payload.length - 1];
+                System.arraycopy(payload, 1, value, 0, value.length);
                 return stream.stream(prefix, key, timestamp, tombstoned, version, fp, true, value);
+            } else {
+                fp = UIO.bytesLong(payload);
             }
         }
         return stream.stream(prefix, key, timestamp, tombstoned, version, fp, false, null);
+    }
+
+    private boolean fromPayload(byte[] prefix,
+        byte[] key,
+        byte[] value,
+        long valueTimestamp,
+        boolean valueTombstoned,
+        long valueVersion,
+        long timestamp,
+        boolean tombstoned,
+        long version,
+        byte[] payload,
+        KeyValuePointerStream stream) throws Exception {
+        long fp = -1;
+        if (payload != null) {
+            if (payload[0] == PAYLOAD_NULL) {
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, true, null);
+            } else if (payload[0] == PAYLOAD_NONNULL) {
+                byte[] pointerValue = new byte[payload.length - 1];
+                System.arraycopy(payload, 1, pointerValue, 0, pointerValue.length);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, true, pointerValue);
+            } else {
+                fp = UIO.bytesLong(payload);
+            }
+        }
+        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, false, null);
     }
 
     @Override
@@ -294,8 +318,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get(pk, (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                    return entryToWALPointer(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
-                        timestamp, tombstoned, version, payload == null ? -1 : UIO.bytesLong(payload), stream);
+                    return fromPayload(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, payload, stream);
                 });
             });
         } finally {

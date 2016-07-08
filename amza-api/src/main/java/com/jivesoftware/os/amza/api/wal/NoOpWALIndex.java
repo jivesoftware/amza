@@ -62,7 +62,7 @@ public class NoOpWALIndex implements WALIndex {
     @Override
     public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
         return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
-            -> stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1));
+            -> stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1, false, null));
     }
 
     @Override

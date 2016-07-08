@@ -115,7 +115,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
         boolean tombstoned = (entryBytes[valueBytes.length + 8] == (byte) 1);
         long version = UIO.bytesLong(entryBytes, valueBytes.length + 8 + 1);
         return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version,
-            UIO.bytesLong(valueBytes));
+            UIO.bytesLong(valueBytes), false, null);
     }
 
     private long entryToTimestamp(byte[] entryBytes) throws Exception {
@@ -291,7 +291,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 if (status == OperationStatus.SUCCESS) {
                     return entryToWALPointer(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, dpPointerValue.getData(), stream);
                 } else {
-                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1);
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1, false, null);
                 }
             });
         } finally {

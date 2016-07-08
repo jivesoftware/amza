@@ -221,10 +221,10 @@ public class MemoryWALIndex implements WALIndex {
         WALPointer pointer,
         KeyValuePointerStream stream) throws Exception {
         if (pointer == null) {
-            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1);
+            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1, false, null);
         } else {
             return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
-                pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp());
+                pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp(), pointer.getHasValue(), pointer.getValue());
         }
     }
 

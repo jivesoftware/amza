@@ -15,6 +15,8 @@ public interface KeyValuePointerStream {
         long pointerTimestamp,
         boolean pointerTombstoned,
         long pointerVersion,
-        long pointerFp) throws Exception;
+        long pointerFp,
+        boolean pointerHasValue,
+        byte[] pointerValue) throws Exception;
 
 }

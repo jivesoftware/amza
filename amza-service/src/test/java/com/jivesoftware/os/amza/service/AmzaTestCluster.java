@@ -250,6 +250,7 @@ public class AmzaTestCluster {
             sickPartitions,
             localRingMember,
             localRingHost,
+            Collections.emptySet(),
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,

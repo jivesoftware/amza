@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
@@ -52,7 +53,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
@@ -226,7 +226,8 @@ public class DeltaStripeWALStorageNGTest {
             member,
             new ConcurrentBAHash<>(13, true, 4),
             new ConcurrentBAHash<>(13, true, 4),
-            new AtomicLong());
+            new AtomicLong(),
+            ImmutableSet.of());
         ringStoreReader.start(partitionIndex);
     }
 

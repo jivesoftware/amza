@@ -158,6 +158,7 @@ public class Main {
             sickPartitions,
             ringMember,
             ringHost,
+            Collections.emptySet(),
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,

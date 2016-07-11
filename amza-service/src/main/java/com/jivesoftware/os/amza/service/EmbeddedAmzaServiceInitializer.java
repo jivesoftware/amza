@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.service.take.RowsTakerFactory;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import java.util.Set;
 
 /**
  *
@@ -29,6 +30,7 @@ public class EmbeddedAmzaServiceInitializer {
         SickPartitions sickPartitions,
         RingMember ringMember,
         RingHost ringHost,
+        Set<RingMember> blacklistRingMembers,
         TimestampedOrderIdProvider orderIdProvider,
         IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
@@ -50,6 +52,7 @@ public class EmbeddedAmzaServiceInitializer {
             highwaterRowMarshaller,
             ringMember,
             ringHost,
+            blacklistRingMembers,
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,

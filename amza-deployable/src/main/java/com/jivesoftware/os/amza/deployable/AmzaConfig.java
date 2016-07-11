@@ -49,4 +49,7 @@ public interface AmzaConfig extends Config {
 
     @IntDefault(1_000_000)
     int getMaxUpdatesBeforeDeltaStripeCompaction();
+
+    @StringDefault("")
+    String getBlacklistRingMembers();
 }

@@ -15,12 +15,12 @@ import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.InstanceDescriptor;
 import com.jivesoftware.os.routing.bird.shared.TenantRoutingProvider;
 import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescriptorProvider;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RoutingBirdAmzaDiscovery implements Runnable {
@@ -33,12 +33,18 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
     private final String serviceName;
     private final AmzaService amzaService;
     private final long discoveryIntervalMillis;
+    private final Set<RingMember> blacklistRingMembers;
 
-    public RoutingBirdAmzaDiscovery(Deployable deployable, String serviceName, AmzaService amzaService, long discoveryIntervalMillis) {
+    public RoutingBirdAmzaDiscovery(Deployable deployable,
+        String serviceName,
+        AmzaService amzaService,
+        long discoveryIntervalMillis,
+        Set<RingMember> blacklistRingMembers) {
         this.deployable = deployable;
         this.serviceName = serviceName;
         this.amzaService = amzaService;
         this.discoveryIntervalMillis = discoveryIntervalMillis;
+        this.blacklistRingMembers = blacklistRingMembers;
     }
 
     public void start() {
@@ -61,13 +67,15 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
                 RingMember routingRingMember = new RingMember(
                     Strings.padStart(String.valueOf(routingInstanceDescriptor.instanceName), 5, '0') + "_" + routingInstanceDescriptor.instanceKey);
 
-                HostPort hostPort = connectionDescriptor.getHostPort();
-                InstanceDescriptor instanceDescriptor = connectionDescriptor.getInstanceDescriptor();
-                AmzaRingStoreWriter ringWriter = amzaService.getRingWriter();
-                ringWriter.register(routingRingMember, new RingHost(instanceDescriptor.datacenter,
-                    instanceDescriptor.rack,
-                    hostPort.getHost(),
-                    hostPort.getPort()), -1);
+                if (!blacklistRingMembers.contains(routingRingMember)) {
+                    HostPort hostPort = connectionDescriptor.getHostPort();
+                    InstanceDescriptor instanceDescriptor = connectionDescriptor.getInstanceDescriptor();
+                    AmzaRingStoreWriter ringWriter = amzaService.getRingWriter();
+                    ringWriter.register(routingRingMember, new RingHost(instanceDescriptor.datacenter,
+                        instanceDescriptor.rack,
+                        hostPort.getHost(),
+                        hostPort.getPort()), -1);
+                }
             }
         } catch (Exception x) {
             LOG.warn("Failed while calling routing bird discovery.", x);

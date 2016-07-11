@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
@@ -78,6 +79,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -129,6 +131,7 @@ public class AmzaServiceInitializer {
         public long interruptBlockingReadsIfLingersForNMillis = 60_000;
 
         public boolean rackDistributionEnabled = true;
+        public String blacklistRingMembers = null;
     }
 
     public interface IndexProviderRegistryCallback {
@@ -149,6 +152,7 @@ public class AmzaServiceInitializer {
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         RingMember ringMember,
         RingHost ringHost,
+        Set<RingMember> blacklistRingMembers,
         TimestampedOrderIdProvider orderIdProvider,
         IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
@@ -244,7 +248,8 @@ public class AmzaServiceInitializer {
             ringMember,
             ringsCache,
             ringMemberRingNamesCache,
-            nodeCacheId);
+            nodeCacheId,
+            ImmutableSet.copyOf(blacklistRingMembers));
 
         AwaitNotify<PartitionName> awaitOnline = new AwaitNotify<>(config.awaitOnlineStripingLevel);
 
@@ -418,7 +423,7 @@ public class AmzaServiceInitializer {
                 } catch (PropertiesNotPresentException x) {
                     LOG.warn("Skipped system ready init for a partition because its properties were missing: {}", partitionName);
                 } catch (Exception x) {
-                    LOG.error("Failed system ready init for a partition, please fix: {}", new Object[]{partitionName}, x);
+                    LOG.error("Failed system ready init for a partition, please fix: {}", new Object[] { partitionName }, x);
                 }
             }
             LOG.info("Finished loading {} highest txIds after system ready!", count);

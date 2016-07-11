@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -83,6 +85,7 @@ import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.LongDefault;
@@ -225,6 +228,17 @@ public class AmzaMain {
 
             LABPointerIndexConfig labConfig = deployable.config(LABPointerIndexConfig.class);
 
+            String blacklist = amzaConfig.getBlacklistRingMembers();
+            Set<RingMember> blacklistRingMembers = Sets.newHashSet();
+            for (String b : blacklist != null ? blacklist.split("\\s*,\\s*") : new String[0]) {
+                if (b != null) {
+                    b = b.trim();
+                    if (!b.isEmpty()) {
+                        blacklistRingMembers.add(new RingMember(b));
+                    }
+                }
+            }
+
             AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
                 interner,
                 amzaStats,
@@ -232,6 +246,7 @@ public class AmzaMain {
                 sickPartitions,
                 ringMember,
                 ringHost,
+                blacklistRingMembers,
                 orderIdProvider,
                 idPacker,
                 partitionPropertyMarshaller,
@@ -318,7 +333,8 @@ public class AmzaMain {
             RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
                 instanceConfig.getServiceName(),
                 amzaService,
-                amzaConfig.getDiscoveryIntervalMillis());
+                amzaConfig.getDiscoveryIntervalMillis(),
+                blacklistRingMembers);
 
             amzaService.start(ringMember, ringHost);
 

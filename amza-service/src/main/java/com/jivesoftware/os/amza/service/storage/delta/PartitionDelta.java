@@ -41,6 +41,7 @@ class PartitionDelta {
 
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
+    private final int maxValueSizeInIndex;
     final AtomicReference<PartitionDelta> merging;
 
     private final ConcurrentBAHash<WALPointer> pointerIndex = new ConcurrentBAHash<>(3, true, 4);
@@ -51,9 +52,11 @@ class PartitionDelta {
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,
         DeltaWAL deltaWAL,
+        int maxValueSizeInIndex,
         PartitionDelta merging) {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
+        this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.merging = new AtomicReference<>(merging);
     }
 
@@ -174,11 +177,18 @@ class PartitionDelta {
     void put(long fp,
         byte[] prefix,
         byte[] key,
+        byte[] value,
         long valueTimestamp,
         boolean valueTombstone,
         long valueVersion) {
 
-        WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion, false, null); //TODO store values in delta index?
+        WALPointer pointer;
+        int valueLength = (value == null) ? 0 : value.length;
+        if (maxValueSizeInIndex >= 0 && maxValueSizeInIndex >= valueLength) {
+            pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion, true, value);
+        } else {
+            pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion, false, null);
+        }
         byte[] walKey = WALKey.compose(prefix, key);
         pointerIndex.put(walKey, pointer);
         orderedIndex.put(walKey, pointer);

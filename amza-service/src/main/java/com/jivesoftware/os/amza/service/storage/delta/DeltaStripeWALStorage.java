@@ -87,14 +87,16 @@ public class DeltaStripeWALStorage {
     private final SickThreads sickThreads;
     private final AmzaRingReader ringReader;
     private final DeltaWALFactory deltaWALFactory;
+    private final int maxValueSizeInIndex;
     private final WALIndexProviderRegistry walIndexProviderRegistry;
-    private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
-    private final Object awakeCompactionsLock = new Object();
     private final long mergeAfterNUpdates;
+    private final ExecutorService mergeDeltaThreads;
+
+    private final Object awakeCompactionsLock = new Object();
+    private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
-    private final ExecutorService mergeDeltaThreads;
     private final AtomicLong updateSinceLastMerge = new AtomicLong();
     private final AtomicLong merging = new AtomicLong(0);
 
@@ -119,6 +121,7 @@ public class DeltaStripeWALStorage {
         SickThreads sickThreads,
         AmzaRingReader ringReader,
         DeltaWALFactory deltaWALFactory,
+        int maxValueSizeInIndex,
         WALIndexProviderRegistry walIndexProviderRegistry,
         long mergeAfterNUpdates,
         int mergeDeltaThreads) {
@@ -130,6 +133,7 @@ public class DeltaStripeWALStorage {
         this.sickThreads = sickThreads;
         this.ringReader = ringReader;
         this.deltaWALFactory = deltaWALFactory;
+        this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
         this.mergeDeltaThreads = Executors.newFixedThreadPool(mergeDeltaThreads,
@@ -241,7 +245,7 @@ public class DeltaStripeWALStorage {
                             try {
                                 PartitionDelta delta = getPartitionDelta(versionedPartitionName);
                                 // delta is pristine, no need to check timestamps and versions
-                                delta.put(fp, prefix, key, valueTimestamp, valueTombstoned, valueVersion);
+                                delta.put(fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                                 delta.onLoadAppendTxFp(prefix, txId, fp);
                                 updateSinceLastMerge.incrementAndGet();
                                 return true;
@@ -294,7 +298,8 @@ public class DeltaStripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            partitionDelta = partitionDeltas.computeIfAbsent(versionedPartitionName, (t) -> new PartitionDelta(versionedPartitionName, wal, null));
+            partitionDelta = partitionDeltas.computeIfAbsent(versionedPartitionName,
+                vpn -> new PartitionDelta(versionedPartitionName, wal, maxValueSizeInIndex, null));
         }
         return partitionDelta;
     }
@@ -365,7 +370,7 @@ public class DeltaStripeWALStorage {
                     PartitionDelta mergeableDelta = entry.getValue();
                     long mergeableCount = mergeableDelta.size();
                     unmerged.addAndGet(mergeableCount);
-                    PartitionDelta currentDelta = new PartitionDelta(versionedPartitionName, newDeltaWAL, mergeableDelta);
+                    PartitionDelta currentDelta = new PartitionDelta(versionedPartitionName, newDeltaWAL, maxValueSizeInIndex, mergeableDelta);
                     entry.setValue(currentDelta);
                     mergeable.incrementAndGet();
                     futures.add(mergeDeltaThreads.submit(() -> {
@@ -621,6 +626,7 @@ public class DeltaStripeWALStorage {
                         delta.put(fp,
                             keyValueHighwater.prefix,
                             keyValueHighwater.key,
+                            keyValueHighwater.value,
                             keyValueHighwater.valueTimestamp,
                             keyValueHighwater.valueTombstone,
                             keyValueHighwater.valueVersion);

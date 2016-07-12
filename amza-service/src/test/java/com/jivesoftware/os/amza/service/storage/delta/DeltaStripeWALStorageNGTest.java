@@ -240,6 +240,7 @@ public class DeltaStripeWALStorageNGTest {
             new SickThreads(),
             ringStoreReader,
             deltaWALFactory,
+            8,
             walIndexProviderRegistry,
             20_000, 8);
         delta.load(partitionIndex, partitionCreator, currentVersionProvider, primaryRowMarshaller);

@@ -105,6 +105,7 @@ public class AmzaServiceInitializer {
 
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
+        public int deltaMaxValueSizeInIndex = 8;
 
         public int ackWatersStripingLevel = 1024;
         public int awaitOnlineStripingLevel = 1024;
@@ -277,6 +278,7 @@ public class AmzaServiceInitializer {
                 sickThreads,
                 ringStoreReader,
                 deltaWALFactory,
+                config.deltaMaxValueSizeInIndex,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction,
                 numProc);

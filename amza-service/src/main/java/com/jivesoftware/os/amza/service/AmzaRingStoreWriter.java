@@ -108,8 +108,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     }
 
     @Override
-    public void register(RingMember ringMember, RingHost ringHost, long timestampId) throws Exception {
-        TimestampedValue registeredHost = systemWALStorage.getTimestampedValue(PartitionCreator.NODE_INDEX, null, ringMember.toBytes());
+    public void register(RingMember ringMember, RingHost ringHost, long timestampId, boolean force) throws Exception {
+        TimestampedValue registeredHost = force ? null : systemWALStorage.getTimestampedValue(PartitionCreator.NODE_INDEX, null, ringMember.toBytes());
         if (registeredHost == null || !ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             long version = orderIdProvider.nextId();
             long timestamp = (timestampId == -1) ? version : timestampId;

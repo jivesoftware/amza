@@ -285,10 +285,11 @@ public class AmzaTestCluster {
                 TimestampedRingHost lastTimestampedRingHost = lastAmzaService.getRingReader().getRingHost();
                 amzaService.getRingWriter().register(lastAmzaService.getRingReader().getRingMember(),
                     lastTimestampedRingHost.ringHost,
-                    lastTimestampedRingHost.timestampId);
+                    lastTimestampedRingHost.timestampId,
+                    false);
                 amzaService.getRingWriter().addRingMember("test".getBytes(), lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
 
-                lastAmzaService.getRingWriter().register(localRingMember, localRingHost, timestampedRingHost.timestampId);
+                lastAmzaService.getRingWriter().register(localRingMember, localRingHost, timestampedRingHost.timestampId, false);
                 lastAmzaService.getRingWriter().addRingMember("test".getBytes(), localRingMember); // ?? Hacky
             }
             lastAmzaService = amzaService;

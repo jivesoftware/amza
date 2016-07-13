@@ -112,11 +112,11 @@ public class AmzaDiscovery {
                                 RingMemberAndHost entry = Iterables.find(ring.entries, input -> input.ringMember.equals(ringMember));
                                 if (entry == null) {
                                     LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
-                                    ringStoreWriter.register(ringMember, anotherRingHost, timestampId);
+                                    ringStoreWriter.register(ringMember, anotherRingHost, timestampId, false);
                                     allMemberSeen.add(ringMember);
                                 } else if (!entry.ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
-                                    ringStoreWriter.register(ringMember, anotherRingHost, timestampId);
+                                    ringStoreWriter.register(ringMember, anotherRingHost, timestampId, false);
                                     allMemberSeen.add(ringMember);
                                 }
                             }

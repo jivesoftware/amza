@@ -64,7 +64,7 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
                 AmzaClusterPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    ringWriter.register(new RingMember(input.member), new RingHost("", "", input.host, input.port), 0);
+                    ringWriter.register(new RingMember(input.member), new RingHost("", "", input.host, input.port), -1);
                 } else if (input.action.equals("remove")) {
                     ringWriter.deregister(new RingMember(input.member));
                 }

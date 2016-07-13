@@ -74,7 +74,8 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
                     ringWriter.register(routingRingMember, new RingHost(instanceDescriptor.datacenter,
                         instanceDescriptor.rack,
                         hostPort.getHost(),
-                        hostPort.getPort()), -1);
+                        hostPort.getPort()),
+                        -1);
                 }
             }
         } catch (Exception x) {

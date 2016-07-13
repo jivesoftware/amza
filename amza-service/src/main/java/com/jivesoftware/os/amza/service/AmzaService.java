@@ -205,7 +205,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         partitionStripeProvider.load();
 
-        ringStoreWriter.register(ringMember, ringHost, -1);
+        ringStoreWriter.register(ringMember, ringHost, -1, true);
 
         partitionStripeProvider.start();
         changeTaker.start();
@@ -484,7 +484,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         long takeSessionId,
         long heartbeatIntervalMillis) throws Exception {
 
-        ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId);
+        ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId, false);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(out));
@@ -532,7 +532,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         AvailableStream availableStream,
         Callable<Void> deliverCallback,
         Callable<Void> pingCallback) throws Exception {
-        ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId);
+        ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId, false);
         takeCoordinator.availableRowsStream(system,
             ringStoreReader,
             partitionStripeProvider,

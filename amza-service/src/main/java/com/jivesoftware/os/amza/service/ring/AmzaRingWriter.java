@@ -14,7 +14,7 @@ public interface AmzaRingWriter {
 
     void deregister(RingMember ringMember) throws Exception;
 
-    void register(RingMember ringMember, RingHost ringHost, long timestampId) throws Exception;
+    void register(RingMember ringMember, RingHost ringHost, long timestampId, boolean force) throws Exception;
 
     void addRingMember(byte[] ringName, RingMember ringMember) throws Exception;
 

@@ -273,7 +273,7 @@ public class Main {
                         RingHost peerRingHost = new RingHost("unknown", "unknown", peerHostname, Integer.parseInt(peerPort));
 
                         System.out.println("|     Adding ringMember:" + peerRingMember + " on host:" + peerRingHost + " to cluster: " + clusterName);
-                        amzaService.getRingWriter().register(peerRingMember, peerRingHost, writerId);
+                        amzaService.getRingWriter().register(peerRingMember, peerRingHost, writerId, false);
                     }
                 }
                 System.out.println("-----------------------------------------------------------------------");

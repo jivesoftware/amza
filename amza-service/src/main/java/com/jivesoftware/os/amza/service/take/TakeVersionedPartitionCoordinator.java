@@ -6,9 +6,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.NotARingMemberException;
-import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
-import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
@@ -24,6 +21,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -47,6 +45,7 @@ public class TakeVersionedPartitionCoordinator {
     volatile long callCount;
 
     private final ConcurrentMap<RingMember, Session> sessions = Maps.newConcurrentMap();
+    private final AtomicBoolean isInBootstrap = new AtomicBoolean(true);
 
     private long lastOfferedMillis = -1; // approximate is good enough
     private long lastTakenMillis = -1; // approximate is good enough
@@ -168,13 +167,18 @@ public class TakeVersionedPartitionCoordinator {
         boolean takerIsOnline,
         AvailableStream availableStream) throws Exception {
 
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+        if (isInBootstrap.get()) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            if (livelyEndState.getCurrentState() != State.bootstrap) {
+                isInBootstrap.set(false);
+            }
+        }
 
         Integer category = versionedRing.getCategory(ringMember);
         boolean isSystemPartition = versionedPartitionName.getPartitionName().isSystemPartition();
         boolean isSufficientCategory = category != null && category <= currentCategory.get();
         if (!takerIsOnline
-            || livelyEndState.getCurrentState() == State.bootstrap //TODO consider removing this check
+            || isInBootstrap.get()
             || isSystemPartition
             || isSufficientCategory) {
 

@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.jive.utils.collections.bah.BAHasher;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -246,7 +247,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         long currentMemberCacheId = cacheIdRingSet.currentCacheId;
         if (ringSet == null || ringSet.memberCacheId != currentMemberCacheId) {
             try {
-                ConcurrentBAHash<byte[]> ringNames = new ConcurrentBAHash<>(13, false, 1);
+                ConcurrentBAHash<Integer> ringNames = new ConcurrentBAHash<>(13, true, 1);
                 try {
                     ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (!valueTombstone) {
@@ -260,7 +261,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             o += 4;
                             RingMember ringMember = RingMember.fromBytes(key, o, ringMemberLength, interner);
                             if (ringMember != null && ringMember.equals(desiredRingMember)) {
-                                ringNames.put(ringName, ringName);
+                                ringNames.put(ringName, BAHasher.SINGLETON.hashCode(ringName, 0, ringName.length));
                             }
                         }
                         return true;
@@ -275,7 +276,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                 throw new RuntimeException(e);
             }
         }
-        ringSet.ringNames.stream((key, value) -> ringNameStream.stream(key));
+        ringSet.ringNames.stream(ringNameStream::stream);
     }
 
     @Override

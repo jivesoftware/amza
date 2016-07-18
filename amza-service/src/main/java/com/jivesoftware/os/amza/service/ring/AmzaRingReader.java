@@ -32,6 +32,6 @@ public interface AmzaRingReader {
 
     interface RingNameStream {
 
-        boolean stream(byte[] ringName) throws Exception;
+        boolean stream(byte[] ringName, int ringHash) throws Exception;
     }
 }

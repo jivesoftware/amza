@@ -158,7 +158,7 @@ public class TakeCoordinator {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName);
-        ensureRingCoordinator(null, ringName, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
+        ensureRingCoordinator(ringName, null, -1, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(ring);
     }
@@ -223,8 +223,8 @@ public class TakeCoordinator {
         RingTopology get();
     }
 
-    private TakeRingCoordinator ensureRingCoordinator(BAHash<TakeRingCoordinator> stackCache, byte[] ringName, RingSupplier ringSupplier) {
-        TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringName, 0, ringName.length);
+    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, BAHash<TakeRingCoordinator> stackCache, int ringHash, RingSupplier ringSupplier) {
+        TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringHash, ringName, 0, ringName.length);
         if (ringCoordinator == null) {
             ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
                 key -> new TakeRingCoordinator(systemWALStorage,
@@ -238,7 +238,7 @@ public class TakeCoordinator {
                     reofferDeltaMillis,
                     ringSupplier.get()));
             if (stackCache != null) {
-                stackCache.put(ringName, ringCoordinator);
+                stackCache.put(ringHash, ringName, ringCoordinator);
             }
         }
         return ringCoordinator;
@@ -274,6 +274,7 @@ public class TakeCoordinator {
             amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
         };
 
+        int systemRingHash = BAHasher.SINGLETON.hashCode(AmzaRingReader.SYSTEM_RING, 0, AmzaRingReader.SYSTEM_RING.length);
         BAHash<TakeRingCoordinator> stackCache = new BAHash<>(
             new BAHMapState<>(takeRingCoordinators.size() * 2, true, BAHMapState.NIL),
             BAHasher.SINGLETON,
@@ -283,12 +284,12 @@ public class TakeCoordinator {
 
             long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
 
-            RingNameStream ringNameStream = (ringName) -> {
+            RingNameStream ringNameStream = (ringName, ringHash) -> {
                 if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
                     return true;
                 }
 
-                TakeRingCoordinator ring = ensureRingCoordinator(stackCache, ringName, () -> {
+                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> {
                     try {
                         return ringReader.getRing(ringName);
                     } catch (Exception e) {
@@ -306,7 +307,7 @@ public class TakeCoordinator {
             };
 
             if (system) {
-                ringNameStream.stream(AmzaRingReader.SYSTEM_RING);
+                ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
             } else {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }

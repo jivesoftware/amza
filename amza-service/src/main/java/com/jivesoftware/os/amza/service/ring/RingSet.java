@@ -8,9 +8,9 @@ import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 public class RingSet {
 
     public final long memberCacheId;
-    public final ConcurrentBAHash<byte[]> ringNames;
+    public final ConcurrentBAHash<Integer> ringNames;
 
-    public RingSet(long memberCacheId, ConcurrentBAHash<byte[]> ringNames) {
+    public RingSet(long memberCacheId, ConcurrentBAHash<Integer> ringNames) {
         this.memberCacheId = memberCacheId;
         this.ringNames = ringNames;
     }

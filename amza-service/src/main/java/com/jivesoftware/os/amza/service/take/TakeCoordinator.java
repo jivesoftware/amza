@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.take;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -279,38 +280,46 @@ public class TakeCoordinator {
             new BAHMapState<>(takeRingCoordinators.size() * 2, true, BAHMapState.NIL),
             BAHasher.SINGLETON,
             BAHEqualer.SINGLETON);
+
+        long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
+
+        RingNameStream ringNameStream = (ringName, ringHash) -> {
+            if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
+                return true;
+            }
+
+            TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> {
+                try {
+                    return ringReader.getRing(ringName);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            if (ring != null) {
+                suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
+                    ring.availableRowsStream(partitionStripeProvider,
+                        remoteRingMember,
+                        takeSessionId,
+                        watchAvailableStream));
+            }
+            return true;
+        };
+
+
         while (true) {
             long start = updates.get();
 
-            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
-
-            RingNameStream ringNameStream = (ringName, ringHash) -> {
-                if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
-                    return true;
-                }
-
-                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> {
-                    try {
-                        return ringReader.getRing(ringName);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-                if (ring != null) {
-                    suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(partitionStripeProvider,
-                            remoteRingMember,
-                            takeSessionId,
-                            watchAvailableStream));
-                }
-                return true;
-            };
+            suggestedWaitInMillis[0] = Long.MAX_VALUE;
 
             if (system) {
                 ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
             } else {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }
+
+            int offerPower = UIO.chunkPower(offered.longValue(), 0);
+            LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">count", 1);
+            LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
 
             if (offered.longValue() == 0) {
                 pingCallback.call(); // Ping aka keep the socket alive

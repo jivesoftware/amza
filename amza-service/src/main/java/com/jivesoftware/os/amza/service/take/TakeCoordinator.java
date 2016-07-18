@@ -14,6 +14,11 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.jive.utils.collections.bah.BAHEqualer;
+import com.jivesoftware.os.jive.utils.collections.bah.BAHMapState;
+import com.jivesoftware.os.jive.utils.collections.bah.BAHState;
+import com.jivesoftware.os.jive.utils.collections.bah.BAHash;
+import com.jivesoftware.os.jive.utils.collections.bah.BAHasher;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -153,7 +158,7 @@ public class TakeCoordinator {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName);
-        ensureRingCoordinator(ringName, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
+        ensureRingCoordinator(null, ringName, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(ring);
     }
@@ -218,18 +223,25 @@ public class TakeCoordinator {
         RingTopology get();
     }
 
-    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, RingSupplier ringSupplier) {
-        return takeRingCoordinators.computeIfAbsent(ringName,
-            key -> new TakeRingCoordinator(systemWALStorage,
-                rootMember,
-                key,
-                timestampedOrderIdProvider,
-                idPacker,
-                versionedPartitionProvider,
-                systemReofferDeltaMillis,
-                slowTakeInMillis,
-                reofferDeltaMillis,
-                ringSupplier.get()));
+    private TakeRingCoordinator ensureRingCoordinator(BAHash<TakeRingCoordinator> stackCache, byte[] ringName, RingSupplier ringSupplier) {
+        TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringName, 0, ringName.length);
+        if (ringCoordinator == null) {
+            ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
+                key -> new TakeRingCoordinator(systemWALStorage,
+                    rootMember,
+                    key,
+                    timestampedOrderIdProvider,
+                    idPacker,
+                    versionedPartitionProvider,
+                    systemReofferDeltaMillis,
+                    slowTakeInMillis,
+                    reofferDeltaMillis,
+                    ringSupplier.get()));
+            if (stackCache != null) {
+                stackCache.put(ringName, ringCoordinator);
+            }
+        }
+        return ringCoordinator;
     }
 
     private static final Function<RingMember, Object> LOCK_CREATOR = (key) -> new Object();
@@ -262,6 +274,10 @@ public class TakeCoordinator {
             amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
         };
 
+        BAHash<TakeRingCoordinator> stackCache = new BAHash<>(
+            new BAHMapState<>(takeRingCoordinators.size() * 2, true, BAHMapState.NIL),
+            BAHasher.SINGLETON,
+            BAHEqualer.SINGLETON);
         while (true) {
             long start = updates.get();
 
@@ -272,7 +288,7 @@ public class TakeCoordinator {
                     return true;
                 }
 
-                TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
+                TakeRingCoordinator ring = ensureRingCoordinator(stackCache, ringName, () -> {
                     try {
                         return ringReader.getRing(ringName);
                     } catch (Exception e) {

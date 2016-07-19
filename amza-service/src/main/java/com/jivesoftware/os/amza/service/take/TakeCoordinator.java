@@ -50,7 +50,8 @@ public class TakeCoordinator {
     private final VersionedPartitionProvider versionedPartitionProvider;
 
     private final ConcurrentBAHash<TakeRingCoordinator> takeRingCoordinators = new ConcurrentBAHash<>(13, true, 128);
-    private final ConcurrentHashMap<RingMember, Object> ringMembersLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, Object> stripedRingMembersLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, Object> systemRingMembersLocks = new ConcurrentHashMap<>();
     private final AtomicLong updates = new AtomicLong();
     private final AtomicLong cyaLock = new AtomicLong();
     private final long cyaIntervalMillis;
@@ -111,7 +112,9 @@ public class TakeCoordinator {
                         takeRingCoordinators.stream((ringName, takeRingCoordinator) -> {
                             RingTopology ring = ringReader.getRing(ringName);
                             if (takeRingCoordinator.cya(ring)) {
-                                awakeRemoteTakers(ring);
+                                // whatever
+                                awakeRemoteTakers(ring, true);
+                                awakeRemoteTakers(ring, false);
                             }
                             return true;
                         });
@@ -161,7 +164,7 @@ public class TakeCoordinator {
         RingTopology ring = ringReader.getRing(ringName);
         ensureRingCoordinator(ringName, null, -1, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
-        awakeRemoteTakers(ring);
+        awakeRemoteTakers(ring, versionedPartitionName.getPartitionName().isSystemPartition());
     }
 
     public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName) throws Exception {
@@ -247,7 +250,8 @@ public class TakeCoordinator {
 
     private static final Function<RingMember, Object> LOCK_CREATOR = (key) -> new Object();
 
-    private void awakeRemoteTakers(RingTopology ring) {
+    private void awakeRemoteTakers(RingTopology ring, boolean system) {
+        ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
         for (int i = 0; i < ring.entries.size(); i++) {
             if (ring.rootMemberIndex != i) {
                 Object lock = ringMembersLocks.computeIfAbsent(ring.entries.get(i).ringMember, LOCK_CREATOR);
@@ -305,6 +309,8 @@ public class TakeCoordinator {
             return true;
         };
 
+        ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
+        Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
 
         while (true) {
             long start = updates.get();
@@ -332,7 +338,6 @@ public class TakeCoordinator {
                 suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
             }
 
-            Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
             synchronized (lock) {
                 long time = System.currentTimeMillis();
                 long timeRemaining = suggestedWaitInMillis[0];

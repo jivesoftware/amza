@@ -314,17 +314,19 @@ public class TakeCoordinator {
 
         while (true) {
             long start = updates.get();
-
             suggestedWaitInMillis[0] = Long.MAX_VALUE;
 
+            long t = System.currentTimeMillis();
             if (system) {
                 ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
             } else {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }
+            long elapsed = System.currentTimeMillis() - t;
 
             int offerPower = offered.longValue() == 0 ? -1 : UIO.chunkPower(offered.longValue(), 0);
             LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">count", 1);
+            LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">elapsed", elapsed);
             LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
 
             if (offered.longValue() == 0) {

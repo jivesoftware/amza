@@ -323,7 +323,7 @@ public class TakeCoordinator {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }
 
-            int offerPower = UIO.chunkPower(offered.longValue(), 0);
+            int offerPower = offered.longValue() == 0 ? -1 : UIO.chunkPower(offered.longValue(), 0);
             LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">count", 1);
             LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
 

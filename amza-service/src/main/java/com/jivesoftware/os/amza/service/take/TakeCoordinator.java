@@ -50,9 +50,10 @@ public class TakeCoordinator {
     private final VersionedPartitionProvider versionedPartitionProvider;
 
     private final ConcurrentBAHash<TakeRingCoordinator> takeRingCoordinators = new ConcurrentBAHash<>(13, true, 128);
-    private final ConcurrentHashMap<RingMember, Object> stripedRingMembersLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Object> systemRingMembersLocks = new ConcurrentHashMap<>();
-    private final AtomicLong updates = new AtomicLong();
+    private final ConcurrentHashMap<RingMember, Object> stripedRingMembersLocks = new ConcurrentHashMap<>();
+    private final AtomicLong systemUpdates = new AtomicLong();
+    private final AtomicLong stripedUpdates = new AtomicLong();
     private final AtomicLong cyaLock = new AtomicLong();
     private final long cyaIntervalMillis;
     private final long slowTakeInMillis;
@@ -159,12 +160,18 @@ public class TakeCoordinator {
         VersionedPartitionName versionedPartitionName,
         long txId,
         boolean invalidateOnline) throws Exception {
-        updates.incrementAndGet();
+
+        boolean system = versionedPartitionName.getPartitionName().isSystemPartition();
+        if (system) {
+            systemUpdates.incrementAndGet();
+        } else {
+            stripedUpdates.incrementAndGet();
+        }
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName);
         ensureRingCoordinator(ringName, null, -1, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
-        awakeRemoteTakers(ring, versionedPartitionName.getPartitionName().isSystemPartition());
+        awakeRemoteTakers(ring, system);
     }
 
     public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName) throws Exception {
@@ -309,6 +316,7 @@ public class TakeCoordinator {
             return true;
         };
 
+        AtomicLong updates = system ? systemUpdates : stripedUpdates;
         ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
         Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
 
@@ -371,7 +379,9 @@ public class TakeCoordinator {
 
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
-        ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
+        if (ring != null) {
+            ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
+        }
         amzaStats.acks(remoteRingMember, versionedAquarium.getVersionedPartitionName().getPartitionName(), 1, localTxId);
     }
 

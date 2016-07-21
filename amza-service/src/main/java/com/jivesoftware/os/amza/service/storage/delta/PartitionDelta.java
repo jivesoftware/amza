@@ -123,7 +123,7 @@ class PartitionDelta {
     }
 
     boolean get(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
-        return streamRawValues(prefix, keys::consume, fpKeyValueStream);
+        return streamRawValues(prefix, keys, fpKeyValueStream);
     }
 
     WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
@@ -150,28 +150,19 @@ class PartitionDelta {
         });
     }
 
-    Boolean containsKey(byte[] prefix, byte[] key) {
-        WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
-        if (got != null) {
-            return !got.getTombstoned();
-        }
-        PartitionDelta partitionDelta = merging.get();
-        if (partitionDelta != null) {
-            return partitionDelta.containsKey(prefix, key);
-        }
-        return null;
-    }
-
     boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyTombstoneExistsStream stream) throws Exception {
         return keys.consume((key) -> {
-            Boolean got = containsKey(prefix, key);
-            return stream.stream(prefix, key, got != null && !got, got != null);
+            WALPointer got = getPointer(prefix, key);
+            long timestamp = (got == null) ? -1 : got.getTimestampId();
+            boolean tombstoned = got != null && got.getTombstoned();
+            long version = (got == null) ? -1 : got.getVersion();
+            return stream.stream(prefix, key, timestamp, tombstoned, version, got != null);
         });
     }
 
     interface KeyTombstoneExistsStream {
 
-        boolean stream(byte[] prefix, byte[] key, boolean tombstoned, boolean exists) throws Exception;
+        boolean stream(byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, boolean exists) throws Exception;
     }
 
     void put(long fp,
@@ -413,9 +404,15 @@ class PartitionDelta {
                 merged = merge.size();
                 lastTxId = merge.highestTxId();
 
-                partitionStore = validate
-                    ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName, properties, stripe)
-                    : partitionIndex.get(merge.versionedPartitionName, properties, stripe);
+                if (validate) {
+                    partitionStore = partitionIndex.getAndValidate(merge.getDeltaWALId(),
+                        merge.getPrevDeltaWALId(),
+                        merge.versionedPartitionName,
+                        properties,
+                        stripe);
+                } else {
+                    partitionStore = partitionIndex.get(merge.versionedPartitionName, properties, stripe);
+                }
                 long highestTxId = partitionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);
                 LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());

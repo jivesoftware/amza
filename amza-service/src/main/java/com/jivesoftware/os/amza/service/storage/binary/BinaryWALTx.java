@@ -227,6 +227,7 @@ public class BinaryWALTx implements WALTx {
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
+        long disposalVersion,
         I compactableWALIndex,
         int stripe) throws Exception {
 
@@ -256,6 +257,7 @@ public class BinaryWALTx implements WALTx {
         MutableLong clobberCount = new MutableLong();
         MutableLong tombstoneCount = new MutableLong();
         MutableLong ttlCount = new MutableLong();
+        MutableLong disposalCount = new MutableLong();
         MutableLong flushTxId = new MutableLong(-1);
 
         byte[] carryOverEndOfMerge = null;
@@ -283,11 +285,13 @@ public class BinaryWALTx implements WALTx {
                         clobberCount,
                         tombstoneCount,
                         ttlCount,
+                        disposalCount,
                         flushTxId,
                         tombstoneTimestampId,
                         tombstoneVersion,
                         ttlTimestampId,
                         ttlVersion,
+                        disposalVersion,
                         null);
                 } catch (Exception x) {
                     LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to:{}",
@@ -323,11 +327,13 @@ public class BinaryWALTx implements WALTx {
                     clobberCount,
                     tombstoneCount,
                     ttlCount,
+                    disposalCount,
                     flushTxId,
                     tombstoneTimestampId,
                     tombstoneVersion,
                     ttlTimestampId,
                     ttlVersion,
+                    disposalVersion,
                     endOfMerge);
                 compactionIO.flush(true);
 
@@ -374,6 +380,7 @@ public class BinaryWALTx implements WALTx {
                     clobberCount.longValue(),
                     tombstoneCount.longValue(),
                     ttlCount.longValue(),
+                    disposalCount.longValue(),
                     oldestTimestamp.longValue() == Long.MAX_VALUE ? -1 : oldestTimestamp.longValue(),
                     oldestVersion.longValue() == Long.MAX_VALUE ? -1 : oldestVersion.longValue(),
                     oldestTombstonedTimestamp.longValue() == Long.MAX_VALUE ? -1 : oldestTombstonedTimestamp.longValue(),
@@ -405,11 +412,13 @@ public class BinaryWALTx implements WALTx {
         MutableLong clobberCount,
         MutableLong tombstoneCount,
         MutableLong ttlCount,
+        MutableLong disposalCount,
         MutableLong highestTxId,
         long tombstoneTimestampId,
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
+        long disposalVersion,
         EndOfMerge endOfMerge) throws Exception {
 
         Preconditions.checkNotNull(compactableWALIndex, "If you don't have one use NoOpWALIndex.");
@@ -466,6 +475,8 @@ public class BinaryWALTx implements WALTx {
                                 tombstoneCount.increment();
                             } else if (valueTimestamp < ttlTimestampId || valueVersion < ttlVersion) {
                                 ttlCount.increment();
+                            } else if (valueVersion < disposalVersion) {
+                                disposalCount.increment();
                             } else {
                                 estimatedSizeInBytes.add(row.length);
                                 oldestTimestamp.setValue(Math.min(valueTimestamp, oldestTimestamp.longValue()));

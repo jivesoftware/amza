@@ -774,9 +774,9 @@ public class DeltaStripeWALStorage {
         try {
             return storage.containsKeys(prefix,
                 storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(prefix, keys,
-                    (_prefix, key, tombstoned, exists) -> {
+                    (_prefix, key, timestamp, tombstoned, version, exists) -> {
                         if (exists) {
-                            return stream.stream(prefix, key, !tombstoned);
+                            return stream.stream(prefix, key, !tombstoned, timestamp, version);
                         } else {
                             return storageKeyStream.stream(key);
                         }

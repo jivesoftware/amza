@@ -67,7 +67,7 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
-        return keys.consume((key) -> stream.stream(prefix, key, false));
+        return keys.consume((key) -> stream.stream(prefix, key, false, -1, -1));
     }
 
     @Override

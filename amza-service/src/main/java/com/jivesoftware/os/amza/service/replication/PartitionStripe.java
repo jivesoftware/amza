@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -139,7 +140,18 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             long start = System.currentTimeMillis();
-            boolean got = storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, (stream) -> stream.stream(key), keyValueStream);
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
+            boolean got = storage.get(versionedPartitionName,
+                partitionStore.getWalStorage(),
+                prefix,
+                (stream) -> stream.stream(key),
+                (prefix1, key1, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    if (valueVersion != -1 && valueVersion < disposalVersion) {
+                        return keyValueStream.stream(prefix1, key1, null, -1, false, -1);
+                    } else {
+                        return keyValueStream.stream(prefix1, key1, value, valueTimestamp, valueTombstoned, valueVersion);
+                    }
+                });
             stats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return got;
         }
@@ -156,7 +168,15 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             long start = System.currentTimeMillis();
-            boolean got = storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys, stream);
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
+            boolean got = storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys,
+                (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    if (valueVersion != -1 && valueVersion < disposalVersion) {
+                        return stream.stream(prefix1, key, null, -1, false, -1);
+                    } else {
+                        return stream.stream(prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                    }
+                });
             stats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return got;
         }
@@ -173,7 +193,15 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             long start = System.currentTimeMillis();
-            storage.rowScan(versionedPartitionName, partitionStore, keyValueStream);
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
+            storage.rowScan(versionedPartitionName, partitionStore,
+                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    if (valueVersion != -1 && valueVersion < disposalVersion) {
+                        return true;
+                    } else {
+                        return keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                    }
+                });
             stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
         }
 
@@ -196,7 +224,15 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             long start = System.currentTimeMillis();
-            storage.rangeScan(versionedPartitionName, partitionStore, fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
+            storage.rangeScan(versionedPartitionName, partitionStore, fromPrefix, fromKey, toPrefix, toKey,
+                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    if (valueVersion != -1 && valueVersion < disposalVersion) {
+                        return true;
+                    } else {
+                        return keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                    }
+                });
             stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
         }
 
@@ -260,6 +296,7 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             WALHighwater[] highwater = new WALHighwater[1];
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
             primaryRowMarshaller.fromRows(txFpRowStream -> {
                 RowStream stream = (rowFP, rowTxId, rowType, row) -> {
                     if (rowType.isPrimary()) {
@@ -273,7 +310,13 @@ public class PartitionStripe {
                     highwater[0] = partitionHighwater;
                 }
                 return true;
-            }, txKeyValueStream);
+            }, (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                if (valueVersion != -1 && valueVersion < disposalVersion) {
+                    return true;
+                } else {
+                    return txKeyValueStream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                }
+            });
             return highwater[0];
         }
 
@@ -297,6 +340,7 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             WALHighwater[] highwater = new WALHighwater[1];
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
             primaryRowMarshaller.fromRows(txFpRowStream -> {
                 RowStream stream = (rowFP, rowTxId, rowType, row) -> {
                     if (rowType.isPrimary()) {
@@ -310,7 +354,13 @@ public class PartitionStripe {
                     highwater[0] = partitionHighwater;
                 }
                 return true;
-            }, txKeyValueStream);
+            }, (rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                if (valueVersion != -1 && valueVersion < disposalVersion) {
+                    return true;
+                } else {
+                    return txKeyValueStream.stream(rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                }
+            });
             return highwater[0];
         }
 
@@ -375,7 +425,15 @@ public class PartitionStripe {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             long start = System.currentTimeMillis();
-            boolean contained = storage.containsKeys(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys, stream);
+            long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
+            boolean contained = storage.containsKeys(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys,
+                (prefix1, key, contained1, timestamp, version) -> {
+                    if (version != -1 && version < disposalVersion) {
+                        return stream.stream(prefix1, key, false, -1, -1);
+                    } else {
+                        return stream.stream(prefix1, key, contained1, timestamp, version);
+                    }
+                });
             stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return contained;
         }

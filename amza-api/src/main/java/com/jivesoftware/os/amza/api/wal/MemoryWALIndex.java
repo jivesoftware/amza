@@ -183,16 +183,15 @@ public class MemoryWALIndex implements WALIndex {
         return delta[0];
     }
 
-    //    @Override
-//    public long size() throws Exception {
-//        return index.size();
-//    }
     @Override
     public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         return keys.consume((key) -> {
             byte[] pk = WALKey.compose(prefix, key);
             WALPointer got = index.get(pk);
-            return stream.stream(prefix, key, got != null && !got.getTombstoned());
+            boolean contained = got != null && !got.getTombstoned();
+            long timestamp = got == null ? -1 : got.getTimestampId();
+            long version = got == null ? -1 : got.getVersion();
+            return stream.stream(prefix, key, contained, timestamp, version);
         });
     }
 

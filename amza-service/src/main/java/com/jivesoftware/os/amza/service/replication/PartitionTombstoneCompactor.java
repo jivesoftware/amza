@@ -105,7 +105,10 @@ public class PartitionTombstoneCompactor {
                             File toBaseKey = fromBaseKey;
 
                             int rebalanceToStripe = -1;
+                            long disposalVersion = -1;
                             if (!partitionName.isSystemPartition()) {
+                                disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
+
                                 if (force || rebalancingIsActive()) {
                                     rebalanceToStripe = indexedWALStorageProvider.rebalanceToStripe(versionedPartitionName,
                                         stripeIndex,
@@ -128,6 +131,7 @@ public class PartitionTombstoneCompactor {
                                 fromBaseKey,
                                 toBaseKey,
                                 compactToStripe,
+                                disposalVersion,
                                 (transitionToCompactedTx) -> {
                                     return storageVersionProvider.replaceOneWithAll(partitionName,
                                         () -> {

@@ -17,7 +17,7 @@ public interface VersionedPartitionProvider {
     VersionedPartitionProperties getVersionedProperties(PartitionName partitionName,
         VersionedPartitionProperties versionedPartitionProperties);
 
-    boolean isPartitionDisposed(PartitionName partitionName) throws Exception;
+    long getPartitionDisposal(PartitionName partitionName) throws Exception;
 
     class VersionedPartitionProperties {
 

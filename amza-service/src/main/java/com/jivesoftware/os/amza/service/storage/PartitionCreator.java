@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -317,8 +318,13 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
     public void markForDisposal(PartitionName partitionName) throws Exception {
         byte[] rawPartitionName = partitionName.toBytes();
         long timestampAndVersion = orderIdProvider.nextId();
+
+        byte[] disposalValue = new byte[rawPartitionName.length + 8];
+        System.arraycopy(rawPartitionName, 0, disposalValue, 0, rawPartitionName.length);
+        UIO.longBytes(timestampAndVersion, disposalValue, rawPartitionName.length);
+
         RowsChanged changed = systemWALStorage.update(REGION_INDEX, null,
-            (highwater, scan) -> scan.row(-1, rawPartitionName, null, timestampAndVersion, false, timestampAndVersion),
+            (highwater, scan) -> scan.row(-1, rawPartitionName, disposalValue, timestampAndVersion, false, timestampAndVersion),
             walUpdated);
         if (!changed.isEmpty()) {
             rowChanges.changes(changed);
@@ -326,16 +332,21 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
     }
 
     @Override
-    public boolean isPartitionDisposed(PartitionName partitionName) throws Exception {
+    public long getPartitionDisposal(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return false;
+            return -1L;
         }
 
         byte[] rawPartitionName = partitionName.toBytes();
         TimestampedValue indexValue = systemWALStorage.getTimestampedValue(REGION_INDEX, null, rawPartitionName);
-        return (indexValue != null && indexValue.getValue() == null);
+        byte[] value = (indexValue == null) ? null : indexValue.getValue();
+        if (value != null && value.length > rawPartitionName.length) {
+            return UIO.bytesLong(value, rawPartitionName.length);
+        }
+        return -1;
     }
 
+    // this is really dangerous for a variety of reasons (e.g. it removes a disposal marker)
     public void destroyPartition(PartitionName partitionName) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
         long timestampAndVersion = orderIdProvider.nextId();

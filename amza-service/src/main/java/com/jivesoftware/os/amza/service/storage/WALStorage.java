@@ -201,7 +201,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean compactableTombstone(long tombstoneTimestampId,
         long tombstoneVersion,
         long ttlTimestampId,
-        long ttlVersion) throws Exception {
+        long ttlVersion,
+        long disposalVersion) throws Exception {
 
         long compactableOldestTombstonedTimestamp = oldestTombstonedTimestamp.get();
         long compactableOldestTombstonedVersion = oldestTombstonedVersion.get();
@@ -211,6 +212,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             || (compactableOldestTombstonedVersion > -1 && compactableOldestTombstonedVersion < tombstoneVersion)
             || (compactableOldestTimestamp > -1 && compactableOldestTimestamp < ttlTimestampId)
             || (compactableOldestVersion > -1 && compactableOldestVersion < ttlVersion)
+            || (compactableOldestVersion > -1 && compactableOldestVersion < disposalVersion)
             || ((clobberCount.get() + 1) / (keyCount.get() + 1) > tombstoneCompactionFactor);
     }
 
@@ -231,6 +233,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
+        long disposalVersion,
         int maxValueSizeInIndex,
         int stripe,
         boolean expectedEndOfMerge,
@@ -247,6 +250,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             tombstoneVersion,
             ttlTimestampId,
             ttlVersion,
+            disposalVersion,
             got,
             stripe);
 

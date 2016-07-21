@@ -305,7 +305,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
         try {
             return keys.consume((key) -> getPointer(prefix, key,
                 (_prefix, _key, timestamp, tombstoned, version, fp, hasValue, value) -> {
-                    stream.stream(prefix, key, fp != -1 && !tombstoned);
+                    boolean contained = fp != -1 && !tombstoned;
+                    stream.stream(prefix, key, contained, timestamp, version);
                     return true;
                 }));
         } finally {

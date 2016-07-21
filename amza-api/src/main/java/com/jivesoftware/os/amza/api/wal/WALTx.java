@@ -36,6 +36,7 @@ public interface WALTx {
         long tombstoneVersion,
         long ttlTimestampId,
         long ttlVersion,
+        long disposalVersion,
         I rowIndex,
         int stripe) throws Exception;
 
@@ -78,6 +79,7 @@ public interface WALTx {
         public final long clobberCount;
         public final long tombstoneCount;
         public final long ttlCount;
+        public final long disposalCount;
 
         public final long oldestTimestamp;
         public final long oldestVersion;
@@ -93,6 +95,7 @@ public interface WALTx {
             long removeCount,
             long tombstoneCount,
             long ttlCount,
+            long disposalCount,
             long oldestTimestamp,
             long oldestVersion,
             long oldestTombstonedTimestamp,
@@ -105,6 +108,7 @@ public interface WALTx {
             this.clobberCount = removeCount;
             this.tombstoneCount = tombstoneCount;
             this.ttlCount = ttlCount;
+            this.disposalCount = disposalCount;
             this.oldestTimestamp = oldestTimestamp;
             this.oldestVersion = oldestVersion;
             this.oldestTombstonedTimestamp = oldestTombstonedTimestamp;
@@ -122,6 +126,7 @@ public interface WALTx {
                 + ", clobberCount=" + clobberCount
                 + ", tombstoneCount=" + tombstoneCount
                 + ", ttlCount=" + ttlCount
+                + ", disposalCount=" + disposalCount
                 + ", duration=" + duration
                 + '}';
         }

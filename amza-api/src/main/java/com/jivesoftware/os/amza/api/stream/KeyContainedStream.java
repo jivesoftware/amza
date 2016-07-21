@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.api.stream;
  */
 public interface KeyContainedStream {
 
-    boolean stream(byte[] prefix, byte[] key, boolean contained) throws Exception;
+    boolean stream(byte[] prefix, byte[] key, boolean contained, long timestamp, long version) throws Exception;
 
 }

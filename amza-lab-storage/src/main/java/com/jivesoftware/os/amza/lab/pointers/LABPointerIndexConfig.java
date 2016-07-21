@@ -34,10 +34,10 @@ public interface LABPointerIndexConfig extends Config {
     @LongDefault(1_000_000)
     long getLeapCacheMaxCapacity();
 
+    void setLeapCacheMaxCapacity(long leapCacheMaxCapacity);
+
     @LongDefault(60_000)
     long getLeapCacheCleanupIntervalInMillis();
-
-    void setLeapCacheMaxCapacity(long leapCacheMaxCapacity);
 
     @LongDefault(1024 * 1024 * 1024)
     long getGlobalMaxHeapPressureInBytes();

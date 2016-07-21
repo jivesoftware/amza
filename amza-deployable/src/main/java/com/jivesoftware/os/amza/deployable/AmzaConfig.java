@@ -14,6 +14,9 @@ public interface AmzaConfig extends Config {
     @IntDefault(1000)
     int getTakeFromNeighborsIntervalInMillis();
 
+    @LongDefault(60_000L)
+    long getTakeSlowThresholdInMillis();
+
     @IntDefault(8)
     int getNumberOfCompactorThreads();
 

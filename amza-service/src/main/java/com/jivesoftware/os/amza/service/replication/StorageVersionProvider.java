@@ -141,9 +141,6 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                 stickyStorage = getStickyStorage(partitionName);
                 stripeIndex = (stickyStorage.storageVersion == null) ? -1 : getStripeIndex(stickyStorage.storageVersion.stripeVersion);
                 if (stripeIndex == -1) {
-                    if (versionedPartitionProvider.isPartitionDisposed(partitionName)) {
-                        throw new PartitionIsDisposedException("Partition " + partitionName + " is disposed");
-                    }
                     if (!versionedPartitionProvider.hasPartition(partitionName)) {
                         throw new PropertiesNotPresentException("Properties missing for " + partitionName);
                     }

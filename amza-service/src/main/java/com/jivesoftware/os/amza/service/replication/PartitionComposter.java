@@ -183,8 +183,7 @@ public class PartitionComposter implements RowChanges {
         synchronized (stripingLocksProvider.lock(partitionName, 0)) {
             State currentState = versionedAquarium.getLivelyEndState().getCurrentState();
             if (currentState == State.expunged // Aquarium State
-                || !storageVersionProvider.isCurrentVersion(versionedPartitionName) // Partition Version
-                || partitionCreator.isPartitionDisposed(partitionName)) { // Region Index
+                || !storageVersionProvider.isCurrentVersion(versionedPartitionName)) { // Partition Version
                 deletePartition(versionedPartitionName);
                 return true;
             } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {

@@ -321,16 +321,16 @@ public class TakeCoordinator {
         Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
 
         while (true) {
-            long start = updates.get();
+            long initialUpdates = updates.get();
             suggestedWaitInMillis[0] = Long.MAX_VALUE;
 
-            long t = System.currentTimeMillis();
+            long start = System.currentTimeMillis();
             if (system) {
                 ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
             } else {
                 ringReader.getRingNames(remoteRingMember, ringNameStream);
             }
-            long elapsed = System.currentTimeMillis() - t;
+            long elapsed = System.currentTimeMillis() - start;
 
             int offerPower = offered.longValue() == 0 ? -1 : UIO.chunkPower(offered.longValue(), 0);
             LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">count", 1);
@@ -351,7 +351,7 @@ public class TakeCoordinator {
             synchronized (lock) {
                 long time = System.currentTimeMillis();
                 long timeRemaining = suggestedWaitInMillis[0];
-                while (start == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
+                while (initialUpdates == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
                     long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
                     //LOG.info("PARKED:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());

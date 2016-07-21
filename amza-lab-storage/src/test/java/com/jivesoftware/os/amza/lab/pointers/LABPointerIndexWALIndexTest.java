@@ -133,7 +133,7 @@ public class LABPointerIndexWALIndexTest {
             keyStream.stream(UIO.longBytes(10001));
             keyStream.stream(UIO.longBytes(10002));
             return true;
-        }, (byte[] prefix, byte[] key, boolean contained) -> {
+        }, (byte[] prefix, byte[] key, boolean contained, long timestamp, long version) -> {
             Assert.assertFalse(contained);
             return true;
         });
@@ -141,7 +141,7 @@ public class LABPointerIndexWALIndexTest {
         index.containsKeys(UIO.longBytes(10), (UnprefixedWALKeyStream keyStream) -> {
             keyStream.stream(UIO.longBytes(10));
             return true;
-        }, (byte[] prefix, byte[] key, boolean contained) -> {
+        }, (byte[] prefix, byte[] key, boolean contained, long timestamp, long version) -> {
             Assert.assertTrue(contained);
             return true;
         });

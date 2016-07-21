@@ -83,7 +83,11 @@ public class PartitionStore implements RangeScannable {
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
         walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, properties.maxValueSizeInIndex, stripe);
         if (properties.forceCompactionOnStartup) {
-            compactTombstone(true, baseKey, baseKey, stripe,
+            compactTombstone(true,
+                baseKey,
+                baseKey,
+                stripe,
+                -1,
                 (transitionToCompacted) -> {
                     return transitionToCompacted.tx(() -> {
                         return null;
@@ -115,6 +119,7 @@ public class PartitionStore implements RangeScannable {
         File fromBaseKey,
         File toBaseKey,
         int stripe,
+        long disposalVersion,
         TxTransitionToCompacted transitionToCompacted) {
         // ageInMillis: 180 days
         // intervalMillis: 10 days
@@ -148,7 +153,7 @@ public class PartitionStore implements RangeScannable {
         }
 
         try {
-            if (force || walStorage.compactableTombstone(tombstoneCheckTimestamp, tombstoneCheckVersion, ttlCheckTimestamp, ttlCheckVersion)) {
+            if (force || walStorage.compactableTombstone(tombstoneCheckTimestamp, tombstoneCheckVersion, ttlCheckTimestamp, ttlCheckVersion, disposalVersion)) {
                 String dir = fromBaseKey.toString();
                 if (!fromBaseKey.equals(toBaseKey)) {
                     dir = " rebalance " + fromBaseKey + " to " + toBaseKey;
@@ -166,6 +171,7 @@ public class PartitionStore implements RangeScannable {
                         tombstoneCompactVersion,
                         ttlCompactTimestamp,
                         ttlCompactVersion,
+                        disposalVersion,
                         properties.maxValueSizeInIndex,
                         stripe,
                         expectedEndOfMerge,
@@ -178,7 +184,7 @@ public class PartitionStore implements RangeScannable {
                     tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
             }
         } catch (Exception x) {
-            LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
+            LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
         }
 
     }
@@ -201,7 +207,7 @@ public class PartitionStore implements RangeScannable {
 
     public boolean containsKey(byte[] prefix, byte[] key) throws Exception {
         boolean[] result = new boolean[1];
-        walStorage.containsKeys(prefix, stream -> stream.stream(key), (_prefix, _key, contained) -> {
+        walStorage.containsKeys(prefix, stream -> stream.stream(key), (_prefix, _key, contained, timestamp, version) -> {
             result[0] = contained;
             return true;
         });

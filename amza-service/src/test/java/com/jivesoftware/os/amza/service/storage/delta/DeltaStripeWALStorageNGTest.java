@@ -311,11 +311,11 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
         File baseKey = indexedWALStorageProvider.baseKey(versionedPartitionName1, 0);
-        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, 0, true,
+        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, true,
             (transitionToCompacted) -> transitionToCompacted.tx(() -> {
                 return null;
             }));
-        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, 0, true,
+        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, true,
             (transitionToCompacted) -> transitionToCompacted.tx(() -> {
                 return null;
             })); // Bla
@@ -541,7 +541,7 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private KeyContainedStream assertKeyIsContained(boolean shouldBeContained) {
-        return (prefix, key, contained) -> {
+        return (prefix, key, contained, timestamp, version) -> {
             Assert.assertEquals(contained, shouldBeContained);
             return true;
         };

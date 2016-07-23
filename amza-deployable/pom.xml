@@ -5,12 +5,12 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.459</version>
+        <version>0.460</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
     <artifactId>amza-deployable</artifactId>
-    <version>0.459</version>
+    <version>0.460</version>
     
     <properties>
         <java.main>com.jivesoftware.os.amza.deployable.AmzaMain</java.main>
@@ -24,10 +24,6 @@
             <type>tar.gz</type>
             <classifier>bin</classifier>
             <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>javax.inject</groupId>
-            <artifactId>javax.inject</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.routing.bird</groupId>
@@ -62,29 +58,30 @@
             <artifactId>slf4j-log4j12</artifactId>
             <scope>runtime</scope>
         </dependency>
+         <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-embed</artifactId>
+            <version>0.460</version>
+        </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.459</version>
+            <version>0.460</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-ui</artifactId>
-            <version>0.459</version>
+            <version>0.460</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
-            <version>0.459</version>
+            <version>0.460</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-client</artifactId>
-            <version>0.459</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
+            <version>0.460</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -96,26 +93,13 @@
             <type>jar</type>
         </dependency>
         <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.459</version>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.mlogger</groupId>
-            <artifactId>core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>javax.ws.rs</groupId>
-            <artifactId>javax.ws.rs-api</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-lab-storage</artifactId>
-            <version>0.459</version>
+            <version>0.460</version>
         </dependency>
     </dependencies>
 </project>

@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.deployable;
+package com.jivesoftware.os.amza.embed;
 
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;

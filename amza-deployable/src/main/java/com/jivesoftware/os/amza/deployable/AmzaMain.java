@@ -15,48 +15,35 @@
  */
 package com.jivesoftware.os.amza.deployable;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.google.common.base.Optional;
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.embed.AmzaConfig;
+import com.jivesoftware.os.amza.embed.AmzaRestClientHealthCheckDelegate;
+import com.jivesoftware.os.amza.embed.EmbedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
-import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
-import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
-import com.jivesoftware.os.amza.service.SickPartitions;
-import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
-import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
-import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRestEndpoints;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
-import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
-import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
@@ -65,15 +52,12 @@ import com.jivesoftware.os.routing.bird.health.api.HealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.ScheduledMinMaxHealthCheckConfig;
-import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.DiskFreeHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.FileDescriptorCountHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCPauseHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.LoadAverageHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
-import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
-import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
@@ -83,11 +67,9 @@ import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Executors;
-import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.LongDefault;
 import org.merlin.config.defaults.StringDefault;
 
@@ -107,21 +89,6 @@ public class AmzaMain {
         @Override
         public Long getMax();
 
-    }
-
-    interface AmzaSickThreadsHealthConfig extends SickHealthCheckConfig {
-
-        @Override
-        @StringDefault("sick>threads")
-        String getName();
-
-        @Override
-        @StringDefault("No sick threads")
-        String getDescription();
-
-        @Override
-        @DoubleDefault(0.2)
-        Double getSickHealth();
     }
 
     public void run(String[] args) throws Exception {
@@ -183,46 +150,11 @@ public class AmzaMain {
             amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis = amzaConfig.getInterruptBlockingReadsIfLingersForNMillis();
             amzaServiceConfig.rackDistributionEnabled = amzaConfig.getRackDistributionEnabled();
 
-            final AmzaStats amzaStats = new AmzaStats();
-            final SickThreads sickThreads = new SickThreads();
-            final SickPartitions sickPartitions = new SickPartitions();
-
-            deployable.addHealthCheck(new SickThreadsHealthCheck(deployable.config(AmzaSickThreadsHealthConfig.class), sickThreads));
-            deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
-
+            AmzaStats amzaStats = new AmzaStats();
             BAInterner interner = new BAInterner();
-
-            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, (int) amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis);
-
-            final ObjectMapper mapper = new ObjectMapper();
-            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
-            PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
-
-                @Override
-                public PartitionProperties fromBytes(byte[] bytes) {
-                    try {
-                        return mapper.readValue(bytes, PartitionProperties.class);
-                    } catch (IOException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }
-
-                @Override
-                public byte[] toBytes(PartitionProperties partitionProperties) {
-                    try {
-                        return mapper.writeValueAsBytes(partitionProperties);
-                    } catch (JsonProcessingException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }
-            };
-
             RingHost ringHost = new RingHost(instanceConfig.getDatacenter(), instanceConfig.getRack(), instanceConfig.getHost(), instanceConfig.getMainPort());
             SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
             JiveEpochTimestampProvider timestampProvider = new JiveEpochTimestampProvider();
-            TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(instanceConfig.getInstanceName()),
-                idPacker, timestampProvider);
 
             RingMember ringMember = new RingMember(
                 Strings.padStart(String.valueOf(instanceConfig.getInstanceName()), 5, '0') + "_" + instanceConfig.getInstanceKey());
@@ -240,35 +172,26 @@ public class AmzaMain {
                 }
             }
 
-            AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
-                interner,
+            AmzaService amzaService = new EmbedAmzaServiceInitializer().initialize(deployable,
+                instanceConfig.getRoutesHost(),
+                instanceConfig.getRoutesPort(),
+                instanceConfig.getConnectionsHealth(),
+                instanceConfig.getInstanceName(),
+                instanceConfig.getInstanceKey(),
+                instanceConfig.getServiceName(),
+                instanceConfig.getDatacenter(),
+                instanceConfig.getRack(),
+                instanceConfig.getHost(),
+                instanceConfig.getMainPort(),
+                instanceConfig.getClusterName(),
+                amzaServiceConfig,
+                labConfig,
                 amzaStats,
-                sickThreads,
-                sickPartitions,
-                ringMember,
-                ringHost,
-                blacklistRingMembers,
-                orderIdProvider,
+                interner,
                 idPacker,
-                partitionPropertyMarshaller,
-                (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, numberOfStripes) -> {
-                    indexProviderRegistry.register(
-                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
-                            numberOfStripes,
-                            workingIndexDirectories),
-                        persistentRowIOProvider);
-
-                    indexProviderRegistry.register(
-                        new LABPointerIndexWALIndexProvider(labConfig,
-                            LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                            numberOfStripes,
-                            workingIndexDirectories),
-                        persistentRowIOProvider);
-
-                },
-                availableRowsTaker,
-                () -> new HttpRowsTaker(amzaStats, interner, (int) amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis),
-                Optional.<TakeFailureListener>absent(),
+                timestampProvider,
+                blacklistRingMembers,
+                true,
                 (RowsChanged changes) -> {
                 });
 
@@ -283,6 +206,9 @@ public class AmzaMain {
                 10,
                 10_000); // TODO expose to conf
 
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
             AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
                 new HttpPartitionClientFactory(interner),
                 new HttpPartitionHostsProvider(interner, httpClient, mapper),
@@ -296,7 +222,7 @@ public class AmzaMain {
             System.out.println("|      Tcp Replication Service Online");
             System.out.println("-----------------------------------------------------------------------");
 
-            deployable.addEndpoints(com.jivesoftware.os.amza.deployable.AmzaEndpoints.class);
+            deployable.addEndpoints(com.jivesoftware.os.amza.embed.AmzaEndpoints.class);
             deployable.addInjectables(AmzaService.class, amzaService);
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
@@ -308,16 +234,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                    @Override
-                    public void addEndpoint(Class clazz) {
-                        deployable.addEndpoints(clazz);
-                    }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    deployable.addEndpoints(clazz);
+                }
 
-                    @Override
-                    public void addInjectable(Class clazz, Object instance) {
-                        deployable.addInjectables(clazz, instance);
-                    }
-                });
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    deployable.addInjectables(clazz, instance);
+                }
+            });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());
@@ -331,20 +257,7 @@ public class AmzaMain {
                 .setContext("/static/amza");
             deployable.addResource(staticResource);
 
-            RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
-                instanceConfig.getServiceName(),
-                amzaService,
-                amzaConfig.getDiscoveryIntervalMillis(),
-                blacklistRingMembers);
-
             amzaService.start(ringMember, ringHost);
-
-            routingBirdAmzaDiscovery.start();
-
-            System.out.println("-----------------------------------------------------------------------");
-            System.out.println("|     Amza Service is in Routing Bird Discovery mode");
-            System.out.println("-----------------------------------------------------------------------");
-
             deployable.buildServer().start();
             serviceStartupHealthCheck.success();
 

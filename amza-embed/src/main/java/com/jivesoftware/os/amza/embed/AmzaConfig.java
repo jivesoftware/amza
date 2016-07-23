@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.deployable;
+package com.jivesoftware.os.amza.embed;
 
 import org.merlin.config.Config;
 import org.merlin.config.defaults.BooleanDefault;

@@ -47,6 +47,8 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
@@ -243,11 +245,16 @@ public class AmzaTestCluster {
         SickPartitions sickPartitions = new SickPartitions();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
-        AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
+        BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+
+        AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
             interner,
             amzaStats,
             sickThreads,
             sickPartitions,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
             localRingMember,
             localRingHost,
             Collections.emptySet(),
@@ -299,7 +306,6 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        
         service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
 
         cluster.put(localRingMember, service);

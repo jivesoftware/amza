@@ -133,6 +133,8 @@ public class AmzaServiceInitializer {
 
         public boolean rackDistributionEnabled = true;
         public String blacklistRingMembers = null;
+
+        public long discoveryIntervalMillis = 30_000;
     }
 
     public interface IndexProviderRegistryCallback {

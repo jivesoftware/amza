@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.deployable;
+package com.jivesoftware.os.amza.embed;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;

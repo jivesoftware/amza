@@ -37,8 +37,8 @@ import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
-import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
@@ -51,6 +51,8 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -151,11 +153,17 @@ public class Main {
         LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
         labConfig.setLeapCacheMaxCapacity(Integer.parseInt(System.getProperty("amza.leap.cache.max.capacity", "1000000")));
 
-        AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
+
+        BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+
+        AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             interner,
             amzaStats,
             sickThreads,
             sickPartitions,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
             ringMember,
             ringHost,
             Collections.emptySet(),
@@ -174,10 +182,11 @@ public class Main {
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            () -> new HttpRowsTaker(amzaStats, interner, 60_000), // TODO config
+            () -> new HttpRowsTaker(amzaStats, interner, 60_000),
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });
+
 
         InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", 0L, true);
         ConnectionDescriptorsProvider connectionsProvider = connectionDescriptorsRequest -> {

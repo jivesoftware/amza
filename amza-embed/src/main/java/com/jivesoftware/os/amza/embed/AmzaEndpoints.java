@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.deployable;
+package com.jivesoftware.os.amza.embed;
 
 import com.google.common.base.Splitter;
 import com.jivesoftware.os.amza.api.partition.Consistency;

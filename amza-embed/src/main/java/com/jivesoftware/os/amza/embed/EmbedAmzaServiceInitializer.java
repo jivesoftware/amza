@@ -25,8 +25,11 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
+import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRestEndpoints;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingWriter;
@@ -84,7 +87,7 @@ public class EmbedAmzaServiceInitializer {
         Double getSickHealth();
     }
 
-    public AmzaService initialize(Deployable deployable,
+    public Lifecycle initialize(Deployable deployable,
         String routesHost,
         int routesPort,
         String connectionsHealthEndpoint,
@@ -104,6 +107,7 @@ public class EmbedAmzaServiceInitializer {
         JiveEpochTimestampProvider timestampProvider,
         Set<RingMember> blacklistRingMembers,
         boolean useAmzaDiscovery,
+        boolean bindClientEndpoints,
         RowChanges allRowChanges) throws Exception {
 
         SickThreads sickThreads = new SickThreads();
@@ -144,7 +148,6 @@ public class EmbedAmzaServiceInitializer {
                 }
             }
         };
-
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
@@ -191,20 +194,6 @@ public class EmbedAmzaServiceInitializer {
             amzaServiceConfig.discoveryIntervalMillis,
             blacklistRingMembers);
 
-        amzaService.start(ringMember, ringHost);
-
-        System.out.println("-----------------------------------------------------------------------");
-        System.out.println("|      Amza Service Online");
-        System.out.println("-----------------------------------------------------------------------");
-
-        if (useAmzaDiscovery) {
-            routingBirdAmzaDiscovery.start();
-        }
-
-        System.out.println("-----------------------------------------------------------------------");
-        System.out.println("|     Amza Service is in Routing Bird Discovery mode");
-        System.out.println("-----------------------------------------------------------------------");
-
         HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceKey,
             HttpRequestHelperUtils.buildRequestHelper(routesHost, routesPort),
             connectionsHealthEndpoint, 5_000, 100);
@@ -242,10 +231,18 @@ public class EmbedAmzaServiceInitializer {
         });
 
         deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
+        deployable.addInjectables(AmzaService.class, amzaService);
         deployable.addInjectables(AmzaRingWriter.class, amzaService.getRingWriter());
         deployable.addInjectables(AmzaRingReader.class, amzaService.getRingReader());
         deployable.addInjectables(AmzaInstance.class, amzaService);
         deployable.addInjectables(BAInterner.class, baInterner);
+
+        if (bindClientEndpoints) {
+            deployable.addEndpoints(AmzaClientRestEndpoints.class);
+            deployable.addInjectables(AmzaRestClient.class, new AmzaRestClientHealthCheckDelegate(
+                new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService)));
+        }
+   
 
         Resource staticResource = new Resource(null)
             .addClasspathResource("resources/static/amza")
@@ -340,7 +337,41 @@ public class EmbedAmzaServiceInitializer {
             }
         });
 
-        return amzaService;
+        return new Lifecycle(ringMember, ringHost, amzaService, routingBirdAmzaDiscovery);
+    }
+
+    public static class Lifecycle {
+
+        public final RingMember ringMember;
+        public final RingHost ringHost;
+        public final AmzaService amzaService;
+        public final RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery;
+
+        public Lifecycle(RingMember ringMember, RingHost ringHost, AmzaService amzaService, RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery) {
+            this.ringMember = ringMember;
+            this.ringHost = ringHost;
+            this.amzaService = amzaService;
+            this.routingBirdAmzaDiscovery = routingBirdAmzaDiscovery;
+        }
+
+        public void startAmzaService() throws Exception {
+            amzaService.start(ringMember, ringHost);
+
+            System.out.println("-----------------------------------------------------------------------");
+            System.out.println("|      Amza Service Online");
+            System.out.println("-----------------------------------------------------------------------");
+
+        }
+
+        public void startRoutingBirdAmzaDiscovery() {
+            if (routingBirdAmzaDiscovery != null) {
+                routingBirdAmzaDiscovery.start();
+
+                System.out.println("-----------------------------------------------------------------------");
+                System.out.println("|     Amza Service is in Routing Bird Discovery mode");
+                System.out.println("-----------------------------------------------------------------------");
+            }
+        }
     }
 
 }

@@ -43,22 +43,14 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.routing.bird</groupId>
-            <artifactId>routing-bird-shared</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.routing.bird</groupId>
             <artifactId>merlin-config</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.routing.bird</groupId>
-            <artifactId>routing-bird-http-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
             <scope>runtime</scope>
         </dependency>
-         <dependency>
+        <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-embed</artifactId>
             <version>0.461-SNAPSHOT</version>
@@ -70,22 +62,8 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-ui</artifactId>
-            <version>0.461-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
             <version>0.461-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-client</artifactId>
-            <version>0.461-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>

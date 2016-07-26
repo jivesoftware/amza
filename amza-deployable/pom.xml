@@ -5,12 +5,12 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.461</version>
+        <version>0.462-SNAPSHOT</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
     <artifactId>amza-deployable</artifactId>
-    <version>0.461</version>
+    <version>0.462-SNAPSHOT</version>
     
     <properties>
         <java.main>com.jivesoftware.os.amza.deployable.AmzaMain</java.main>
@@ -53,17 +53,17 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-embed</artifactId>
-            <version>0.461</version>
+            <version>0.462-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.461</version>
+            <version>0.462-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
-            <version>0.461</version>
+            <version>0.462-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>
@@ -77,7 +77,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-lab-storage</artifactId>
-            <version>0.461</version>
+            <version>0.462-SNAPSHOT</version>
         </dependency>
     </dependencies>
 </project>

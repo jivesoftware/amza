@@ -161,7 +161,7 @@ public class EmbedAmzaServiceInitializer {
             highwaterRowMarshaller,
             ringMember,
             ringHost,
-            Collections.emptySet(),
+            blacklistRingMembers,
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,
@@ -188,11 +188,14 @@ public class EmbedAmzaServiceInitializer {
             Optional.<TakeFailureListener>absent(),
             allRowChanges);
 
-        RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
-            serviceName,
-            amzaService,
-            amzaServiceConfig.discoveryIntervalMillis,
-            blacklistRingMembers);
+        RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = null;
+        if (useAmzaDiscovery) {
+            routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
+                serviceName,
+                amzaService,
+                amzaServiceConfig.discoveryIntervalMillis,
+                blacklistRingMembers);
+        }
 
         HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceKey,
             HttpRequestHelperUtils.buildRequestHelper(routesHost, routesPort),

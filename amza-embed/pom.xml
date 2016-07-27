@@ -5,12 +5,12 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.462</version>
+        <version>0.463</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
     <artifactId>amza-embed</artifactId>
-    <version>0.462</version>
+    <version>0.463</version>
     
     <dependencies>
         <dependency>
@@ -46,29 +46,24 @@
             <artifactId>routing-bird-http-client</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.462</version>
+            <version>0.463</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-ui</artifactId>
-            <version>0.462</version>
+            <version>0.463</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
-            <version>0.462</version>
+            <version>0.463</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-client</artifactId>
-            <version>0.462</version>
+            <version>0.463</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -86,7 +81,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.462</version>
+            <version>0.463</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>
@@ -103,7 +98,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-lab-storage</artifactId>
-            <version>0.462</version>
+            <version>0.463</version>
         </dependency>
     </dependencies>
 </project>

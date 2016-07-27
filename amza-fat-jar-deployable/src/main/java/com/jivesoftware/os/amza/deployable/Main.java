@@ -189,14 +189,14 @@ public class Main {
 
 
         InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", 0L, true);
-        ConnectionDescriptorsProvider connectionsProvider = connectionDescriptorsRequest -> {
+        ConnectionDescriptorsProvider connectionsProvider = (connectionDescriptorsRequest, expectedReleaseGroup) -> {
             try {
                 RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
                 List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.entries,
                     input -> new ConnectionDescriptor(instanceDescriptor,
                         new HostPort(input.ringHost.getHost(), input.ringHost.getPort()),
                         Collections.emptyMap())));
-                return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors);
+                return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors, connectionDescriptorsRequest.getRequestUuid());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

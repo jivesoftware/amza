@@ -195,7 +195,8 @@ public class DeltaStripeWALStorage {
                     DeltaWAL prevWAL = deltaWAL.get();
                     DeltaWAL currentWAL = deltaWALs.get(i);
                     if (prevWAL != null) {
-                        Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(), "Delta WALs were not contiguous");
+                        Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(),
+                            "Delta WALs were not contiguous, %s->%s", currentWAL.getPrevId(), prevWAL.getId());
                         mergeDelta(partitionIndex, versionedPartitionProvider, currentVersionProvider, prevWAL, true, () -> currentWAL);
                     }
                     deltaWAL.set(currentWAL);

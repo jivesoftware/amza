@@ -29,6 +29,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.io.IOException;
+import java.nio.channels.FileLock;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +55,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final RingMembership ringMembership;
     private final File[] workingIndexDirectories;
+    private final FileLock[] stripeLocks;
     private final long[] stripeVersions;
     private final long stripeMaxFreeWithinNBytes;
     private final DeltaStripeWALStorage[] deltaStripeWALStorages;
@@ -70,6 +73,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         RingMembership ringMembership,
         File[] workingIndexDirectories,
         long[] stripeVersions,
+        FileLock[] stripeLocks,
         long stripeMaxFreeWithinNBytes,
         DeltaStripeWALStorage[] deltaStripeWALStorages,
         WALUpdated walUpdated,
@@ -82,10 +86,27 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         this.ringMembership = ringMembership;
         this.workingIndexDirectories = workingIndexDirectories;
         this.stripeVersions = stripeVersions;
+        this.stripeLocks = stripeLocks;
         this.stripeMaxFreeWithinNBytes = stripeMaxFreeWithinNBytes;
         this.deltaStripeWALStorages = deltaStripeWALStorages;
         this.walUpdated = walUpdated;
         this.awaitNotify = awaitNotify;
+    }
+
+    public void start() {
+        for (int i = 0; i < stripeLocks.length; i++) {
+            Preconditions.checkState(stripeLocks[i].isValid() && !stripeLocks[i].isShared());
+        }
+    }
+
+    public void stop() {
+        for (int i = 0; i < stripeLocks.length; i++) {
+            try {
+                stripeLocks[i].release();
+            } catch (IOException x) {
+                LOG.error("Failed to release stripe lock {} for {}", new Object[] { i, workingIndexDirectories[i] }, x);
+            }
+        }
     }
 
     private static byte[] walKey(RingMember member, PartitionName partitionName) throws Exception {

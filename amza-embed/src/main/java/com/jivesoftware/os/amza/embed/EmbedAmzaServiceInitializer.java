@@ -46,6 +46,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
+import com.jivesoftware.os.routing.bird.health.HealthCheck;
 import com.jivesoftware.os.routing.bird.health.HealthCheckResponse;
 import com.jivesoftware.os.routing.bird.health.HealthCheckResponseImpl;
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
@@ -246,99 +247,10 @@ public class EmbedAmzaServiceInitializer {
                 new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService)));
         }
    
-
         Resource staticResource = new Resource(null)
             .addClasspathResource("resources/static/amza")
             .setContext("/static/amza");
         deployable.addResource(staticResource);
-
-        deployable.addHealthCheck(() -> {
-            Map<Thread, Throwable> sickThread = sickThreads.getSickThread();
-            if (sickThread.isEmpty()) {
-                return new HealthCheckResponseImpl("sick>threads", 1.0, "Healthy", "No sick threads", "", System.currentTimeMillis());
-            } else {
-                return new HealthCheckResponse() {
-
-                    @Override
-                    public String getName() {
-                        return "sick>thread";
-                    }
-
-                    @Override
-                    public double getHealth() {
-                        return 0;
-                    }
-
-                    @Override
-                    public String getStatus() {
-                        return "There are " + sickThread.size() + " sick threads.";
-                    }
-
-                    @Override
-                    public String getDescription() {
-                        StringBuilder sb = new StringBuilder();
-                        for (Map.Entry<Thread, Throwable> entry : sickThread.entrySet()) {
-                            sb.append("thread:").append(entry.getKey()).append(" cause:").append(entry.getValue());
-                        }
-                        return sb.toString();
-                    }
-
-                    @Override
-                    public String getResolution() {
-                        return "Look at the logs and see if you can resolve the issue.";
-                    }
-
-                    @Override
-                    public long getTimestamp() {
-                        return System.currentTimeMillis();
-                    }
-                };
-            }
-        });
-
-        deployable.addHealthCheck(() -> {
-            Map<VersionedPartitionName, Throwable> sickPartition = sickPartitions.getSickPartitions();
-            if (sickPartition.isEmpty()) {
-                return new HealthCheckResponseImpl("sick>partitions", 1.0, "Healthy", "No sick partitions", "", System.currentTimeMillis());
-            } else {
-                return new HealthCheckResponse() {
-
-                    @Override
-                    public String getName() {
-                        return "sick>partition";
-                    }
-
-                    @Override
-                    public double getHealth() {
-                        return 0;
-                    }
-
-                    @Override
-                    public String getStatus() {
-                        return "There are " + sickPartition.size() + " sick partitions.";
-                    }
-
-                    @Override
-                    public String getDescription() {
-                        StringBuilder sb = new StringBuilder();
-                        for (Map.Entry<VersionedPartitionName, Throwable> entry : sickPartition.entrySet()) {
-                            sb.append("partition:").append(entry.getKey()).append(" cause:").append(entry.getValue());
-                        }
-                        return sb.toString();
-                    }
-
-                    @Override
-                    public String getResolution() {
-                        return "Look at the logs and see if you can resolve the issue.";
-                    }
-
-                    @Override
-                    public long getTimestamp() {
-                        return System.currentTimeMillis();
-                    }
-                };
-            }
-        });
 
         return new Lifecycle(ringMember, ringHost, amzaService, routingBirdAmzaDiscovery);
     }

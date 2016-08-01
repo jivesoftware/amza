@@ -78,6 +78,9 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -217,6 +220,7 @@ public class AmzaServiceInitializer {
 
         File[] walDirs = new File[numberOfStripes];
         long[] stripeVersions = new long[numberOfStripes];
+        FileLock[] stripeLocks = new FileLock[numberOfStripes];
         for (int i = 0; i < numberOfStripes; i++) {
             walDirs[i] = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             if (!walDirs[i].exists()) {
@@ -226,12 +230,14 @@ public class AmzaServiceInitializer {
             }
             File versionFile = new File(walDirs[i], "version");
             if (versionFile.exists()) {
+                stripeLocks[i] = FileChannel.open(versionFile.toPath(), StandardOpenOption.WRITE).lock();
                 try (FileInputStream fileInputStream = new FileInputStream(versionFile)) {
                     DataInput input = new DataInputStream(fileInputStream);
                     stripeVersions[i] = input.readLong();
                     LOG.info("Loaded stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " from " + versionFile);
                 }
             } else if (versionFile.createNewFile()) {
+                stripeLocks[i] = FileChannel.open(versionFile.toPath(), StandardOpenOption.WRITE).lock();
                 try (FileOutputStream fileOutputStream = new FileOutputStream(versionFile)) {
                     DataOutput output = new DataOutputStream(fileOutputStream);
                     stripeVersions[i] = orderIdProvider.nextId();
@@ -311,6 +317,7 @@ public class AmzaServiceInitializer {
             ringStoreReader,
             workingIndexDirectories,
             stripeVersions,
+            stripeLocks,
             stripeMaxFreeWithinNBytes,
             deltaStripeWALStorages,
             walUpdated,

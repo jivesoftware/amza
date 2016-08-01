@@ -186,7 +186,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     public void start(RingMember ringMember, RingHost ringHost) throws Exception {
-
+        storageVersionProvider.start();
         indexProviderRegistry.start();
         partitionCreator.init(storageVersionProvider);
         ringStoreReader.start(partitionIndex);
@@ -225,7 +225,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         takeCoordinator.stop();
         ringStoreReader.stop();
         indexProviderRegistry.stop();
-
+        storageVersionProvider.stop();
     }
 
     public void migrate(String fromIndexClass, String toIndexClass) throws Exception {

@@ -195,6 +195,7 @@ public class Main {
                 List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.entries,
                     input -> new ConnectionDescriptor(instanceDescriptor,
                         new HostPort(input.ringHost.getHost(), input.ringHost.getPort()),
+                        Collections.emptyMap(),
                         Collections.emptyMap())));
                 return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors, connectionDescriptorsRequest.getRequestUuid());
             } catch (Exception e) {

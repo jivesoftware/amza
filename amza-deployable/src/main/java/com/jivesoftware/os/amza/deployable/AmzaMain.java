@@ -124,12 +124,8 @@ public class AmzaMain {
 
             AmzaStats amzaStats = new AmzaStats();
             BAInterner interner = new BAInterner();
-            RingHost ringHost = new RingHost(instanceConfig.getDatacenter(), instanceConfig.getRack(), instanceConfig.getHost(), instanceConfig.getMainPort());
             SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
             JiveEpochTimestampProvider timestampProvider = new JiveEpochTimestampProvider();
-
-            RingMember ringMember = new RingMember(
-                Strings.padStart(String.valueOf(instanceConfig.getInstanceName()), 5, '0') + "_" + instanceConfig.getInstanceKey());
 
             LABPointerIndexConfig labConfig = deployable.config(LABPointerIndexConfig.class);
 

@@ -89,7 +89,7 @@ public class HttpRowsTaker implements RowsTaker {
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "rowsStream",
                 httpClient -> {
-                    HttpStreamResponse response = httpClient.streamingPost(endpoint, null, null);
+                    HttpStreamResponse response = httpClient.streamingPost(endpoint, "{}", null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }
@@ -130,7 +130,7 @@ public class HttpRowsTaker implements RowsTaker {
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "rowsStream",
                 httpClient -> {
-                    HttpResponse response = httpClient.postJson(endpoint, null, null);
+                    HttpResponse response = httpClient.postJson(endpoint, "{}", null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }

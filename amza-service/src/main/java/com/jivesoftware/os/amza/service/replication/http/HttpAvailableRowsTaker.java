@@ -67,7 +67,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
             new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
             "availableRowsStream",
             httpClient -> {
-                HttpStreamResponse response = httpClient.streamingPost(endpoint, null, null);
+                HttpStreamResponse response = httpClient.streamingPost(endpoint, "{}", null);
                 if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                     throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                 }

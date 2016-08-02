@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.service.replication.http;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -24,30 +23,27 @@ import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.http.client.HttpClientConfig;
-import com.jivesoftware.os.routing.bird.http.client.HttpClientConfiguration;
-import com.jivesoftware.os.routing.bird.http.client.HttpClientFactory;
-import com.jivesoftware.os.routing.bird.http.client.HttpClientFactoryProvider;
-import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
+import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiveStrategy;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
+import com.jivesoftware.os.routing.bird.http.client.NonSuccessStatusCodeException;
+import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
+import com.jivesoftware.os.routing.bird.shared.ClientCall.ClientResponse;
+import com.jivesoftware.os.routing.bird.shared.HostPort;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
-import java.util.Arrays;
-import java.util.concurrent.ConcurrentHashMap;
 import org.xerial.snappy.SnappyInputStream;
 
 public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
+    private final TenantAwareHttpClient<String> ringClient;
     private final StreamingTakesConsumer streamingTakesConsumer;
-    private final int socketTimeoutInMillis;
 
-    public HttpAvailableRowsTaker(BAInterner interner, int socketTimeoutInMillis) {
+    public HttpAvailableRowsTaker(TenantAwareHttpClient<String> ringClient,
+        BAInterner interner) {
+        this.ringClient = ringClient;
         this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
-        this.socketTimeoutInMillis = socketTimeoutInMillis;
     }
 
     @Override
@@ -60,14 +56,23 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         long timeoutMillis,
         AvailableStream availableStream) throws Exception {
 
-        HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost, socketTimeoutInMillis).executeStreamingPostRequest(null,
-            "/amza/rows/available"
+        String endpoint = "/amza/rows/available"
             + "/" + localRingMember.getMember()
             + "/" + localTimestampedRingHost.ringHost.toCanonicalString()
             + "/" + system
             + "/" + localTimestampedRingHost.timestampId
             + "/" + takeSessionId
-            + "/" + timeoutMillis);
+            + "/" + timeoutMillis;
+        HttpStreamResponse httpStreamResponse = ringClient.call("",
+            new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
+            "availableRowsStream",
+            httpClient -> {
+                HttpStreamResponse response = httpClient.streamingPost(endpoint, null, null);
+                if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
+                    throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
+                }
+                return new ClientResponse<>(response, true);
+            });
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
             DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
@@ -75,22 +80,6 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         } finally {
             httpStreamResponse.close();
         }
-    }
-
-    HttpRequestHelper getRequestHelper(RingHost ringHost, int socketTimeoutInMillis) {
-        return requestHelpers.computeIfAbsent(ringHost, (t) -> buildRequestHelper(ringHost.getHost(), ringHost.getPort(), socketTimeoutInMillis));
-    }
-
-    static HttpRequestHelper buildRequestHelper(String host, int port, int socketTimeoutInMillis) {
-        HttpClientConfig httpClientConfig = HttpClientConfig
-            .newBuilder()
-            .setSocketTimeoutInMillis(socketTimeoutInMillis)
-            .build();
-        HttpClientFactory httpClientFactory = new HttpClientFactoryProvider()
-            .createHttpClientFactory(Arrays.<HttpClientConfiguration>asList(httpClientConfig));
-        HttpClient httpClient = httpClientFactory.createClient(host, port);
-        HttpRequestHelper requestHelper = new HttpRequestHelper(httpClient, new ObjectMapper());
-        return requestHelper;
     }
 
 }

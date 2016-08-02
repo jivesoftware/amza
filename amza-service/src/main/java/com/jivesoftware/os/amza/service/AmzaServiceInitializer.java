@@ -135,7 +135,6 @@ public class AmzaServiceInitializer {
         public long interruptBlockingReadsIfLingersForNMillis = 60_000;
 
         public boolean rackDistributionEnabled = true;
-        public String blacklistRingMembers = null;
 
         public long discoveryIntervalMillis = 30_000;
     }

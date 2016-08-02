@@ -79,7 +79,9 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import org.merlin.config.BindInterfaceToConfiguration;
 
 public class Main {
@@ -126,8 +128,6 @@ public class Main {
 
         BAInterner interner = new BAInterner();
 
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner, 60_000); // TODO config
-
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
             @Override
@@ -153,9 +153,40 @@ public class Main {
         LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
         labConfig.setLeapCacheMaxCapacity(Integer.parseInt(System.getProperty("amza.leap.cache.max.capacity", "1000000")));
 
-
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+
+        AtomicReference<Callable<RingTopology>> topologyProvider = new AtomicReference<>(); // bit of a hack
+
+        InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", 0L, true);
+        ConnectionDescriptorsProvider connectionsProvider = (connectionDescriptorsRequest, expectedReleaseGroup) -> {
+            try {
+                RingTopology systemRing = topologyProvider.get().call();
+                List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.entries,
+                    input -> new ConnectionDescriptor(instanceDescriptor,
+                        new HostPort(input.ringHost.getHost(), input.ringHost.getPort()),
+                        Collections.emptyMap(),
+                        Collections.emptyMap())));
+                return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors, connectionDescriptorsRequest.getRequestUuid());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+        TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().builder(
+            new TenantsServiceConnectionDescriptorProvider<>(Executors.newScheduledThreadPool(1),
+                "",
+                connectionsProvider,
+                "",
+                "",
+                10_000), // TODO config
+            new HttpDeliveryClientHealthProvider("", null, "", 5000, 100))
+            .deadAfterNErrors(10)
+            .checkDeadEveryNMillis(10_000)
+            .maxConnections(1_000)
+            .socketTimeoutInMillis(60_000)
+            .build(); //TODO expose to conf
+
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(httpClient, interner); // TODO config
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             interner,
@@ -175,43 +206,20 @@ public class Main {
                     new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
-                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
-                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                    partitionStripeFunction,
-                    workingIndexDirectories),
+                indexProviderRegistry.register(
+                    new LABPointerIndexWALIndexProvider(labConfig,
+                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                        partitionStripeFunction,
+                        workingIndexDirectories),
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            () -> new HttpRowsTaker(amzaStats, interner, 60_000),
-            Optional.<TakeFailureListener>absent(),
+            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, interner),
+            Optional.absent(),
             (RowsChanged changes) -> {
             });
 
-
-        InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", 0L, true);
-        ConnectionDescriptorsProvider connectionsProvider = (connectionDescriptorsRequest, expectedReleaseGroup) -> {
-            try {
-                RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
-                List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.entries,
-                    input -> new ConnectionDescriptor(instanceDescriptor,
-                        new HostPort(input.ringHost.getHost(), input.ringHost.getPort()),
-                        Collections.emptyMap(),
-                        Collections.emptyMap())));
-                return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors, connectionDescriptorsRequest.getRequestUuid());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        };
-        TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().initialize(
-            new TenantsServiceConnectionDescriptorProvider<>(Executors.newScheduledThreadPool(1),
-                "",
-                connectionsProvider,
-                "",
-                "",
-                10_000), // TODO config
-            new HttpDeliveryClientHealthProvider("", null, "", 5000, 100),
-            10,
-            10_000); //TODO expose to conf
+        topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING));
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
             new HttpPartitionClientFactory(interner),
@@ -235,18 +243,18 @@ public class Main {
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
 
-            @Override
-            public void addEndpoint(Class clazz) {
-                System.out.println("Adding endpoint=" + clazz);
-                jerseyEndpoints.addEndpoint(clazz);
-            }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    System.out.println("Adding endpoint=" + clazz);
+                    jerseyEndpoints.addEndpoint(clazz);
+                }
 
-            @Override
-            public void addInjectable(Class clazz, Object instance) {
-                System.out.println("Injecting " + clazz + " " + instance);
-                jerseyEndpoints.addInjectable(clazz, instance);
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    System.out.println("Injecting " + clazz + " " + instance);
+                    jerseyEndpoints.addInjectable(clazz, instance);
+                }
             }
-        }
         );
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);

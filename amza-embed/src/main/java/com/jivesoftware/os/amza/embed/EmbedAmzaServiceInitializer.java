@@ -126,9 +126,6 @@ public class EmbedAmzaServiceInitializer {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
 
-        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, baInterner, (int) amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis);
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(baInterner, (int) amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis);
-
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
             @Override
@@ -152,6 +149,23 @@ public class EmbedAmzaServiceInitializer {
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
+
+        HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceKey,
+            HttpRequestHelperUtils.buildRequestHelper(routesHost, routesPort),
+            connectionsHealthEndpoint, 5_000, 100);
+
+        TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
+        TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
+            deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
+            clientHealthProvider)
+            .deadAfterNErrors(10)
+            .checkDeadEveryNMillis(10_000)
+            .maxConnections(1_000)
+            .socketTimeoutInMillis(60_000)
+            .build(); // TODO expose to conf
+
+        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, ringClient, mapper, baInterner);
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner);
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             baInterner,
@@ -198,21 +212,10 @@ public class EmbedAmzaServiceInitializer {
                 blacklistRingMembers);
         }
 
-        HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceKey,
-            HttpRequestHelperUtils.buildRequestHelper(routesHost, routesPort),
-            connectionsHealthEndpoint, 5_000, 100);
-
-        TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
-        TenantAwareHttpClient<String> httpClient = tenantRoutingHttpClientInitializer.initialize(
-            deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
-            clientHealthProvider,
-            10,
-            10_000); // TODO expose to conf
-
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
             new HttpPartitionClientFactory(baInterner),
-            new HttpPartitionHostsProvider(baInterner, httpClient, mapper),
-            new RingHostHttpClientProvider(httpClient),
+            new HttpPartitionHostsProvider(baInterner, ringClient, mapper),
+            new RingHostHttpClientProvider(ringClient),
             Executors.newCachedThreadPool(),
             10_000, //TODO expose to conf
             -1,

@@ -49,8 +49,8 @@ public class BinaryRowReader implements WALReader {
 
         byte[] intLongBuffer = new byte[8];
         synchronized (parent.lock()) {
-            IReadable filer = parent.reader(null, parent.length(), true, 0);
-            long filerLength = filer.length();
+            long filerLength = parent.length();
+            IReadable filer = parent.reader(null, filerLength, true, 0);
             if (backwardScan) {
                 long seekTo = filerLength;
                 while (seekTo > 0) {
@@ -239,7 +239,10 @@ public class BinaryRowReader implements WALReader {
                                 LOG.warn("Truncating due to corruption while scanning");
                                 return truncate(preTruncationNotifier, offsetFp);
                             } else {
-                                String msg = "Scan terminated prematurely due to a corruption at fp:" + offsetFp + ". " + parent;
+                                String msg = "Scan terminated prematurely due to a corruption at fp:" + offsetFp +
+                                    " length:" + length +
+                                    " available:" + fileLength +
+                                    " in " + parent;
                                 LOG.error(msg);
                                 throw new EOFException(msg);
                             }

@@ -11,20 +11,11 @@ public interface AmzaConfig extends Config {
     @StringDefault("./var/data")
     String getWorkingDirs();
 
-    @IntDefault(1000)
-    int getTakeFromNeighborsIntervalInMillis();
-
     @LongDefault(60_000L)
     long getTakeSlowThresholdInMillis();
 
     @IntDefault(8)
-    int getNumberOfCompactorThreads();
-
-    @IntDefault(8)
     int getNumberOfTakerThreads();
-
-    @LongDefault(30_000L)
-    long getDiscoveryIntervalMillis();
 
     @LongDefault(1_000L)
     long getAsyncFsyncIntervalMillis();

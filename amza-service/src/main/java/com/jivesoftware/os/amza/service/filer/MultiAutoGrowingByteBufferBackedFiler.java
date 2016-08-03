@@ -23,6 +23,7 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
 
     private final int fShift;
     private final long fseekMask;
+    private final long maxPosition;
 
     public MultiAutoGrowingByteBufferBackedFiler(long initialBufferSegmentSize,
         long maxBufferSegmentSize,
@@ -43,6 +44,8 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
         } else {
             throw new IllegalArgumentException("It's hard to ensure powers of 2");
         }
+
+        this.maxPosition = MAX_POSITION;
     }
 
     private MultiAutoGrowingByteBufferBackedFiler(long maxBufferSegmentSize,
@@ -59,34 +62,16 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
         this.length = length;
         this.fShift = fShift;
         this.fseekMask = fseekMask;
-    }
-
-    public MultiAutoGrowingByteBufferBackedFiler duplicate(long startFP, long endFp) {
-        ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
-        for (int i = 0; i < duplicate.length; i++) {
-            if ((i + 1) * maxBufferSegmentSize < startFP || (i - 1) * maxBufferSegmentSize > endFp) {
-                continue;
-            }
-            duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
-        }
-        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
-    }
-
-    public MultiAutoGrowingByteBufferBackedFiler duplicateNew(MultiAutoGrowingByteBufferBackedFiler current) {
-        ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
-        System.arraycopy(current.filers, 0, duplicate, 0, current.filers.length - 1);
-        for (int i = current.filers.length - 1; i < duplicate.length; i++) {
-            duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
-        }
-        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
+        this.maxPosition = length;
     }
 
     public MultiAutoGrowingByteBufferBackedFiler duplicateAll() {
         ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
+        long copyLength = length; // grab length before duplicating buffers
         for (int i = 0; i < duplicate.length; i++) {
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
+        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, copyLength, fShift, fseekMask);
     }
 
     final long ensure(long bytesToWrite) throws IOException {
@@ -101,7 +86,7 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
     }
 
     final void position(long position) throws IOException {
-        if (position > MAX_POSITION) {
+        if (position > maxPosition) {
             throw new IllegalStateException("Encountered a likely runaway file position! position=" + position);
         }
         int f = (int) (position >> fShift);

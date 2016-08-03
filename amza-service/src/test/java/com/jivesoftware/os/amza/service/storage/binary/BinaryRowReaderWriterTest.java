@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -29,7 +30,13 @@ import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -219,6 +226,58 @@ public class BinaryRowReaderWriterTest {
             filer.close();
         }
 
+    }
+
+    @Test(enabled = false)
+    public void testConcurrency() throws Exception {
+        MemoryBackedWALFiler walFiler = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(32, 1_024 * 1_024, new HeapByteBufferFactory()));
+        IoStats ioStats = new IoStats();
+        BinaryRowReader binaryRowReader = new BinaryRowReader(walFiler, ioStats);
+        BinaryRowWriter binaryRowWriter = new BinaryRowWriter(walFiler, ioStats);
+
+        ExecutorService executors = Executors.newFixedThreadPool(9);
+        AtomicBoolean running = new AtomicBoolean(true);
+        AtomicLong scanned = new AtomicLong();
+        List<Future<?>> futures = Lists.newArrayList();
+        for (int i = 0; i < 8; i++) {
+            futures.add(executors.submit(() -> {
+                try {
+                    while (running.get()) {
+                        binaryRowReader.scan(0, false, (rowFP, rowTxId, rowType, row) -> {
+                            scanned.incrementAndGet();
+                            return true;
+                        });
+                    }
+                    return true;
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                    throw t;
+                }
+            }));
+        }
+        futures.add(executors.submit(() -> {
+            try {
+                for (int i = 0; i < 1_000_000; i++) {
+                    byte[] row = UIO.intBytes(i);
+                    binaryRowWriter.write(i, RowType.primary, 1, 16,
+                        stream -> stream.stream(row),
+                        stream -> true,
+                        (txId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                        false,
+                        false);
+                    if (i % 10_000 == 0) {
+                        System.out.println("Finished i:" + i + " scanned:" + scanned.get());
+                    }
+                }
+            } finally {
+                running.set(false);
+            }
+            return null;
+        }));
+
+        for (Future<?> future : futures) {
+            future.get();
+        }
     }
 
     static class ReadStream implements RowStream {

@@ -128,7 +128,7 @@ public class HttpRowsTaker implements RowsTaker {
                 + "/" + localLeadershipToken;
             return ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
-                "rowsStream",
+                "rowsTaken",
                 httpClient -> {
                     HttpResponse response = httpClient.postJson(endpoint, "{}", null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {

@@ -8,7 +8,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -46,9 +45,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
-import com.jivesoftware.os.routing.bird.health.HealthCheck;
-import com.jivesoftware.os.routing.bird.health.HealthCheckResponse;
-import com.jivesoftware.os.routing.bird.health.HealthCheckResponseImpl;
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
@@ -60,15 +56,12 @@ import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.StringDefault;
 
 /**
- *
  * @author jonathan.colt
  */
 public class EmbedAmzaServiceInitializer {
@@ -164,6 +157,8 @@ public class EmbedAmzaServiceInitializer {
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
 
+        clientHealthProvider.start();
+
         RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, ringClient, mapper, baInterner);
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner);
 
@@ -193,9 +188,9 @@ public class EmbedAmzaServiceInitializer {
                     persistentRowIOProvider);
 
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(indexConfig,
-                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                    partitionStripeFunction,
-                    workingIndexDirectories),
+                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                        partitionStripeFunction,
+                        workingIndexDirectories),
                     persistentRowIOProvider);
             },
             availableRowsTaker,
@@ -224,18 +219,18 @@ public class EmbedAmzaServiceInitializer {
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
 
-            @Override
-            public void addEndpoint(Class clazz) {
-                System.out.println("Adding endpoint=" + clazz);
-                deployable.addEndpoints(clazz);
-            }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    System.out.println("Adding endpoint=" + clazz);
+                    deployable.addEndpoints(clazz);
+                }
 
-            @Override
-            public void addInjectable(Class clazz, Object instance) {
-                System.out.println("Injecting " + clazz + " " + instance);
-                deployable.addInjectables(clazz, instance);
-            }
-        });
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    System.out.println("Injecting " + clazz + " " + instance);
+                    deployable.addInjectables(clazz, instance);
+                }
+            });
 
         deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
         deployable.addInjectables(AmzaService.class, amzaService);
@@ -249,7 +244,7 @@ public class EmbedAmzaServiceInitializer {
             deployable.addInjectables(AmzaRestClient.class, new AmzaRestClientHealthCheckDelegate(
                 new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService)));
         }
-   
+
         Resource staticResource = new Resource(null)
             .addClasspathResource("resources/static/amza")
             .setContext("/static/amza");

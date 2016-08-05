@@ -173,14 +173,30 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
     }
 
     @Override
-    public boolean scan(Consistency consistency,
+    public boolean scan(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan, long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency, compressed, ranges, scan, true, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis, abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    @Override
+    public boolean scanKeys(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency, compressed, ranges, scan, false, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis, abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    private boolean scanInternal(Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
         KeyValueTimestampStream stream,
+        boolean hydrateValues,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
+
         boolean merge;
         if (consistency == Consistency.leader_plus_one
             || consistency == Consistency.leader_quorum
@@ -191,10 +207,13 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
             merge = false;
         }
         byte[] intLongBuffer = new byte[8];
-        return partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "scan",
-            (leader, ringMember, client) -> {
-                return remotePartitionCaller.scan(leader, ringMember, client, consistency, compressed, ranges);
-            },
+
+        PartitionCall<C, CloseableStreamResponse, E> partitionCall = (leader, ringMember, client) -> {
+            return remotePartitionCaller.scan(leader, ringMember, client, consistency, compressed, ranges, hydrateValues);
+        };
+
+        return partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, hydrateValues ? "scan" : "scanKeys",
+            partitionCall,
             (answers) -> {
                 List<FilerInputStream> streams = Lists.newArrayList(Lists.transform(answers, input -> {
                     try {
@@ -220,7 +239,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                                 if (!eos[i]) {
                                     quorumScan.fill(i, UIO.readByteArray(fis, "prefix", intLongBuffer),
                                         UIO.readByteArray(fis, "key", intLongBuffer),
-                                        UIO.readByteArray(fis, "value", intLongBuffer),
+                                        hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null,
                                         UIO.readLong(fis, "timestampId", intLongBuffer),
                                         UIO.readLong(fis, "version", intLongBuffer));
                                 } else {
@@ -247,7 +266,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                     while (!UIO.readBoolean(fis, "eos")) {
                         if (!stream.stream(UIO.readByteArray(fis, "prefix", intLongBuffer),
                             UIO.readByteArray(fis, "key", intLongBuffer),
-                            UIO.readByteArray(fis, "value", intLongBuffer),
+                            hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null,
                             UIO.readLong(fis, "timestampId", intLongBuffer),
                             UIO.readLong(fis, "version", intLongBuffer))) {
                             return false;

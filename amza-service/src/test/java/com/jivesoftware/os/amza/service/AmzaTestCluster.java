@@ -509,7 +509,7 @@ public class AmzaTestCluster {
                     partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
-                    });
+                    }, true);
                     if (count[0] > 0) {
                         return false;
                     }
@@ -669,7 +669,7 @@ public class AmzaTestCluster {
                         } catch (Exception x) {
                             throw new RuntimeException("Failed while comparing", x);
                         }
-                    });
+                    }, true);
             } catch (Exception e) {
                 System.out.println("EXCEPTION: " + e.getMessage());
                 e.printStackTrace();

@@ -75,6 +75,7 @@
                         <th>Count</th>
                         <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
                         <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan</th>
+                        <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan Keys</th>
                         <th><span class="glyphicon glyphicon-save"></span>{sp}Direct Applied</th>
                         <th><span class="glyphicon glyphicon-edit"></span>{sp}Updates</th>
                         <th><span class="glyphicon glyphicon-share"></span>{sp}Offered</th>
@@ -99,6 +100,7 @@
                         <td></td>
                         <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag} ms lag</i></td>
                         <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag} ms lag</i></td>
+                        <td><b>{$grandTotals.scanKeys}</b>{sp}<i>{$grandTotals.scanKeysLag} ms lag</i></td>
                         <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag} ms lag</i></td>
                         <td><b>{$grandTotals.updates}</b>{sp}<i>{$grandTotals.updatesLag} ms lag</i></td>
                         <td><b>{$grandTotals.offers}</b>{sp}<i>{$grandTotals.offersLag} ms lag</i></td>
@@ -127,6 +129,7 @@
                             <td><b>{$r.count}</b></td>
                             <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag} ms lag</i></td>
                             <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag} ms lag</i></td>
+                            <td><b>{$r.scanKeys}</b>{sp}<i>{$r.scanKeysLag} ms lag</i></td>
                             <td><b>{$r.directApplies}</b><i>{sp}{$r.directAppliesLag} ms lag</i></td>
                             <td><b>{$r.updates}</b>{sp}<i>{$r.updatesLag} ms lag</i></td>
                             <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag} ms lag</i></td>

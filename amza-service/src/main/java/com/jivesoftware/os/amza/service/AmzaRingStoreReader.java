@@ -153,7 +153,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             } else {
                                 return true;
                             }
-                        }),
+                        }, true),
                     (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
                         if (!blacklistRingMembers.contains(ringMember)) {
@@ -192,7 +192,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             } else {
                 return stream.stream(new RingMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
             }
-        });
+        }, true);
 
     }
 
@@ -229,7 +229,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                     }
                 }
                 return true;
-            });
+            }, true);
         return ring;
     }
 
@@ -265,7 +265,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             }
                         }
                         return true;
-                    });
+                    }, true);
                 } catch (Exception x) {
                     throw new RuntimeException(x);
                 }
@@ -304,7 +304,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                 }
             }
             return true;
-        });
+        }, true);
 
         ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
@@ -329,7 +329,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             } else {
                 return true;
             }
-        });
+        }, true);
     }
 
 }

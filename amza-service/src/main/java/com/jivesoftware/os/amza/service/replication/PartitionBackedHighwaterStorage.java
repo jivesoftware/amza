@@ -12,7 +12,6 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -80,7 +79,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         (highwaters, txKeyValueStream) -> txKeyValueStream.row(-1, key, value, removeTimestamp, true, removeTimestamp),
                         walUpdated);
                     return true;
-                });
+                }, true);
         } finally {
             bigBird.release();
         }
@@ -191,7 +190,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                     highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
                 }
                 return true;
-            });
+            }, true);
         return new WALHighwater(highwaters);
     }
 

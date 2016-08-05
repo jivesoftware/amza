@@ -63,6 +63,15 @@ public interface PartitionClient {
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception;
 
+    boolean scanKeys(Consistency consistency,
+        boolean compressed,
+        PrefixedKeyRanges ranges,
+        KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception;
+
     TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,

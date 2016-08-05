@@ -34,7 +34,8 @@ public interface RemotePartitionCaller<C, E extends Throwable> {
         C client,
         Consistency consistency,
         boolean compressed,
-        PrefixedKeyRanges ranges) throws E;
+        PrefixedKeyRanges ranges,
+        boolean hydrateValues) throws E;
 
     PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader,
         RingMember ringMember,

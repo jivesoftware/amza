@@ -129,12 +129,12 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rowScan(WALKeyPointerStream stream) throws Exception {
+    public boolean rowScan(WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
         return true;
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
         return true;
     }
 

@@ -33,7 +33,7 @@ public interface AmzaRestClient {
 
     void ring(RingLeader ringLeader, IWriteable writeable) throws IOException;
 
-    void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out) throws Exception;
+    void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out, boolean hydrateValues) throws Exception;
 
     StateMessageCause status(PartitionName partitionName, Consistency consistency, boolean checkLeader, long partitionAwaitOnlineTimeoutMillis);
 

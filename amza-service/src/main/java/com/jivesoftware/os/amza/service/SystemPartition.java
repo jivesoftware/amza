@@ -118,12 +118,13 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception {
+    public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan, boolean hydrateValues) throws Exception {
         for (ScanRange range : ranges) {
             if (range.fromKey == null && range.toKey == null) {
                 boolean result = systemWALStorage.rowScan(versionedPartitionName,
                     (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion),
+                    true);
                 if (!result) {
                     return false;
                 }
@@ -134,7 +135,8 @@ public class SystemPartition implements Partition {
                     range.toPrefix,
                     range.toKey,
                     (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
-                        -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                        -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion),
+                    true);
                 if (!result) {
                     return false;
                 }

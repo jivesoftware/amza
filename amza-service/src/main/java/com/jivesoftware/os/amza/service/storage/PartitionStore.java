@@ -106,13 +106,14 @@ public class PartitionStore implements RangeScannable {
     }
 
     @Override
-    public boolean rowScan(KeyValueStream txKeyValueStream) throws Exception {
-        return walStorage.rowScan(txKeyValueStream);
+    public boolean rowScan(KeyValueStream txKeyValueStream, boolean hydrateValues) throws Exception {
+        return walStorage.rowScan(txKeyValueStream, hydrateValues);
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream txKeyValueStream) throws Exception {
-        return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream);
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream txKeyValueStream,
+        boolean hydrateValues) throws Exception {
+        return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream, hydrateValues);
     }
 
     public void compactTombstone(boolean force,

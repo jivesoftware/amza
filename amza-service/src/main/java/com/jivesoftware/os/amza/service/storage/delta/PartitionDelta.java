@@ -221,7 +221,7 @@ class PartitionDelta {
                 -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp, hasValue, value));
     }
 
-    DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
+    DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, boolean hydrateValues) {
         byte[] from = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
         byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
         Iterator<Map.Entry<byte[], WALPointer>> iterator = subMap(orderedIndex, from, to).entrySet().iterator();
@@ -232,7 +232,7 @@ class PartitionDelta {
             mergingIterator = subMap(mergingPartitionDelta.orderedIndex, from, to).entrySet().iterator();
             mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
         }
-        return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL);
+        return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL, hydrateValues);
     }
 
     private static ConcurrentNavigableMap<byte[], WALPointer> subMap(ConcurrentSkipListMap<byte[], WALPointer> index, byte[] from, byte[] to) {
@@ -251,7 +251,7 @@ class PartitionDelta {
         }
     }
 
-    DeltaPeekableElmoIterator rowScanIterator() {
+    DeltaPeekableElmoIterator rowScanIterator(boolean hydrateValues) {
         Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.entrySet().iterator();
         Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
         PartitionDelta mergingPartitionDelta = merging.get();
@@ -260,7 +260,7 @@ class PartitionDelta {
             mergingIterator = mergingPartitionDelta.orderedIndex.entrySet().iterator();
             mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
         }
-        return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL);
+        return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL, hydrateValues);
     }
 
     long highestTxId() {

@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -68,7 +67,6 @@ public class PartitionStripe {
     public String getName() {
         return name;
     }
-
 
     void deleteDelta(VersionedPartitionName versionedPartitionName) throws Exception {
         storage.delete(versionedPartitionName);
@@ -183,7 +181,7 @@ public class PartitionStripe {
 
     }
 
-    public void rowScan(VersionedAquarium versionedAquarium, KeyValueStream keyValueStream) throws Exception {
+    public void rowScan(VersionedAquarium versionedAquarium, KeyValueStream keyValueStream, boolean hydrateValues) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
         Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
@@ -201,8 +199,12 @@ public class PartitionStripe {
                     } else {
                         return keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                     }
-                });
-            stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                }, hydrateValues);
+            if (hydrateValues) {
+                stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            } else {
+                stats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            }
         }
 
     }
@@ -212,7 +214,8 @@ public class PartitionStripe {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueStream keyValueStream) throws Exception {
+        KeyValueStream keyValueStream,
+        boolean hydrateValues) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
@@ -232,8 +235,13 @@ public class PartitionStripe {
                     } else {
                         return keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                     }
-                });
-            stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                }, hydrateValues);
+
+            if (hydrateValues) {
+                stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            } else {
+                stats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            }
         }
 
     }

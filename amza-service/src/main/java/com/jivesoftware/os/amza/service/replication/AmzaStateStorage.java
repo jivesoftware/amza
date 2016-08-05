@@ -53,7 +53,7 @@ class AmzaStateStorage implements StateStorage<Long> {
                         }, interner);
                 }
                 return true;
-            });
+            }, true);
     }
 
     @Override

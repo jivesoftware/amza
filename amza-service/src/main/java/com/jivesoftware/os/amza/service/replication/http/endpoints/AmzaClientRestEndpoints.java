@@ -258,10 +258,11 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/scan/{base64PartitionName}/{consistency}/{checkLeader}")
+    @Path("/scan/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
     public Object scan(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,
         @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
@@ -302,7 +303,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.scan(partitionName, ranges, out);
+                client.scan(partitionName, ranges, out, hydrateValues);
                 out.flush(true);
 
             } catch (Exception x) {
@@ -317,10 +318,11 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/scanCompressed/{base64PartitionName}/{consistency}/{checkLeader}")
+    @Path("/scanCompressed/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
     public Object scanCompressed(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,
         @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
@@ -362,7 +364,7 @@ public class AmzaClientRestEndpoints {
                 SnappyOutputStream sos = new SnappyOutputStream(new BufferedOutputStream(os, 8192));
                 FilerOutputStream fos = new FilerOutputStream(sos);
                 try {
-                    client.scan(partitionName, ranges, fos);
+                    client.scan(partitionName, ranges, fos, hydrateValues);
                 } catch (Exception x) {
                     LOG.warn("Failed during compressed stream scan", x);
                 } finally {

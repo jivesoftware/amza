@@ -857,7 +857,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     @Override
-    public boolean rowScan(KeyValueStream keyValueStream) throws Exception {
+    public boolean rowScan(KeyValueStream keyValueStream, boolean hydrateValues) throws Exception {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
@@ -868,14 +868,15 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     value = primaryRowMarshaller.valueFromRow(rowType, hydrateRowIndexValue, 1 + 8);
                 }
                 return keyValueStream.stream(prefix, key, value, timestamp, tombstoned, version);
-            });
+            }, hydrateValues);
         } finally {
             releaseOne();
         }
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream keyValueStream) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream keyValueStream,
+        boolean hydrateValues) throws Exception {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
@@ -890,7 +891,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         value = primaryRowMarshaller.valueFromRow(rowType, hydrateRowIndexValue, 1 + 8);
                     }
                     return keyValueStream.stream(prefix, key, value, timestamp, tombstoned, version);
-                });
+                }, hydrateValues);
         } finally {
             releaseOne();
         }

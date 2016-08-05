@@ -48,7 +48,7 @@ public class LABPointerIndexWALIndexTest {
         index.rowScan((prefix, key, timestamp, tombstoned, version, fp, hasValue, value) -> {
             System.out.println("1.---" + Arrays.toString(prefix) + " " + Arrays.toString(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
             return true;
-        });
+        }, true);
 
         index.merge(stream -> stream.stream(2L, UIO.longBytes(2), UIO.longBytes(2), UIO.longBytes(2), System.currentTimeMillis(), false, Long.MAX_VALUE, 2L),
             null);
@@ -56,7 +56,7 @@ public class LABPointerIndexWALIndexTest {
         index.rowScan((prefix, key, timestamp, tombstoned, version, fp, hasValue, value) -> {
             System.out.println("2.---" + Arrays.toString(prefix) + " " + Arrays.toString(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
             return true;
-        });
+        }, true);
 
         index.getPointer(UIO.longBytes(2), UIO.longBytes(2), (prefix, key, timestamp, tombstoned, version, fp, hasValue, value) -> {
             assertEquals(fp, 2);
@@ -160,7 +160,7 @@ public class LABPointerIndexWALIndexTest {
             assertEquals(rowScanExpectedI[0], UIO.bytesLong(key));
             rowScanExpectedI[0]++;
             return true;
-        });
+        }, true);
 
         int[] rangeScaneExpectedI = new int[] { 10 };
         index.rangeScan(UIO.longBytes(10), UIO.longBytes(10), UIO.longBytes(20), UIO.longBytes(20),
@@ -178,7 +178,7 @@ public class LABPointerIndexWALIndexTest {
                 assertEquals(rangeScaneExpectedI[0], UIO.bytesLong(key));
                 rangeScaneExpectedI[0]++;
                 return true;
-            });
+            }, true);
     }
 
     @Test
@@ -215,7 +215,7 @@ public class LABPointerIndexWALIndexTest {
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromKey, key) <= 0);
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(key, toKey) < 0);
             return true;
-        });
+        }, true);
         Assert.assertEquals(count[0], 16);
 
         int[] rowScanExpectedI = new int[] { 0 };
@@ -232,7 +232,7 @@ public class LABPointerIndexWALIndexTest {
             //assertEquals(iToKey(rowScanExpectedI[0]), key);
             rowScanExpectedI[0]++;
             return true;
-        });
+        }, true);
 
         Assert.assertTrue(rowScanExpectedI[0] == 64);
 
@@ -252,7 +252,7 @@ public class LABPointerIndexWALIndexTest {
                 assertEquals(iToKey(rangeScaneExpectedI[0]), key);
                 rangeScaneExpectedI[0] += 4;
                 return true;
-            });
+            }, true);
     }
 
     byte[] iToKey(long i) {
@@ -296,7 +296,7 @@ public class LABPointerIndexWALIndexTest {
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromPrefix, prefix) <= 0);
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(prefix, toPrefix) < 0);
             return true;
-        });
+        }, true);
         Assert.assertEquals(count[0], 16);
     }
 

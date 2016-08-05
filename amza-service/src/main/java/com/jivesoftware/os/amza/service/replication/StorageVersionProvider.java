@@ -366,7 +366,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     }
                 }
                 return true;
-            });
+            }, true);
     }
 
     private int getStripeIndex(long stripeVersion) {

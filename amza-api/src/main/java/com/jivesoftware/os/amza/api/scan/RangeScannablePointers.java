@@ -8,5 +8,5 @@ import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
  */
 public interface RangeScannablePointers extends ScannablePointers {
 
-    boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception;
+    boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream, boolean hydrateValues) throws Exception;
 }

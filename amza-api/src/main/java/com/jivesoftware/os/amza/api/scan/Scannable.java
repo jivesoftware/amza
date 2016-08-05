@@ -19,6 +19,6 @@ import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 
 public interface Scannable {
 
-    boolean rowScan(KeyValueStream scan) throws Exception;
+    boolean rowScan(KeyValueStream scan, boolean hydrateValues) throws Exception;
 
 }

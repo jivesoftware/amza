@@ -405,12 +405,12 @@ public class DeltaStripeWALStorage {
                                     sickThreads.sick(x);
                                     if (validate) {
                                         LOG.error("Validation merge failed for partition:{} WAL storage must be purged and re-taken!",
-                                            new Object[] { versionedPartitionName }, x);
+                                            new Object[]{versionedPartitionName}, x);
                                         currentVersionProvider.abandonVersion(versionedPartitionName);
                                         break;
                                     } else {
                                         LOG.error("Background merge failed for partition:{} We will retry in case the issue can be resolved.",
-                                            new Object[] { versionedPartitionName }, x);
+                                            new Object[]{versionedPartitionName}, x);
                                         Thread.sleep(30_000L);
                                     }
                                 }
@@ -433,10 +433,10 @@ public class DeltaStripeWALStorage {
             sickThreads.sick(x);
             LOG.error(
                 "This is catastrophic."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance",
+                new Object[]{index}, x);
             LockSupport.park();
         } finally {
             releaseAll();
@@ -469,10 +469,10 @@ public class DeltaStripeWALStorage {
             sickThreads.sick(x);
             LOG.error(
                 "This is catastrophic. Failure finalizing merge."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance",
+                new Object[]{index}, x);
             LockSupport.park();
         }
 
@@ -484,10 +484,10 @@ public class DeltaStripeWALStorage {
             sickThreads.sick(x);
             LOG.error(
                 "This is catastrophic. Failure destroying WAL."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance",
+                new Object[]{index}, x);
             LockSupport.park();
         } finally {
             releaseAll();
@@ -501,10 +501,10 @@ public class DeltaStripeWALStorage {
             sickThreads.sick(x);
             LOG.error(
                 "This is catastrophic. Failure invalidating delta index cache."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance",
+                new Object[]{index}, x);
             LockSupport.park();
         }
         return true;
@@ -528,7 +528,7 @@ public class DeltaStripeWALStorage {
         if (directApply && mergeDebt > 0) {
             long highestTxId = partitionStore.mergedTxId();
             int takeFromFactor = ringReader.getTakeFromFactor(versionedPartitionName.getPartitionName().getRingName());
-            int[] taken = { 0 };
+            int[] taken = {0};
             ackWaters.streamPartitionTxIds(versionedPartitionName, (member, txId) -> {
                 if (txId >= highestTxId) {
                     taken[0]++;
@@ -775,13 +775,13 @@ public class DeltaStripeWALStorage {
         try {
             return storage.containsKeys(prefix,
                 storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(prefix, keys,
-                    (_prefix, key, timestamp, tombstoned, version, exists) -> {
-                        if (exists) {
-                            return stream.stream(prefix, key, !tombstoned, timestamp, version);
-                        } else {
-                            return storageKeyStream.stream(key);
-                        }
-                    }),
+                (_prefix, key, timestamp, tombstoned, version, exists) -> {
+                    if (exists) {
+                        return stream.stream(prefix, key, !tombstoned, timestamp, version);
+                    } else {
+                        return storageKeyStream.stream(key);
+                    }
+                }),
                 stream);
         } finally {
             releaseOne();
@@ -823,13 +823,14 @@ public class DeltaStripeWALStorage {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueStream keyValueStream) throws Exception {
+        KeyValueStream keyValueStream,
+        boolean hydrateValues) throws Exception {
 
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-            final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(fromPrefix, fromKey, toPrefix, toKey);
-            rangeScannable.rangeScan(fromPrefix, fromKey, toPrefix, toKey, new LatestKeyValueStream(iterator, keyValueStream));
+            final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(fromPrefix, fromKey, toPrefix, toKey, hydrateValues);
+            rangeScannable.rangeScan(fromPrefix, fromKey, toPrefix, toKey, new LatestKeyValueStream(iterator, keyValueStream), hydrateValues);
 
             return WALKey.decompose(
                 fpRawKeyValueStream -> {
@@ -854,18 +855,22 @@ public class DeltaStripeWALStorage {
                     return true;
                 },
                 (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
-                    -> keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
+                -> keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
         } finally {
             releaseOne();
         }
     }
 
-    public boolean rowScan(final VersionedPartitionName versionedPartitionName, Scannable scannable, KeyValueStream keyValueStream) throws Exception {
+    public boolean rowScan(VersionedPartitionName versionedPartitionName,
+        Scannable scannable,
+        KeyValueStream keyValueStream,
+        boolean hydrateValues) throws Exception {
+        
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-            DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
-            if (!scannable.rowScan(new LatestKeyValueStream(iterator, keyValueStream))) {
+            DeltaPeekableElmoIterator iterator = delta.rowScanIterator(hydrateValues);
+            if (!scannable.rowScan(new LatestKeyValueStream(iterator, keyValueStream), hydrateValues)) {
                 return false;
             }
 
@@ -892,7 +897,7 @@ public class DeltaStripeWALStorage {
                         return true;
                     },
                     (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
-                        -> keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
+                    -> keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
             }
             return true;
         } finally {
@@ -942,7 +947,7 @@ public class DeltaStripeWALStorage {
             if (d == null && iterator.hasNext()) {
                 d = iterator.next();
             }
-            boolean[] needsKey = { true };
+            boolean[] needsKey = {true};
             byte[] pk = WALKey.compose(prefix, key);
             boolean complete = WALKey.decompose(
                 txFpKeyValueStream -> {
@@ -966,7 +971,7 @@ public class DeltaStripeWALStorage {
                     return true;
                 },
                 (txId, fp, rowType, sPrefix, sKey, sHasValue, sValue, sValueTimestamp, sValueTombstoned, sValueVersion, row)
-                    -> keyValueStream.stream(sPrefix, sKey, sValue, sValueTimestamp, sValueTombstoned, sValueVersion));
+                -> keyValueStream.stream(sPrefix, sKey, sValue, sValueTimestamp, sValueTombstoned, sValueVersion));
 
             if (!complete) {
                 return false;

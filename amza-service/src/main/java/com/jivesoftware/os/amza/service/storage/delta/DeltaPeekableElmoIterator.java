@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALValue;
@@ -19,6 +20,7 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
     private final Iterator<Map.Entry<byte[], WALPointer>> compactingIterator;
     private final WALRowHydrator hydrator;
     private final WALRowHydrator compactingHydrator;
+    private final boolean hydrateValues;
     private Map.Entry<byte[], WALValue> last;
     private Map.Entry<byte[], WALPointer> iNext;
     private Map.Entry<byte[], WALPointer> cNext;
@@ -26,11 +28,13 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
     public DeltaPeekableElmoIterator(Iterator<Map.Entry<byte[], WALPointer>> iterator,
         Iterator<Map.Entry<byte[], WALPointer>> compactingIterator,
         WALRowHydrator hydrator,
-        WALRowHydrator compactingHydrator) {
+        WALRowHydrator compactingHydrator,
+        boolean hydrateValues) {
         this.iterator = new OverConsumingEntryIterator<>(iterator);
         this.compactingIterator = new OverConsumingEntryIterator<>(compactingIterator);
         this.hydrator = hydrator;
         this.compactingHydrator = compactingHydrator;
+        this.hydrateValues = hydrateValues;
     }
 
     public void eos() {
@@ -86,7 +90,17 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
     // TODO fix this Ugly Abomination
     private Map.Entry<byte[], WALValue> hydrate(Map.Entry<byte[], WALPointer> entry, WALRowHydrator valueHydrator) {
         try {
-            WALValue hydrated = valueHydrator.hydrate(entry.getValue().getFp());
+            WALPointer pointer = entry.getValue();
+            WALValue hydrated = null;
+            if (hydrateValues) {
+                if (pointer.getHasValue()) {
+                    hydrated = new WALValue(RowType.primary, pointer.getValue(), pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion());
+                } else {
+                    hydrated = valueHydrator.hydrate(entry.getValue().getFp());
+                }
+            } else {
+                hydrated = new WALValue(RowType.primary, null, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion());
+            }
             return new AbstractMap.SimpleEntry<>(entry.getKey(), hydrated);
         } catch (Exception e) {
             throw new RuntimeException("Failed to hydrate while iterating delta", e);

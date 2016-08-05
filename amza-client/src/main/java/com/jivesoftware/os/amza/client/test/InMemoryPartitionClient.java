@@ -81,10 +81,27 @@ public class InMemoryPartitionClient implements PartitionClient {
     }
 
     @Override
-    public boolean scan(Consistency consistency,
+    public boolean scan(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan, long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency, compressed, ranges, scan, true, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    @Override
+    public boolean scanKeys(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency, compressed, ranges, scan, false, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    private boolean scanInternal(Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
         KeyValueTimestampStream scan,
+        boolean hydrateValues,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
@@ -107,7 +124,7 @@ public class InMemoryPartitionClient implements PartitionClient {
                 byte[] key = WALKey.rawKeyKey(rawKey);
                 WALValue value = entry.getValue();
                 if (value.getTimestampId() != -1 && !value.getTombstoned()) {
-                    if (!scan.stream(prefix, key, value.getValue(), value.getTimestampId(), value.getVersion())) {
+                    if (!scan.stream(prefix, key, hydrateValues ? value.getValue() : null, value.getTimestampId(), value.getVersion())) {
                         return false;
                     }
                 }

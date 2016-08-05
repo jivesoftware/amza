@@ -41,8 +41,10 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
         LabHeapPressure labHeapPressure = new LabHeapPressure(config.getGlobalMaxHeapPressureInBytes(), new AtomicLong());
 
+        ExecutorService schedulerThreadPool = LABEnvironment.buildLABSchedulerThreadPool(config.getConcurrency());
         ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
+
         this.leapCache = LABEnvironment.buildLeapsCache((int) config.getLeapCacheMaxCapacity(), config.getConcurrency());
 
         for (int i = 0; i < environments.length; i++) {
@@ -54,7 +56,8 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LABEnvironment(compactorThreadPool,
+            this.environments[i] = new LABEnvironment(schedulerThreadPool,
+                compactorThreadPool,
                 destroyThreadPool,
                 active,
                 config.getUseMemMap(),

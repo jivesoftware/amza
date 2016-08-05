@@ -448,6 +448,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("getsLag", getDurationBreakdown(totals.getsLatency.get()));
         map.put("scans", numberFormat.format(totals.scans.get()));
         map.put("scansLag", getDurationBreakdown(totals.scansLatency.get()));
+        map.put("scanKeys", numberFormat.format(totals.scanKeys.get()));
+        map.put("scanKeysLag", getDurationBreakdown(totals.scanKeysLatency.get()));
         map.put("directApplies", numberFormat.format(totals.directApplies.get()));
         map.put("directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()));
         map.put("updates", numberFormat.format(totals.updates.get()));
@@ -524,6 +526,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Scans (" + numberFormat.format(grandTotal.scans.get()) + ")",
             (int) (((double) grandTotal.scansLatency.longValue() / 1000d) * 100),
             getDurationBreakdown(grandTotal.scansLatency.longValue()) + " lag"));
+
+         sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.get()) + ")",
+            (int) (((double) grandTotal.scanKeysLatency.longValue() / 1000d) * 100),
+            getDurationBreakdown(grandTotal.scanKeysLatency.longValue()) + " lag"));
 
         sb.append(progress("Direct Applied (" + numberFormat.format(grandTotal.directApplies.get()) + ")",
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),

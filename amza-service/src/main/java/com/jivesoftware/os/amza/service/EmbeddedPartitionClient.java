@@ -68,10 +68,27 @@ public class EmbeddedPartitionClient implements PartitionClient {
     }
 
     @Override
-    public boolean scan(Consistency consistency,
+    public boolean scan(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan, long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency, compressed, ranges, scan, true, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    @Override
+    public boolean scanKeys(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency, compressed, ranges, scan, false, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    private boolean scanInternal(Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
         KeyValueTimestampStream scan,
+        boolean hydrateValues,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
@@ -82,7 +99,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
             scanRanges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
             return true;
         });
-        return partition.scan(scanRanges, scan);
+        return partition.scan(scanRanges, scan, hydrateValues);
     }
 
     @Override

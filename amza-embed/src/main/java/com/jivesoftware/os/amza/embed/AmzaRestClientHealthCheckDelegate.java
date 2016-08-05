@@ -263,13 +263,31 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
     private static final HealthTimer scanResponseLatency = HealthFactory.getHealthTimer(ScanResponseLatency.class, TimerHealthChecker.FACTORY);
 
+    public static interface ScanKeysResponseLatency extends TimerHealthCheckConfig {
+
+        @StringDefault("client>scanKeys>response>latency")
+        @Override
+        String getName();
+
+        @StringDefault("How long its taking to scanKeys.")
+        @Override
+        String getDescription();
+
+        @DoubleDefault(3600000d)
+        @Override
+        Double get95ThPecentileMax();
+    }
+
+    private static final HealthTimer scanKeysResponseLatency = HealthFactory.getHealthTimer(ScanKeysResponseLatency.class, TimerHealthChecker.FACTORY);
+
     @Override
-    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out) throws Exception {
+    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out, boolean hydrateValues) throws Exception {
+        HealthTimer timer = hydrateValues ? scanResponseLatency : scanKeysResponseLatency;
         try {
-            scanResponseLatency.startTimer();
-            client.scan(partitionName, ranges, out);
+            timer.startTimer();
+            client.scan(partitionName, ranges, out, hydrateValues);
         } finally {
-            scanResponseLatency.stopTimer("Ensure", "Check cluster health.");
+            timer.stopTimer("Ensure", "Check cluster health.");
         }
     }
 

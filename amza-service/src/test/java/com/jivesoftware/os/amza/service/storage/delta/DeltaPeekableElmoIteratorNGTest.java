@@ -81,7 +81,8 @@ public class DeltaPeekableElmoIteratorNGTest {
                 wal.entrySet().iterator(),
                 Iterators.<Map.Entry<byte[], WALPointer>>emptyIterator(),
                 hydrator,
-                hydrator);
+                hydrator,
+                true);
 
             List<Byte> had = new ArrayList<>();
             long[] lastV = {-1};
@@ -102,7 +103,8 @@ public class DeltaPeekableElmoIteratorNGTest {
                 wal.entrySet().iterator(),
                 other.entrySet().iterator(),
                 hydrator,
-                hydrator);
+                hydrator,
+                true);
 
             had.clear();
             lastV[0] = -1;

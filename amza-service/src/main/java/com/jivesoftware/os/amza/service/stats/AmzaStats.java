@@ -112,6 +112,8 @@ public class AmzaStats {
         public final AtomicLong getsLatency = new AtomicLong();
         public final AtomicLong scans = new AtomicLong();
         public final AtomicLong scansLatency = new AtomicLong();
+        public final AtomicLong scanKeys = new AtomicLong();
+        public final AtomicLong scanKeysLatency = new AtomicLong();
         public final AtomicLong updates = new AtomicLong();
         public final AtomicLong updatesLag = new AtomicLong();
         public final AtomicLong offers = new AtomicLong();
@@ -283,6 +285,14 @@ public class AmzaStats {
         totals.scans.addAndGet(count);
         totals.scansLatency.set(lag);
         grandTotals.scansLatency.set((grandTotals.scansLatency.get() + lag) / 2);
+    }
+
+    public void scanKeys(PartitionName partitionName, int count, long lag) {
+        grandTotals.scanKeys.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.scanKeys.addAndGet(count);
+        totals.scanKeysLatency.set(lag);
+        grandTotals.scanKeysLatency.set((grandTotals.scanKeysLatency.get() + lag) / 2);
     }
 
     private Totals partitionTotals(PartitionName versionedPartitionName) {

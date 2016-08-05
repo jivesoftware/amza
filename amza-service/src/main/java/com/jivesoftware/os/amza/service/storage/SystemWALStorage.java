@@ -152,14 +152,14 @@ public class SystemWALStorage {
         return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public boolean rowScan(VersionedPartitionName versionedPartitionName, KeyValueStream keyValueStream) throws Exception {
+    public boolean rowScan(VersionedPartitionName versionedPartitionName, KeyValueStream keyValueStream, boolean hydrateValues) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
         PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return partitionStore.getWalStorage().rowScan(keyValueStream);
+            return partitionStore.getWalStorage().rowScan(keyValueStream, hydrateValues);
         }
     }
 
@@ -168,7 +168,8 @@ public class SystemWALStorage {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueStream keyValueStream) throws Exception {
+        KeyValueStream keyValueStream,
+        boolean hydrateValues) throws Exception {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
@@ -176,7 +177,7 @@ public class SystemWALStorage {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return partitionStore.getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
+            return partitionStore.getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream, hydrateValues);
         }
     }
 

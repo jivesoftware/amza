@@ -52,11 +52,34 @@ public class AmzaPartitionClientTest {
             Optional.<List<String>>empty());
     }
 
+    @Test
+    public void testScanKeys() throws Exception {
+        byte[] partitionNameBytes = "abc".getBytes();
+        PartitionName partitionName = new PartitionName(false, partitionNameBytes, partitionNameBytes);
+        AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(),
+            new TestRingHostClientProvider());
+        AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(new BAInterner(), partitionName, router, new TestRemotePartitionCaller(),
+            10_000L, -1, -1);
+
+        client.scanKeys(Consistency.quorum,
+            false,
+            stream -> stream.stream(null, null, null, null),
+            (prefix, key, value, timestamp, version) -> {
+                System.out.println("Got " + Arrays.toString(key) + " = " + Arrays.toString(value) + " @ " + timestamp);
+                return true;
+            },
+            1_000L,
+            10_000L,
+            30_000L,
+            Optional.<List<String>>empty());
+    }
+
     private class TestClient {
 
     }
 
     private class TestPartitionHostsProvider implements PartitionHostsProvider {
+
         @Override
         public void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
             // do nothing
@@ -65,15 +88,15 @@ public class AmzaPartitionClientTest {
         @Override
         public Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws Exception {
             return new Ring(0,
-                new RingMemberAndHost[] {
+                new RingMemberAndHost[]{
                     new RingMemberAndHost(new RingMember("test1"), new RingHost("", "", "host1", 1234)),
                     new RingMemberAndHost(new RingMember("test2"), new RingHost("", "", "host2", 1234)),
-                    new RingMemberAndHost(new RingMember("test3"), new RingHost("", "", "host3", 1234)),
-                });
+                    new RingMemberAndHost(new RingMember("test3"), new RingHost("", "", "host3", 1234)),});
         }
     }
 
     private class TestRingHostClientProvider implements RingHostClientProvider<TestClient, Exception> {
+
         @Override
         public <R> R call(PartitionName partitionName,
             RingMember leader,
@@ -86,6 +109,7 @@ public class AmzaPartitionClientTest {
     }
 
     private class TestRemotePartitionCaller implements RemotePartitionCaller<TestClient, Exception> {
+
         @Override
         public PartitionResponse<NoOpCloseable> commit(RingMember leader,
             RingMember ringMember,
@@ -113,12 +137,13 @@ public class AmzaPartitionClientTest {
             TestClient client,
             Consistency consistency,
             boolean compressed,
-            PrefixedKeyRanges ranges) throws Exception {
+            PrefixedKeyRanges ranges,
+            boolean hydrateValues) throws Exception {
 
             ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
             FilerOutputStream out = new FilerOutputStream(compressed ? new SnappyOutputStream(bytesOut) : bytesOut);
             try {
-                scanOut(out, 10);
+                scanOut(out, 10, hydrateValues);
                 out.close();
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -147,13 +172,15 @@ public class AmzaPartitionClientTest {
             }, true);
         }
 
-        private void scanOut(IWriteable out, int count) throws Exception {
+        private void scanOut(IWriteable out, int count, boolean hydrateValues) throws Exception {
             byte[] intLongBuffer = new byte[8];
             for (int i = 0; i < count; i++) {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, null, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, UIO.intBytes(i), "key", intLongBuffer);
-                UIO.writeByteArray(out, UIO.intBytes(-i), "value", intLongBuffer);
+                if (hydrateValues) {
+                    UIO.writeByteArray(out, UIO.intBytes(-i), "value", intLongBuffer);
+                }
                 UIO.writeLong(out, 1_000 + i, "timestampId");
                 UIO.writeLong(out, 2_000 + i, "version");
             }

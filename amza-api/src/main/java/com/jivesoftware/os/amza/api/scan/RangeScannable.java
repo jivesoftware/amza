@@ -7,5 +7,5 @@ import com.jivesoftware.os.amza.api.stream.KeyValueStream;
  */
 public interface RangeScannable extends Scannable {
 
-    boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream keyValueStream) throws Exception;
+    boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream keyValueStream, boolean hydrateValues) throws Exception;
 }

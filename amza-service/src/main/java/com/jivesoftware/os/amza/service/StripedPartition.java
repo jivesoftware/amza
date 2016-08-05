@@ -177,7 +177,7 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception {
+    public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan, boolean hydrateValues) throws Exception {
 
         systemReady.await(0);
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
@@ -185,7 +185,7 @@ public class StripedPartition implements Partition {
                 for (ScanRange range : ranges) {
                     if (range.fromKey == null && range.toKey == null) {
                         partitionStripe.rowScan(versionedAquarium, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                            -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                            -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion), hydrateValues);
                     } else {
                         partitionStripe.rangeScan(versionedAquarium,
                             range.fromPrefix,
@@ -193,7 +193,7 @@ public class StripedPartition implements Partition {
                             range.toPrefix,
                             range.toKey,
                             (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion), hydrateValues);
                     }
                 }
 

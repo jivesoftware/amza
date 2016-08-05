@@ -90,7 +90,7 @@ public class BerkeleyDBWALIndexTest {
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(key, toKey) < 0);
             //System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
             return true;
-        });
+        }, true);
         Assert.assertEquals(count[0], 16);
     }
 
@@ -122,7 +122,7 @@ public class BerkeleyDBWALIndexTest {
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(prefix, toPrefix) < 0);
             //System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
             return true;
-        });
+        }, true);
         Assert.assertEquals(count[0], 16);
     }
 

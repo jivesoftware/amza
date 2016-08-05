@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.api.stream.KeyValues;
 import com.jivesoftware.os.amza.api.stream.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxFpStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointers;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -90,7 +89,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rowScan(WALKeyPointerStream stream) throws Exception {
+    public boolean rowScan(WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
         return WALKey.decompose(
             keyEntryStream -> {
                 for (Entry<byte[], WALPointer> e : index.entrySet()) {
@@ -115,7 +114,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
         byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
         byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
         return WALKey.decompose(

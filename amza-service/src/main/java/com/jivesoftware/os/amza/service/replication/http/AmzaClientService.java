@@ -168,7 +168,8 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out) throws Exception {
+    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out, boolean hydrateValues) throws Exception {
+ 
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
 
@@ -177,11 +178,13 @@ public class AmzaClientService implements AmzaRestClient {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, key, "key", intLongBuffer);
-                UIO.writeByteArray(out, value, "value", intLongBuffer);
+                if (hydrateValues) {
+                    UIO.writeByteArray(out, value, "value", intLongBuffer);
+                }
                 UIO.writeLong(out, timestamp, "timestampId");
                 UIO.writeLong(out, version, "version");
                 return true;
-            });
+            }, hydrateValues);
 
         UIO.writeByte(out, (byte) 1, "eos");
     }

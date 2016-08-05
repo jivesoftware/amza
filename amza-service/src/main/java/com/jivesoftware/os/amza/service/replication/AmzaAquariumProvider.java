@@ -729,11 +729,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             };
 
             if (rootMember == null && otherMember == null) {
-                return systemWALStorage.rowScan(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, keyValueStream);
+                return systemWALStorage.rowScan(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, keyValueStream, true);
             } else {
                 byte[] fromKey = livelinessKey(rootMember, otherMember);
                 return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
-                    keyValueStream);
+                    keyValueStream, true);
             }
         }
 

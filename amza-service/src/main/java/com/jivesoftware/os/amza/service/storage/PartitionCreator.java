@@ -298,7 +298,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
                 }
             }
             return true;
-        });
+        }, true);
         return partitionNames;
     }
 
@@ -312,7 +312,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
                 }
             }
             return true;
-        });
+        }, true);
     }
 
     public void markForDisposal(PartitionName partitionName) throws Exception {

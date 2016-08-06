@@ -9,6 +9,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -246,7 +247,8 @@ public class DeltaStripeWALStorage {
                             try {
                                 PartitionDelta delta = getPartitionDelta(versionedPartitionName);
                                 // delta is pristine, no need to check timestamps and versions
-                                delta.put(fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                                byte[] deltaValue = UIO.readByteArray(value, 0, "value");
+                                delta.put(fp, prefix, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion);
                                 delta.onLoadAppendTxFp(prefix, txId, fp);
                                 updateSinceLastMerge.incrementAndGet();
                                 return true;

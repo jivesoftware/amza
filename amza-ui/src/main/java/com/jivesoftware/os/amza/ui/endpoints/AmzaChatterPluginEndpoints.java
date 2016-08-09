@@ -31,7 +31,6 @@ public class AmzaChatterPluginEndpoints {
     }
 
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response chatter() {
         String rendered = soyService.renderPlugin(pluginRegion, new ChatterPluginRegionInput(false, false, false));
@@ -39,7 +38,6 @@ public class AmzaChatterPluginEndpoints {
     }
 
     @POST
-    @Path("/")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("unhealthy") @DefaultValue("false") boolean unhealthy,
         @FormParam("active") @DefaultValue("false") boolean active,

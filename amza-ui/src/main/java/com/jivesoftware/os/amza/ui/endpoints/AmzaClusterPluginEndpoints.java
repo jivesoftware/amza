@@ -32,7 +32,6 @@ public class AmzaClusterPluginEndpoints {
     }
 
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
@@ -41,7 +40,6 @@ public class AmzaClusterPluginEndpoints {
     }
 
     @POST
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("member") @DefaultValue("") String member,

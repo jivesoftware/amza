@@ -50,7 +50,7 @@ import javax.ws.rs.core.UriInfo;
  * @author jonathan.colt
  */
 @Singleton
-@Path("/amza/")
+@Path("/amza")
 public class AmzaUIEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
@@ -256,7 +256,7 @@ public class AmzaUIEndpoints {
 
     @GET
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/download")
+    @Path("/propagator/download")
     public StreamingOutput pull() throws Exception {
         return (OutputStream os) -> {
             try {
@@ -282,10 +282,9 @@ public class AmzaUIEndpoints {
     }
 
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response get(@Context UriInfo uriInfo) {
-        String rendered = soyService.render(uriInfo.getAbsolutePath() + "propagator/download", amzaClusterName.name);
+        String rendered = soyService.render(uriInfo.getAbsolutePath() + "/propagator/download", amzaClusterName.name);
         return Response.ok(rendered).build();
     }
 

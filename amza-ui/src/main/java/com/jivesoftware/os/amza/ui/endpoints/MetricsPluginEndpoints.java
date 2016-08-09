@@ -29,7 +29,6 @@ public class MetricsPluginEndpoints {
     }
 
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response filter(@QueryParam("partitionName") @DefaultValue("") String partitionName,
         @QueryParam("ringName") @DefaultValue("") String ringName,
@@ -42,7 +41,7 @@ public class MetricsPluginEndpoints {
 
     @GET
     @Produces(MediaType.TEXT_HTML)
-    @Path("/stats/")
+    @Path("/stats")
     public Response stats(@QueryParam("partitionName") String partitionName,
         @QueryParam("exact") boolean exact) {
         return Response.ok(pluginRegion.renderStats(partitionName, exact)).build();

@@ -1044,20 +1044,25 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     //TODO replace with stream!
     private byte[] hydrateRowIndexValue(long indexFP) {
-        try {
-            return walTx.tx((io) -> io.readTypeByteTxIdAndRow(indexFP));
-        } catch (Exception x) {
-
-            long length;
+        if (indexFP >= 0) {
             try {
-                length = walTx.length();
-            } catch (Exception e) {
-                length = -1;
-            }
+                return walTx.tx((io) -> io.readTypeByteTxIdAndRow(indexFP));
+            } catch (Exception x) {
+                long length;
+                try {
+                    length = walTx.length();
+                } catch (Exception e) {
+                    length = -1;
+                }
 
-            throw new RuntimeException(
-                "Failed to hydrate for " + versionedPartitionName + " versionedPartitionName=" + versionedPartitionName + " size=" + length + " fp=" + indexFP,
-                x);
+                throw new RuntimeException("Failed to hydrate for" +
+                    " versionedPartitionName=" + versionedPartitionName +
+                    " size=" + length +
+                    " fp=" + indexFP,
+                    x);
+            }
+        } else {
+            throw new RuntimeException("Failed to hydrate missing FP for versionedPartitionName=" + versionedPartitionName);
         }
     }
 

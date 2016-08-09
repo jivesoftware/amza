@@ -32,7 +32,6 @@ public class AmzaPartitionsPluginEndpoints {
     }
 
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput("", "", "", "", "none", true, true, RowType.primary));
@@ -40,7 +39,6 @@ public class AmzaPartitionsPluginEndpoints {
     }
 
     @POST
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("action") @DefaultValue("") String action,

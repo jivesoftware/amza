@@ -29,17 +29,7 @@ public class AquariumPluginEndpoints {
         this.pluginRegion = pluginRegion;
     }
 
-//    @GET
-//    @Path("/")
-//    @Produces(MediaType.TEXT_HTML)
-//    public Response ring() {
-//        String rendered = soyService.renderPlugin(pluginRegion,
-//            new AquariumPluginRegionInput("", "", "0"));
-//        return Response.ok(rendered).build();
-//    }
-
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@QueryParam("ringName") @DefaultValue("") String ringName,

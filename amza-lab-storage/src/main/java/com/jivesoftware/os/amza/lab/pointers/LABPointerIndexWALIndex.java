@@ -247,19 +247,19 @@ public class LABPointerIndexWALIndex implements WALIndex {
         long version,
         byte[] payload,
         KeyValuePointerStream stream) throws Exception {
-        long fp = -1;
         if (payload != null) {
             if (payload[0] == PAYLOAD_NULL) {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, true, null);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, true, null);
             } else if (payload[0] == PAYLOAD_NONNULL) {
                 byte[] pointerValue = new byte[payload.length - 1];
                 System.arraycopy(payload, 1, pointerValue, 0, pointerValue.length);
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, true, pointerValue);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, true, pointerValue);
             } else {
-                fp = UIO.bytesLong(payload);
+                long fp = UIO.bytesLong(payload);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, false, null);
             }
         }
-        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, false, null);
+        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, false, null);
     }
 
     @Override

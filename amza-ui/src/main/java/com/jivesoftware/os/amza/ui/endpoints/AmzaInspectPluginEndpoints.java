@@ -33,7 +33,6 @@ public class AmzaInspectPluginEndpoints {
     }
 
     @GET
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring(@QueryParam("regionType") @DefaultValue("USER") String type,
         @QueryParam("client") @DefaultValue("false") boolean client,
@@ -54,7 +53,6 @@ public class AmzaInspectPluginEndpoints {
     }
 
     @POST
-    @Path("/")
     @Produces(MediaType.TEXT_HTML)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("client") @DefaultValue("false") boolean client,

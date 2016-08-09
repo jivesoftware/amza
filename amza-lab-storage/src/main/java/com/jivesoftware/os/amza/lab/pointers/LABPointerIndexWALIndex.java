@@ -201,7 +201,11 @@ public class LABPointerIndexWALIndex implements WALIndex {
         }
     }
 
-    private boolean fromPayload(long txId, long fp, byte[] payload, TxFpStream txFpStream) throws Exception {
+    private boolean fromPayload(long txId,
+        long fp,
+        byte[] payload,
+        TxFpStream txFpStream,
+        boolean hydrateValues) throws Exception {
         if (payload != null && payload[0] < 0) {
             if (payload[0] == PAYLOAD_NULL) {
                 return txFpStream.stream(txId, fp, true, null);
@@ -211,7 +215,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return txFpStream.stream(txId, fp, true, value);
             }
         }
-        return txFpStream.stream(txId, fp, false, null);
+        return txFpStream.stream(txId, fp, !hydrateValues, null);
     }
 
     private boolean fromPayload(byte[] prefix,
@@ -220,20 +224,21 @@ public class LABPointerIndexWALIndex implements WALIndex {
         boolean tombstoned,
         long version,
         byte[] payload,
-        WALKeyPointerStream stream) throws Exception {
-        long fp = -1;
+        WALKeyPointerStream stream,
+        boolean hydrateValues) throws Exception {
         if (payload != null) {
             if (payload[0] == PAYLOAD_NULL) {
-                return stream.stream(prefix, key, timestamp, tombstoned, version, fp, true, null);
+                return stream.stream(prefix, key, timestamp, tombstoned, version, -1, true, null);
             } else if (payload[0] == PAYLOAD_NONNULL) {
                 byte[] value = new byte[payload.length - 1];
                 System.arraycopy(payload, 1, value, 0, value.length);
-                return stream.stream(prefix, key, timestamp, tombstoned, version, fp, true, value);
+                return stream.stream(prefix, key, timestamp, tombstoned, version, -1, true, value);
             } else {
-                fp = UIO.bytesLong(payload);
+                long fp = UIO.bytesLong(payload);
+                return stream.stream(prefix, key, timestamp, tombstoned, version, fp, false, null);
             }
         }
-        return stream.stream(prefix, key, timestamp, tombstoned, version, fp, false, null);
+        return stream.stream(prefix, key, timestamp, tombstoned, version, -1, !hydrateValues, null);
     }
 
     private boolean fromPayload(byte[] prefix,
@@ -246,7 +251,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         boolean tombstoned,
         long version,
         byte[] payload,
-        KeyValuePointerStream stream) throws Exception {
+        KeyValuePointerStream stream,
+        boolean hydrateValues) throws Exception {
         if (payload != null) {
             if (payload[0] == PAYLOAD_NULL) {
                 return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, true, null);
@@ -259,7 +265,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, false, null);
             }
         }
-        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, false, null);
+        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, !hydrateValues, null);
     }
 
     @Override
@@ -275,7 +281,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 byte[] key = WALKey.rawKeyKey(rawKey);
                 long takeTxId = UIO.bytesLong(key, 0);
                 long takeFp = UIO.bytesLong(key, 8);
-                return fromPayload(takeTxId, takeFp, payload, txFpStream);
+                return fromPayload(takeTxId, takeFp, payload, txFpStream, true);
             }, true);
         } finally {
             lock.release();
@@ -293,7 +299,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             byte[] pk = WALKey.compose(prefix, key);
             return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
                 (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                    return fromPayload(prefix, key, timestamp, tombstoned, version, payload, stream);
+                    return fromPayload(prefix, key, timestamp, tombstoned, version, payload, stream, true);
                 },
                 true);
         } finally {
@@ -309,7 +315,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
                     (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                        return fromPayload(prefix, key, timestamp, tombstoned, version, payload, stream);
+                        return fromPayload(prefix, key, timestamp, tombstoned, version, payload, stream, true);
                     },
                     true);
             });
@@ -326,7 +332,18 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
                     (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                        return fromPayload(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, payload, stream);
+                        return fromPayload(prefix,
+                            key,
+                            value,
+                            valueTimestamp,
+                            valueTombstoned,
+                            valueVersion,
+                            timestamp,
+                            tombstoned,
+                            version,
+                            payload,
+                            stream,
+                            true);
                     },
                     true);
             });
@@ -367,7 +384,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             long[] delta = new long[1];
             boolean completed = keyPointers.consume(
                 (prefix, key, requestTimestamp, requestTombstoned, requestVersion, requestFp, requestIndexValue, requestValue)
-                -> getPointer(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
+                    -> getPointer(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
                     // indexFp, indexTombstoned, requestTombstoned, delta
                     // -1       false            false              1
                     // -1       false            true               0
@@ -432,7 +449,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                     tombstoned,
                     version,
                     payload,
-                    stream),
+                    stream,
+                    hydrateValues),
                 hydrateValues);
         } finally {
             lock.release();
@@ -440,10 +458,14 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream,
+    public boolean rangeScan(byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        WALKeyPointerStream stream,
         boolean hydrateValues) throws Exception {
-        lock.acquire();
 
+        lock.acquire();
         try {
             byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
             byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
@@ -455,9 +477,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
                     tombstoned,
                     version,
                     payload,
-                    stream),
+                    stream,
+                    hydrateValues),
                 hydrateValues);
-
         } finally {
             lock.release();
         }

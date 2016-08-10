@@ -19,3 +19,6 @@ nbactions.xml
 target/
 .checkstyle
 .checkstyle-cachefile
+data1/
+data2/
+data3/

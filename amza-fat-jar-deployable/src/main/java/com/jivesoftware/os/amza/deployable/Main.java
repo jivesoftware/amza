@@ -172,13 +172,17 @@ public class Main {
                 throw new RuntimeException(e);
             }
         };
+        TenantsServiceConnectionDescriptorProvider<String> connectionPoolProvider = new TenantsServiceConnectionDescriptorProvider<>(
+            Executors.newScheduledThreadPool(1),
+            "",
+            connectionsProvider,
+            "",
+            "",
+            10_000); // TODO config
+        connectionPoolProvider.start();
+
         TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().builder(
-            new TenantsServiceConnectionDescriptorProvider<>(Executors.newScheduledThreadPool(1),
-                "",
-                connectionsProvider,
-                "",
-                "",
-                10_000), // TODO config
+            connectionPoolProvider,
             new HttpDeliveryClientHealthProvider("", null, "", 5000, 100))
             .deadAfterNErrors(10)
             .checkDeadEveryNMillis(10_000)

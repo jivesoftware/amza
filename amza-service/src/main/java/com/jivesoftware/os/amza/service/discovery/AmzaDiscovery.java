@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.service.discovery;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -92,45 +91,61 @@ public class AmzaDiscovery {
                             try {
                                 socket.receive(packet);
                             } catch (Exception x) {
-                                LOG.warn("No data.");
+                                LOG.warn("No multicast data received.");
                                 continue;
                             }
+
                             String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
                             List<String> clusterMemberHostPort = Lists.newArrayList(Splitter.on('|').split(received));
-                            if (clusterMemberHostPort.size() == 4 && clusterMemberHostPort.get(0) != null && clusterMemberHostPort.get(0).equals(clusterName)) {
-                                LOG.debug("received:" + clusterMemberHostPort);
+                            if (clusterMemberHostPort.size() == 7 &&
+                                clusterMemberHostPort.get(0) != null &&
+                                clusterMemberHostPort.get(0).equals(clusterName)) {
+                                LOG.debug("Received multicast: " + clusterMemberHostPort.toString().trim());
+
                                 String member = clusterMemberHostPort.get(1).trim();
                                 String datacenter = clusterMemberHostPort.get(2).trim();
                                 String rack = clusterMemberHostPort.get(3).trim();
                                 String host = clusterMemberHostPort.get(4).trim();
                                 int port = Integer.parseInt(clusterMemberHostPort.get(5).trim());
                                 long timestampId = Long.parseLong(clusterMemberHostPort.get(6).trim());
+
                                 RingMember ringMember = new RingMember(member);
+                                allMemberSeen.add(ringMember);
+
+                                RingMemberAndHost entry = null;
+                                RingTopology systemRing = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
+                                for (RingMemberAndHost iter : systemRing.entries) {
+                                    if (iter.ringMember.equals(ringMember)) {
+                                        entry = iter;
+                                        break;
+                                    }
+                                }
+
                                 RingHost anotherRingHost = new RingHost(datacenter, rack, host, port);
-                                RingTopology ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
-                                //TODO this is a little heavy handed
-                                RingMemberAndHost entry = Iterables.find(ring.entries, input -> input.ringMember.equals(ringMember));
+
                                 if (entry == null) {
                                     LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
                                     ringStoreWriter.register(ringMember, anotherRingHost, timestampId, false);
-                                    allMemberSeen.add(ringMember);
                                 } else if (!entry.ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
                                     ringStoreWriter.register(ringMember, anotherRingHost, timestampId, false);
-                                    allMemberSeen.add(ringMember);
+                                } else {
+                                    LOG.debug("Found entry: " + entry.toString());
                                 }
                             }
+
                             long elapse = System.currentTimeMillis() - startTime;
                             if (elapse > timeout && allMemberSeen.size() <= 1) {
                                 if (!allMemberSeen.contains(ringStoreReader.getRingMember())) {
                                     LOG.error("We have not seen our own multicast.");
                                 }
+
                                 LOG.error("We have not discovered any other members, elapsed:{} multicastGroup:{} multicastPort:{}",
                                     elapse, multicastGroup, multicastPort);
                             }
                         }
                     } catch (Exception x) {
-                        LOG.error("Failed to receive broadcast from  group:" + multicastGroup + " port:" + multicastPort, x);
+                        LOG.error("Failed to receive broadcast from group:" + multicastGroup + " port:" + multicastPort, x);
                     } finally {
                         socket.leaveGroup(multicastGroup);
                     }
@@ -165,8 +180,9 @@ public class AmzaDiscovery {
                     LOG.debug("Sent:" + message);
                 }
             } catch (Exception e) {
-                LOG.error("Failed to receive broadcast. message:" + message + " to  group:" + multicastGroup + " port:" + multicastPort, e);
+                LOG.error("Failed to receive broadcast. message:" + message + " to group:" + multicastGroup + " port:" + multicastPort, e);
             }
         }
     }
+
 }

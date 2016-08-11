@@ -41,6 +41,8 @@ import com.jivesoftware.os.routing.bird.health.checkers.GCPauseHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.LoadAverageHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
+import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
+import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
 import java.util.Arrays;
@@ -137,10 +139,12 @@ public class AmzaMain {
                 }
             }
 
+            HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceConfig.getInstanceKey(),
+                HttpRequestHelperUtils.buildRequestHelper(instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
+                instanceConfig.getConnectionsHealth(), 5_000, 100);
+
             EmbedAmzaServiceInitializer.Lifecycle lifecycle = new EmbedAmzaServiceInitializer().initialize(deployable,
-                instanceConfig.getRoutesHost(),
-                instanceConfig.getRoutesPort(),
-                instanceConfig.getConnectionsHealth(),
+                clientHealthProvider,
                 instanceConfig.getInstanceName(),
                 instanceConfig.getInstanceKey(),
                 instanceConfig.getServiceName(),
@@ -160,7 +164,6 @@ public class AmzaMain {
                 true,
                 (RowsChanged changes) -> {
                 });
-
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

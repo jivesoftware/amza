@@ -178,7 +178,7 @@ public class AmzaStats {
         private long endTime;
 
         private final Map<String, Long> counters = Maps.newConcurrentMap();
-        private final Map<String, Long> timmers = Maps.newConcurrentMap();
+        private final Map<String, Long> timers = Maps.newConcurrentMap();
 
         public CompactionStats(CompactionFamily family, String name, long startTime) {
             this.family = family;
@@ -208,7 +208,7 @@ public class AmzaStats {
 
         @Override
         public Set<Map.Entry<String, Long>> getTimings() {
-            return timmers.entrySet();
+            return timers.entrySet();
         }
 
         @Override
@@ -225,14 +225,14 @@ public class AmzaStats {
 
         @Override
         public void start(String name) {
-            counters.compute(name, (k, v) -> {
+            timers.compute(name, (k, v) -> {
                 return v == null ? System.currentTimeMillis() : v;
             });
         }
 
         @Override
         public void stop(String name) {
-            counters.compute(name, (k, v) -> {
+            timers.compute(name, (k, v) -> {
                 return v == null ? null : System.currentTimeMillis() - v;
             });
         }

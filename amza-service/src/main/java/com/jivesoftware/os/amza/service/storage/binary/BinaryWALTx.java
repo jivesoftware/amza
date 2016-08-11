@@ -322,69 +322,84 @@ public class BinaryWALTx implements WALTx {
         return (endOfMerge, completedCompactCommit) -> {
             compactionLock.acquire(NUM_PERMITS);
             try {
-                compactionStats.add("completion", 1);
+                compactionStats.add("completion-all", 1);
                 compactionStats.start("completion-" + completionPass[0]);
-                compact(compactToRowType,
-                    finalEndOfLastRow,
-                    Long.MAX_VALUE,
-                    finalCarryOverEndOfMerge,
-                    compactableWALIndex,
-                    compactionRowIndex,
-                    compactionIO,
-                    oldestTimestamp,
-                    oldestVersion,
-                    oldestTombstonedTimestamp,
-                    oldestTombstonedVersion,
-                    keyCount,
-                    clobberCount,
-                    tombstoneCount,
-                    ttlCount,
-                    disposalCount,
-                    flushTxId,
-                    tombstoneTimestampId,
-                    tombstoneVersion,
-                    ttlTimestampId,
-                    ttlVersion,
-                    disposalVersion,
-                    endOfMerge);
-                compactionIO.flush(true);
-
-                long sizeAfterCompaction = compactionIO.sizeInBytes();
-                long fpOfLastLeap = compactionIO.getFpOfLastLeap();
-                long updatesSinceLeap = compactionIO.getUpdatesSinceLeap();
-                compactionIO.close();
-                ioProvider.delete(backupKey, name);
-                if (!ioProvider.ensureKey(backupKey)) {
-                    throw new IOException("Failed trying to ensure " + backupKey);
+                compactionStats.start("completion-compact-" + completionPass[0]);
+                try {
+                    compact(compactToRowType,
+                        finalEndOfLastRow,
+                        Long.MAX_VALUE,
+                        finalCarryOverEndOfMerge,
+                        compactableWALIndex,
+                        compactionRowIndex,
+                        compactionIO,
+                        oldestTimestamp,
+                        oldestVersion,
+                        oldestTombstonedTimestamp,
+                        oldestTombstonedVersion,
+                        keyCount,
+                        clobberCount,
+                        tombstoneCount,
+                        ttlCount,
+                        disposalCount,
+                        flushTxId,
+                        tombstoneTimestampId,
+                        tombstoneVersion,
+                        ttlTimestampId,
+                        ttlVersion,
+                        disposalVersion,
+                        endOfMerge);
+                } finally {
+                    compactionStats.stop("completion-compact-" + completionPass[0]);
                 }
-
-                long sizeBeforeCompaction = rowIO.sizeInBytes();
-
-                compactionRowIndex.commit(true, () -> {
-                    rowIO.close();
-                    ioProvider.moveTo(fromKey, name, backupKey, name);
-                    if (!ioProvider.ensureKey(toKey)) {
-                        throw new IOException("Failed trying to ensure " + toKey);
-                    }
-                    ioProvider.delete(toKey, name);
-                    ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
-                    // Reopen the world
-                    RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
-                    rowIO = io;
-                    if (rowIO == null) {
-                        throw new IOException("Failed to reopen " + toKey);
-                    }
-                    rowIO.flush(true);
-                    rowIO.initLeaps(fpOfLastLeap, updatesSinceLeap);
-
-                    completedCompactCommit.call();
-
+                compactionStats.start("completion-flush-" + completionPass[0]);
+                long sizeAfterCompaction;
+                long fpOfLastLeap;
+                long updatesSinceLeap;
+                try {
+                    compactionIO.flush(true);
+                    sizeAfterCompaction = compactionIO.sizeInBytes();
+                    fpOfLastLeap = compactionIO.getFpOfLastLeap();
+                    updatesSinceLeap = compactionIO.getUpdatesSinceLeap();
+                    compactionIO.close();
                     ioProvider.delete(backupKey, name);
-                    LOG.info("Compacted partition fromKey:{} -> toKey:{} named:{} was:{} bytes isNow:{} bytes.",
-                        fromKey, toKey, name, sizeBeforeCompaction, sizeAfterCompaction);
-                    return null;
-                });
+                    if (!ioProvider.ensureKey(backupKey)) {
+                        throw new IOException("Failed trying to ensure " + backupKey);
+                    }
+                } finally {
+                    compactionStats.stop("completion-flush-" + completionPass[0]);
+                }
+                
+                long sizeBeforeCompaction = rowIO.sizeInBytes();
+                compactionStats.start("completion-commit-" + completionPass[0]);
+                try {
+                    compactionRowIndex.commit(true, () -> {
+                        rowIO.close();
+                        ioProvider.moveTo(fromKey, name, backupKey, name);
+                        if (!ioProvider.ensureKey(toKey)) {
+                            throw new IOException("Failed trying to ensure " + toKey);
+                        }
+                        ioProvider.delete(toKey, name);
+                        ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
+                        // Reopen the world
+                        RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
+                        rowIO = io;
+                        if (rowIO == null) {
+                            throw new IOException("Failed to reopen " + toKey);
+                        }
+                        rowIO.flush(true);
+                        rowIO.initLeaps(fpOfLastLeap, updatesSinceLeap);
 
+                        completedCompactCommit.call();
+
+                        ioProvider.delete(backupKey, name);
+                        LOG.info("Compacted partition fromKey:{} -> toKey:{} named:{} was:{} bytes isNow:{} bytes.",
+                            fromKey, toKey, name, sizeBeforeCompaction, sizeAfterCompaction);
+                        return null;
+                    });
+                } finally {
+                    compactionStats.stop("completion-commit-" + completionPass[0]);
+                }
                 return new CommittedCompacted<>(compactableWALIndex,
                     sizeBeforeCompaction,
                     sizeAfterCompaction,
@@ -404,7 +419,7 @@ public class BinaryWALTx implements WALTx {
                 compactionRowIndex.abort();
                 throw x;
             } finally {
-                compactionStats.stop("completion-" + completionPass[0]);
+                compactionStats.stop("completion-all" + completionPass[0]);
                 completionPass[0]++;
                 compactionLock.release(NUM_PERMITS);
             }

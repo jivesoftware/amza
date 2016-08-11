@@ -194,88 +194,92 @@ public class DeltaStripeWALStorage {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         CompactionStats compactionStats = amzaStats.beginCompaction(CompactionFamily.load, "load-delta-stripe-" + getId());
-        synchronized (oneWriterAtATimeLock) {
-            List<DeltaWAL> deltaWALs = deltaWALFactory.list();
-            if (deltaWALs.isEmpty()) {
-                deltaWAL.set(deltaWALFactory.create(-1));
-            } else {
-                for (int i = 0; i < deltaWALs.size(); i++) {
-                    DeltaWAL prevWAL = deltaWAL.get();
-                    DeltaWAL currentWAL = deltaWALs.get(i);
-                    if (prevWAL != null) {
-                        Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(),
-                            "Delta WALs were not contiguous, %s->%s", currentWAL.getPrevId(), prevWAL.getId());
-                        mergeDelta(compactionStats, partitionIndex, versionedPartitionProvider, currentVersionProvider, prevWAL, true, () -> currentWAL);
-                    }
-                    deltaWAL.set(currentWAL);
-                    Set<VersionedPartitionName> accepted = Sets.newHashSet();
-                    Set<VersionedPartitionName> rejected = Sets.newHashSet();
-                    WALKey.decompose(
-                        (WALKey.TxFpRawKeyValueEntries<VersionedPartitionName>) txRawKeyEntryStream -> primaryRowMarshaller.fromRows(
-                            txFpRowStream -> {
-                                currentWAL.load((rowFP, rowTxId, rowType, rawRow) -> {
-                                    if (rowType.isPrimary()) {
-                                        if (!txFpRowStream.stream(rowTxId, rowFP, rowType, rawRow)) {
-                                            return false;
+        try {
+            synchronized (oneWriterAtATimeLock) {
+                List<DeltaWAL> deltaWALs = deltaWALFactory.list();
+                if (deltaWALs.isEmpty()) {
+                    deltaWAL.set(deltaWALFactory.create(-1));
+                } else {
+                    for (int i = 0; i < deltaWALs.size(); i++) {
+                        DeltaWAL prevWAL = deltaWAL.get();
+                        DeltaWAL currentWAL = deltaWALs.get(i);
+                        if (prevWAL != null) {
+                            Preconditions.checkState(currentWAL.getPrevId() == prevWAL.getId(),
+                                "Delta WALs were not contiguous, %s->%s", currentWAL.getPrevId(), prevWAL.getId());
+                            mergeDelta(compactionStats, partitionIndex, versionedPartitionProvider, currentVersionProvider, prevWAL, true, () -> currentWAL);
+                        }
+                        deltaWAL.set(currentWAL);
+                        Set<VersionedPartitionName> accepted = Sets.newHashSet();
+                        Set<VersionedPartitionName> rejected = Sets.newHashSet();
+                        WALKey.decompose(
+                            (WALKey.TxFpRawKeyValueEntries<VersionedPartitionName>) txRawKeyEntryStream -> primaryRowMarshaller.fromRows(
+                                txFpRowStream -> {
+                                    currentWAL.load((rowFP, rowTxId, rowType, rawRow) -> {
+                                        if (rowType.isPrimary()) {
+                                            if (!txFpRowStream.stream(rowTxId, rowFP, rowType, rawRow)) {
+                                                return false;
+                                            }
                                         }
-                                    }
+                                        return true;
+                                    });
                                     return true;
-                                });
-                                return true;
-                            },
-                            (rowTxId, rowFP, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                                VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix, 0, interner);
-                                try {
-                                    boolean acceptable;
-                                    if (accepted.contains(versionedPartitionName)) {
-                                        acceptable = true;
-                                    } else if (rejected.contains(versionedPartitionName)) {
-                                        acceptable = false;
-                                    } else {
-                                        acceptable = currentVersionProvider.isCurrentVersion(versionedPartitionName);
-                                        if (acceptable) {
-                                            accepted.add(versionedPartitionName);
+                                },
+                                (rowTxId, rowFP, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                                    VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix, 0, interner);
+                                    try {
+                                        boolean acceptable;
+                                        if (accepted.contains(versionedPartitionName)) {
+                                            acceptable = true;
+                                        } else if (rejected.contains(versionedPartitionName)) {
+                                            acceptable = false;
                                         } else {
-                                            rejected.add(versionedPartitionName);
+                                            acceptable = currentVersionProvider.isCurrentVersion(versionedPartitionName);
+                                            if (acceptable) {
+                                                accepted.add(versionedPartitionName);
+                                            } else {
+                                                rejected.add(versionedPartitionName);
+                                            }
                                         }
+                                        return !acceptable || txRawKeyEntryStream.stream(rowTxId, rowFP, rowType, key,
+                                            hasValue, value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName);
+                                    } catch (PropertiesNotPresentException e) {
+                                        LOG.warn("Properties not available on load for {}", versionedPartitionName);
+                                        return true;
+                                    } catch (NotARingMemberException e) {
+                                        LOG.warn("Not a ring member for {}", versionedPartitionName);
+                                        return true;
                                     }
-                                    return !acceptable || txRawKeyEntryStream.stream(rowTxId, rowFP, rowType, key,
-                                        hasValue, value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName);
-                                } catch (PropertiesNotPresentException e) {
-                                    LOG.warn("Properties not available on load for {}", versionedPartitionName);
+                                }),
+                            (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName) -> {
+                                acquireOne();
+                                try {
+                                    PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+                                    // delta is pristine, no need to check timestamps and versions
+                                    byte[] deltaValue = UIO.readByteArray(value, 0, "value");
+                                    delta.put(fp, prefix, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion);
+                                    delta.onLoadAppendTxFp(prefix, txId, fp);
+                                    updateSinceLastMerge.incrementAndGet();
                                     return true;
-                                } catch (NotARingMemberException e) {
-                                    LOG.warn("Not a ring member for {}", versionedPartitionName);
-                                    return true;
+                                } finally {
+                                    releaseOne();
                                 }
-                            }),
-                        (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName) -> {
-                            acquireOne();
-                            try {
-                                PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-                                // delta is pristine, no need to check timestamps and versions
-                                byte[] deltaValue = UIO.readByteArray(value, 0, "value");
-                                delta.put(fp, prefix, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion);
-                                delta.onLoadAppendTxFp(prefix, txId, fp);
-                                updateSinceLastMerge.incrementAndGet();
-                                return true;
-                            } finally {
-                                releaseOne();
-                            }
-                        });
+                            });
+                    }
                 }
             }
-        }
 
-        amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
+            amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
 
-        if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
-            synchronized (awakeCompactionsLock) {
-                awakeCompactionsLock.notifyAll();
+            if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
+                synchronized (awakeCompactionsLock) {
+                    awakeCompactionsLock.notifyAll();
+                }
             }
-        }
 
-        LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
+            LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
+        } finally {
+            compactionStats.finished();
+        }
     }
 
     public void flush(boolean fsync) throws Exception {

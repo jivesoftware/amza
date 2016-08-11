@@ -221,10 +221,10 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     }
                 }
                 data.put("message", "Found " + hits + "/" + missed + " in " + getDurationBreakdown(System.currentTimeMillis() - start));
-                data.put("mesategType", "info");
+                data.put("messageType", "info");
             } else {
                 data.put("message", "Please input Name or Ring Name");
-                data.put("mesategType", "info");
+                data.put("messageType", "info");
             }
 
             data.put("partitions", rows);

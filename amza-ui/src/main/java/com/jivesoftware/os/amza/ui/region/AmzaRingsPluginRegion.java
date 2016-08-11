@@ -90,10 +90,10 @@ public class AmzaRingsPluginRegion implements PageRegion<AmzaRingsPluginRegion.A
                     return true;
                 });
                 data.put("message", "Found " + hits + "/" + missed + " in " + getDurationBreakdown(System.currentTimeMillis() - start));
-                data.put("mesategType", "info");
+                data.put("messageType", "info");
             } else {
                 data.put("message", "Please input Ring or Logical Name");
-                data.put("mesategType", "info");
+                data.put("messageType", "info");
             }
             data.put("rings", rows);
         } catch (Exception e) {

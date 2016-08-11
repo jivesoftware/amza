@@ -404,7 +404,7 @@ public class BinaryWALTx implements WALTx {
                 compactionRowIndex.abort();
                 throw x;
             } finally {
-                compactionStats.start("completion-" + completionPass[0]);
+                compactionStats.stop("completion-" + completionPass[0]);
                 completionPass[0]++;
                 compactionLock.release(NUM_PERMITS);
             }

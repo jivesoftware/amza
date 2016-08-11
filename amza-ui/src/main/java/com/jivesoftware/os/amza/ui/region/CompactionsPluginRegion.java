@@ -97,7 +97,7 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
             data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
                 (Map.Entry<String, CompactionStats> input1) -> {
                     return ImmutableMap.of("name", input1.getKey(),
-                        "elapse", numberFormat.format(input1.getValue().elapse()),
+                        "elapse", getDurationBreakdown(input1.getValue().elapse()),
                         "timers", Iterables.transform(Iterables.filter(input1.getValue().getTimings(), Predicates.notNull()),
                             (Map.Entry<String, Long> input2) -> {
                                 return ImmutableMap.of("name", input2.getKey(), "value", getDurationBreakdown(input2.getValue()));
@@ -114,7 +114,7 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
                 (Map.Entry<String, CompactionStats> input1) -> {
                     return ImmutableMap.of("name", input1.getKey(),
                         "age", getDurationBreakdown(System.currentTimeMillis()-input1.getValue().startTime()),
-                        "duration", numberFormat.format(input1.getValue().duration()),
+                        "duration", getDurationBreakdown(input1.getValue().duration()),
                         "timers", Iterables.transform(Iterables.filter(input1.getValue().getTimings(), Predicates.notNull()),
                             (Map.Entry<String, Long> input2) -> {
                                 return ImmutableMap.of("name", input2.getKey(), "value", getDurationBreakdown(input2.getValue()));

@@ -175,6 +175,7 @@ public class AmzaMain {
             lifecycle.startAmzaService();
             lifecycle.startRoutingBirdAmzaDiscovery();
             deployable.buildServer().start();
+            clientHealthProvider.start();
             serviceStartupHealthCheck.success();
 
         } catch (Throwable t) {

@@ -323,7 +323,7 @@ public class BinaryWALTx implements WALTx {
             compactionLock.acquire(NUM_PERMITS);
             try {
                 compactionStats.add("completion-all", 1);
-                compactionStats.start("completion-" + completionPass[0]);
+                compactionStats.start("completion-all" + completionPass[0]);
                 compactionStats.start("completion-compact-" + completionPass[0]);
                 try {
                     compact(compactToRowType,
@@ -369,32 +369,46 @@ public class BinaryWALTx implements WALTx {
                 } finally {
                     compactionStats.stop("completion-flush-" + completionPass[0]);
                 }
-                
+
                 long sizeBeforeCompaction = rowIO.sizeInBytes();
                 compactionStats.start("completion-commit-" + completionPass[0]);
                 try {
                     compactionRowIndex.commit(true, () -> {
-                        rowIO.close();
-                        ioProvider.moveTo(fromKey, name, backupKey, name);
-                        if (!ioProvider.ensureKey(toKey)) {
-                            throw new IOException("Failed trying to ensure " + toKey);
+                        compactionStats.start("completion-commit-swap-" + completionPass[0]);
+                        try {
+                            rowIO.close();
+                            ioProvider.moveTo(fromKey, name, backupKey, name);
+                            if (!ioProvider.ensureKey(toKey)) {
+                                throw new IOException("Failed trying to ensure " + toKey);
+                            }
+                            ioProvider.delete(toKey, name);
+                            ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
+                        } finally {
+                            compactionStats.stop("completion-commit-swap-" + completionPass[0]);
                         }
-                        ioProvider.delete(toKey, name);
-                        ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), toKey, name);
                         // Reopen the world
-                        RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
-                        rowIO = io;
-                        if (rowIO == null) {
-                            throw new IOException("Failed to reopen " + toKey);
+                        compactionStats.start("completion-commit-reopen-" + completionPass[0]);
+                        try {
+                            RowIO io = ioProvider.open(toKey, name, false, updatesBetweenLeaps, maxLeaps);
+                            rowIO = io;
+                            if (rowIO == null) {
+                                throw new IOException("Failed to reopen " + toKey);
+                            }
+                            rowIO.flush(true);
+                            rowIO.initLeaps(fpOfLastLeap, updatesSinceLeap);
+                        } finally {
+                            compactionStats.stop("completion-commit-reopen-" + completionPass[0]);
                         }
-                        rowIO.flush(true);
-                        rowIO.initLeaps(fpOfLastLeap, updatesSinceLeap);
+                        compactionStats.start("completion-commit-finalize-" + completionPass[0]);
+                        try {
+                            completedCompactCommit.call();
 
-                        completedCompactCommit.call();
-
-                        ioProvider.delete(backupKey, name);
-                        LOG.info("Compacted partition fromKey:{} -> toKey:{} named:{} was:{} bytes isNow:{} bytes.",
-                            fromKey, toKey, name, sizeBeforeCompaction, sizeAfterCompaction);
+                            ioProvider.delete(backupKey, name);
+                            LOG.info("Compacted partition fromKey:{} -> toKey:{} named:{} was:{} bytes isNow:{} bytes.",
+                                fromKey, toKey, name, sizeBeforeCompaction, sizeAfterCompaction);
+                        } finally {
+                            compactionStats.stop("completion-commit-finalize-" + completionPass[0]);
+                        }
                         return null;
                     });
                 } finally {

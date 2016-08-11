@@ -48,6 +48,7 @@ import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
+import com.jivesoftware.os.routing.bird.http.client.ClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
@@ -82,9 +83,7 @@ public class EmbedAmzaServiceInitializer {
     }
 
     public Lifecycle initialize(Deployable deployable,
-        String routesHost,
-        int routesPort,
-        String connectionsHealthEndpoint,
+        ClientHealthProvider clientHealthProvider,
         int instanceId,
         String instanceKey,
         String serviceName,
@@ -143,10 +142,6 @@ public class EmbedAmzaServiceInitializer {
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
 
-        HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceKey,
-            HttpRequestHelperUtils.buildRequestHelper(routesHost, routesPort),
-            connectionsHealthEndpoint, 5_000, 100);
-
         TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
         TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
@@ -156,8 +151,6 @@ public class EmbedAmzaServiceInitializer {
             .maxConnections(1_000)
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
-
-        clientHealthProvider.start();
 
         RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, ringClient, mapper, baInterner);
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner);

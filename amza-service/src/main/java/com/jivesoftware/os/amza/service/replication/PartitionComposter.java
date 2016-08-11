@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.StripingLocksProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
+import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.aquarium.State;
@@ -219,7 +220,7 @@ public class PartitionComposter implements RowChanges {
     private void deletePartition(VersionedPartitionName versionedPartitionName) {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         long partitionVersion = versionedPartitionName.getPartitionVersion();
-        amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
+        CompactionStats compactionStats = amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         try {
             LOG.info("Expunging {} {}.", partitionName, partitionVersion);
             partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
@@ -235,7 +236,7 @@ public class PartitionComposter implements RowChanges {
         } catch (Exception e) {
             LOG.error("Failed to compost partition {}", new Object[]{versionedPartitionName}, e);
         } finally {
-            amzaStats.endCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
+            compactionStats.finished();
         }
     }
 }

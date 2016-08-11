@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.RowIO;
+import com.jivesoftware.os.amza.api.wal.WALCompactionStats;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALWriter.IndexableKeys;
@@ -220,7 +221,8 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> Compacted<I> compact(File fromBaseKey,
+    public <I extends CompactableWALIndex> Compacted<I> compact(WALCompactionStats compactionStats,
+        File fromBaseKey,
         File toBaseKey,
         RowType compactToRowType,
         long tombstoneTimestampId,
@@ -268,8 +270,11 @@ public class BinaryWALTx implements WALTx {
             long prevEndOfLastRow = 0;
             endOfLastRow = rowIO.getEndOfLastRow();
 
+            int compactionPass = 1;
             while (prevEndOfLastRow < endOfLastRow) {
                 try {
+                    compactionStats.add("compact", 1);
+                    compactionStats.start("compact-" + compactionPass);
                     carryOverEndOfMerge = compact(compactToRowType,
                         prevEndOfLastRow,
                         endOfLastRow,
@@ -295,13 +300,16 @@ public class BinaryWALTx implements WALTx {
                         null);
                 } catch (Exception x) {
                     LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to:{}",
-                        new Object[] { fromKey, toKey, name, prevEndOfLastRow, endOfLastRow }, x);
+                        new Object[]{fromKey, toKey, name, prevEndOfLastRow, endOfLastRow}, x);
                     compactionRowIndex.abort();
                     throw x;
+                } finally {
+                    compactionStats.stop("compact-" + compactionPass);
                 }
 
                 prevEndOfLastRow = endOfLastRow;
                 endOfLastRow = rowIO.getEndOfLastRow();
+                compactionPass++;
             }
         } finally {
             compactionLock.release();
@@ -309,9 +317,13 @@ public class BinaryWALTx implements WALTx {
 
         long finalEndOfLastRow = endOfLastRow;
         byte[] finalCarryOverEndOfMerge = carryOverEndOfMerge;
+
+        int[] completionPass = {1};
         return (endOfMerge, completedCompactCommit) -> {
             compactionLock.acquire(NUM_PERMITS);
             try {
+                compactionStats.add("completion", 1);
+                compactionStats.start("completion-" + completionPass[0]);
                 compact(compactToRowType,
                     finalEndOfLastRow,
                     Long.MAX_VALUE,
@@ -388,13 +400,16 @@ public class BinaryWALTx implements WALTx {
                     (System.currentTimeMillis() - start));
             } catch (Exception x) {
                 LOG.error("Failure while compacting fromKey:{} -> toKey:{} name:{} from:{} to end of WAL",
-                    new Object[] { fromKey, toKey, name, finalEndOfLastRow }, x);
+                    new Object[]{fromKey, toKey, name, finalEndOfLastRow}, x);
                 compactionRowIndex.abort();
                 throw x;
             } finally {
+                compactionStats.start("completion-" + completionPass[0]);
+                completionPass[0]++;
                 compactionLock.release(NUM_PERMITS);
             }
         };
+
     }
 
     private byte[] compact(RowType compactToRowType,
@@ -426,7 +441,7 @@ public class BinaryWALTx implements WALTx {
         List<CompactionFlushable> flushables = new ArrayList<>();
         MutableInt estimatedSizeInBytes = new MutableInt(0);
         MutableLong flushTxId = new MutableLong(-1);
-        byte[][] keepCarryingOver = { carryOverEndOfMerge };
+        byte[][] keepCarryingOver = {carryOverEndOfMerge};
         primaryRowMarshaller.fromRows(
             txFpRowStream -> rowIO.scan(startAtRow, false,
                 (rowFP, rowTxId, rowType, row) -> {

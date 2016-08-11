@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.ui.region.AmzaRingsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaRingsPluginRegion.AmzaRingsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
@@ -35,7 +34,7 @@ public class AmzaRingsPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaRingsPluginRegionInput("", "", "", "")));
+            new AmzaRingsPluginRegionInput("", "", "", ""));
         return Response.ok(rendered).build();
     }
 
@@ -47,7 +46,7 @@ public class AmzaRingsPluginEndpoints {
         @FormParam("member") @DefaultValue("") String member,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaRingsPluginRegionInput(ringName, status, member, action)));
+            new AmzaRingsPluginRegionInput(ringName, status, member, action));
         return Response.ok(rendered).build();
     }
 }

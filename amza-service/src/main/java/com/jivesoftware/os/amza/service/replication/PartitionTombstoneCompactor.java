@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.StripingLocksProvider;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -24,6 +25,7 @@ public class PartitionTombstoneCompactor {
 
     private ScheduledExecutorService scheduledThreadPool;
 
+    private final AmzaStats amzaStats;
     private final IndexedWALStorageProvider indexedWALStorageProvider;
     private final PartitionCreator partitionCreator;
     private final PartitionIndex partitionIndex;
@@ -34,7 +36,8 @@ public class PartitionTombstoneCompactor {
     private final long[] rebalanceableAfterTimestamp;
     private final StripingLocksProvider<PartitionName> locksProvider = new StripingLocksProvider<>(1024);
 
-    public PartitionTombstoneCompactor(IndexedWALStorageProvider indexedWALStorageProvider,
+    public PartitionTombstoneCompactor(AmzaStats amzaStats,
+        IndexedWALStorageProvider indexedWALStorageProvider,
         PartitionCreator partitionCreator,
         PartitionIndex partitionIndex,
         StorageVersionProvider storageVersionProvider,
@@ -42,6 +45,7 @@ public class PartitionTombstoneCompactor {
         long rebalanceableEveryNMillis,
         int numberOfStripes) {
 
+        this.amzaStats = amzaStats;
         this.indexedWALStorageProvider = indexedWALStorageProvider;
         this.partitionCreator = partitionCreator;
         this.partitionIndex = partitionIndex;
@@ -127,7 +131,8 @@ public class PartitionTombstoneCompactor {
                                 }
                             }
                             int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
-                            partitionStore.compactTombstone(forced,
+                            partitionStore.compactTombstone(amzaStats,
+                                forced,
                                 fromBaseKey,
                                 toBaseKey,
                                 compactToStripe,

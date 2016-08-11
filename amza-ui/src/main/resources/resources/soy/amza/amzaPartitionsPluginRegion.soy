@@ -3,6 +3,8 @@
 /**
  * 
  * @param? partitions
+ * @param? message
+ * @param? messageType
  */
 {template .amzaPartitionsPluginRegion}
     {if $partitions}
@@ -28,6 +30,7 @@
                             <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm" method="post">
                                 <tr style="background-color:#ddd;">
                                     <td>
+                                        <button title="Filter" type="submit" name="action" value="filter" class="btn btn-primary"><span class="glyphicon glyphicon-search"></span> Filter</button>
                                         <button title="Add" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-plus"></span></button>
                                     </td>
                                     <td></td>
@@ -156,6 +159,9 @@
                             {/foreach}
                         </tbody>
                     </table>
+                    {if $message}
+                        <div class="alert alert-{$messageType}" role="alert">...</div>
+                    {/if}
                 </div>
             </div>
         </div>

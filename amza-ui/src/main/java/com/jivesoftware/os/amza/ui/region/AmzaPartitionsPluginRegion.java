@@ -30,6 +30,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
 /**
  *
@@ -147,62 +150,81 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 }
                 return i;
             });
-            PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
-            for (PartitionName partitionName : partitionNames) {
 
-                Map<String, Object> row = new HashMap<>();
-                row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
-                row.put("name", new String(partitionName.getName()));
-                row.put("ringName", new String(partitionName.getRingName()));
+            if (!input.ringName.isEmpty() || !input.partitionName.isEmpty()) {
+                long start = System.currentTimeMillis();
+                AtomicLong hits = new AtomicLong();
+                AtomicLong missed = new AtomicLong();
+                PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+                for (PartitionName partitionName : partitionNames) {
+                    String pn = new String(partitionName.getName());
+                    String prn = new String(partitionName.getRingName());
+                    if ((input.partitionName.isEmpty() || pn.contains(input.partitionName))
+                        && (input.ringName.isEmpty() || prn.contains(input.ringName))) {
 
-                RingTopology ring = ringReader.getRing(partitionName.getRingName());
-                List<Map<String, Object>> ringHosts = new ArrayList<>();
-                for (RingMemberAndHost entry : ring.entries) {
-                    Map<String, Object> ringHost = new HashMap<>();
-                    ringHost.put("member", entry.ringMember.getMember());
-                    ringHost.put("host", entry.ringHost.getHost());
-                    ringHost.put("port", String.valueOf(entry.ringHost.getPort()));
-                    ringHosts.add(ringHost);
-                }
-                row.put("ring", ringHosts);
+                        hits.incrementAndGet();
 
-                PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
-                if (partitionProperties == null) {
-                    row.put("disabled", "?");
-                    row.put("consistency", "none");
-                    row.put("requireConsistency", "true");
-                    row.put("takeFromFactor", "?");
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
+                        row.put("name", pn);
+                        row.put("ringName", prn);
 
-                    row.put("partitionProperties", "none");
-
-                } else {
-                    row.put("disabled", partitionProperties.disabled);
-                    row.put("replicated", partitionProperties.replicated);
-                    row.put("consistency", partitionProperties.consistency.name());
-                    row.put("requireConsistency", partitionProperties.requireConsistency);
-                    row.put("partitionProperties", partitionProperties.toString());
-                }
-
-                try {
-                    partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-                        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                        if (partitionName.isSystemPartition()) {
-                            HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                            WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-                            row.put("highwaters", renderHighwaters(partitionHighwater));
-                        } else {
-                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                            row.put("highwaters", renderHighwaters(partitionHighwater));
+                        RingTopology ring = ringReader.getRing(partitionName.getRingName());
+                        List<Map<String, Object>> ringHosts = new ArrayList<>();
+                        for (RingMemberAndHost entry : ring.entries) {
+                            Map<String, Object> ringHost = new HashMap<>();
+                            ringHost.put("member", entry.ringMember.getMember());
+                            ringHost.put("host", entry.ringHost.getHost());
+                            ringHost.put("port", String.valueOf(entry.ringHost.getPort()));
+                            ringHosts.add(ringHost);
                         }
-                        return null;
-                    });
-                } catch (PartitionIsDisposedException e) {
-                    row.put("highwaters", "partition-disposed");
-                } catch (PropertiesNotPresentException e) {
-                    row.put("highwaters", "properties-disposed");
-                }
+                        row.put("ring", ringHosts);
 
-                rows.add(row);
+                        PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
+                        if (partitionProperties == null) {
+                            row.put("disabled", "?");
+                            row.put("consistency", "none");
+                            row.put("requireConsistency", "true");
+                            row.put("takeFromFactor", "?");
+
+                            row.put("partitionProperties", "none");
+
+                        } else {
+                            row.put("disabled", partitionProperties.disabled);
+                            row.put("replicated", partitionProperties.replicated);
+                            row.put("consistency", partitionProperties.consistency.name());
+                            row.put("requireConsistency", partitionProperties.requireConsistency);
+                            row.put("partitionProperties", partitionProperties.toString());
+                        }
+
+                        try {
+                            partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+                                VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                                if (partitionName.isSystemPartition()) {
+                                    HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+                                    row.put("highwaters", renderHighwaters(partitionHighwater));
+                                } else {
+                                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                                    row.put("highwaters", renderHighwaters(partitionHighwater));
+                                }
+                                return null;
+                            });
+                        } catch (PartitionIsDisposedException e) {
+                            row.put("highwaters", "partition-disposed");
+                        } catch (PropertiesNotPresentException e) {
+                            row.put("highwaters", "properties-disposed");
+                        }
+                        rows.add(row);
+                    } else {
+                        missed.incrementAndGet();
+                    }
+                }
+                data.put("message", "Found " + hits + "/" + missed + " in " + getDurationBreakdown(System.currentTimeMillis() - start));
+                data.put("mesategType", "info");
+            } else {
+                data.put("message", "Please input Name or Ring Name");
+                data.put("mesategType", "info");
             }
 
             data.put("partitions", rows);

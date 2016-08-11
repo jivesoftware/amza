@@ -83,7 +83,8 @@ public class PartitionStore implements RangeScannable {
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
         walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, properties.maxValueSizeInIndex, stripe);
         if (properties.forceCompactionOnStartup) {
-            compactTombstone(true,
+            compactTombstone(amzaStats,
+                true,
                 baseKey,
                 baseKey,
                 stripe,
@@ -116,7 +117,8 @@ public class PartitionStore implements RangeScannable {
         return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream, hydrateValues);
     }
 
-    public void compactTombstone(boolean force,
+    public void compactTombstone(AmzaStats amzaStats,
+        boolean force,
         File fromBaseKey,
         File toBaseKey,
         int stripe,
@@ -160,12 +162,13 @@ public class PartitionStore implements RangeScannable {
                     dir = " rebalance " + fromBaseKey + " to " + toBaseKey;
                 }
                 String name = versionedPartitionName.toString() + " " + dir + " stripe:" + stripe + " force:" + force;
-                amzaStats.beginCompaction(CompactionFamily.tombstone, name);
+                AmzaStats.CompactionStats compactionStats = amzaStats.beginCompaction(CompactionFamily.tombstone, name);
                 try {
                     LOG.info("Compacting tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
                         tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
                     boolean expectedEndOfMerge = !versionedPartitionName.getPartitionName().isSystemPartition();
-                    walStorage.compactTombstone(fromBaseKey,
+                    walStorage.compactTombstone(compactionStats,
+                        fromBaseKey,
                         toBaseKey,
                         properties.rowType,
                         tombstoneCompactTimestamp,
@@ -178,14 +181,14 @@ public class PartitionStore implements RangeScannable {
                         expectedEndOfMerge,
                         transitionToCompacted);
                 } finally {
-                    amzaStats.endCompaction(CompactionFamily.tombstone, name);
+                    compactionStats.finished();
                 }
             } else {
                 LOG.debug("Ignored tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
                     tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
             }
         } catch (Exception x) {
-            LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
+            LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
         }
 
     }

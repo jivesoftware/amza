@@ -41,6 +41,7 @@ public class PartitionStripeProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats stats;
     private final ExecutorService compactDeltasThreadPool;
     private final ExecutorService flusherExecutor;
     private final PartitionCreator partitionCreator;
@@ -77,6 +78,7 @@ public class PartitionStripeProvider {
         long asyncFlushIntervalMillis,
         long deltaStripeCompactionIntervalInMillis) {
 
+        this.stats = stats;
         this.partitionCreator = partitionCreator;
         this.partitionIndex = partitionIndex;
         this.primaryRowMarshaller = primaryRowMarshaller;
@@ -124,11 +126,15 @@ public class PartitionStripeProvider {
         List<Future> futures = new ArrayList<>();
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
+                AmzaStats.CompactionStats compactionStats = stats.beginCompaction(AmzaStats.CompactionFamily.load,
+                    "delta-stripe-" + deltaStripeWALStorage.getId());
                 try {
                     deltaStripeWALStorage.load(partitionIndex, partitionCreator, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
                     LOG.error("Failed while loading {} ", new Object[]{deltaStripeWALStorage}, x);
                     throw new RuntimeException(x);
+                } finally {
+                    compactionStats.finished();
                 }
             }));
         }

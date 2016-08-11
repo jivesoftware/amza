@@ -8,6 +8,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionStats;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -15,6 +16,8 @@ import java.text.NumberFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+
+import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
 /**
  *
@@ -90,15 +93,39 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
                 amzaService.migrate(input.fromIndexClass, input.toIndexClass);
             }
 
-            List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions(AmzaStats.CompactionFamily.values());
+            List<Map.Entry<String, CompactionStats>> ongoingCompactions = amzaStats.ongoingCompactions(AmzaStats.CompactionFamily.values());
             data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
-                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
-                    input1.getKey(), "elapse", numberFormat.format(input1.getValue()))));
+                (Map.Entry<String, CompactionStats> input1) -> {
+                    return ImmutableMap.of("name", input1.getKey(),
+                        "elapse", numberFormat.format(input1.getValue().elapse()),
+                        "timers", Iterables.transform(Iterables.filter(input1.getValue().getTimings(), Predicates.notNull()),
+                            (Map.Entry<String, Long> input2) -> {
+                                return ImmutableMap.of("name", input2.getKey(), "value", getDurationBreakdown(input2.getValue()));
+                            }),
+                        "counters", Iterables.transform(Iterables.filter(input1.getValue().getCounts(), Predicates.notNull()),
+                            (Map.Entry<String, Long> input2) -> {
+                                return ImmutableMap.of("name", input2.getKey(), "value", numberFormat.format(input2.getValue()));
+                            })
+                    );
+                }));
 
-            List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
+            List<Map.Entry<String, CompactionStats>> recentCompaction = amzaStats.recentCompaction();
             data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
-                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
-                    input1.getKey(), "elapse", numberFormat.format(input1.getValue()))));
+                (Map.Entry<String, CompactionStats> input1) -> {
+                    return ImmutableMap.of("name", input1.getKey(),
+                        "age", getDurationBreakdown(System.currentTimeMillis()-input1.getValue().startTime()),
+                        "duration", numberFormat.format(input1.getValue().duration()),
+                        "timers", Iterables.transform(Iterables.filter(input1.getValue().getTimings(), Predicates.notNull()),
+                            (Map.Entry<String, Long> input2) -> {
+                                return ImmutableMap.of("name", input2.getKey(), "value", getDurationBreakdown(input2.getValue()));
+                            }),
+                        "counters", Iterables.transform(Iterables.filter(input1.getValue().getCounts(), Predicates.notNull()),
+                            (Map.Entry<String, Long> input2) -> {
+                                return ImmutableMap.of("name", input2.getKey(), "value", numberFormat.format(input2.getValue()));
+                            })
+                    );
+                }));
+
             long compactionTotal = 0;
             for (AmzaStats.CompactionFamily compactionFamily : AmzaStats.CompactionFamily.values()) {
                 compactionTotal += amzaStats.getTotalCompactions(compactionFamily);

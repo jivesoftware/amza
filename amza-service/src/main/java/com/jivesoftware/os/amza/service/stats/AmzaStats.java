@@ -5,6 +5,7 @@ import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.wal.WALCompactionStats;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import java.util.AbstractMap;
@@ -12,9 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
+import jersey.repackaged.com.google.common.collect.Maps;
 
 /**
  * @author jonathan.colt
@@ -26,9 +29,9 @@ public class AmzaStats {
 
     private final Map<RingMember, AtomicLong> took = new ConcurrentSkipListMap<>();
 
-    private final Map<CompactionFamily, Map<String, Long>> ongoingCompaction = new ConcurrentHashMap<>();
+    private final Map<CompactionFamily, Map<String, CompactionStats>> ongoingCompaction = new ConcurrentHashMap<>();
     private final Map<CompactionFamily, AtomicLong> totalCompactions = new ConcurrentHashMap<>();
-    private final List<Entry<String, Long>> recentCompaction = new ArrayList<>();
+    private final List<Entry<String, CompactionStats>> recentCompaction = new ArrayList<>();
 
     public final Map<RingMember, AtomicLong> longPolled = new ConcurrentSkipListMap<>();
     public final Map<RingMember, AtomicLong> longPollAvailables = new ConcurrentSkipListMap<>();
@@ -152,43 +155,115 @@ public class AmzaStats {
     }
 
     public static enum CompactionFamily {
-        expunge, tombstone, merge;
+        expunge, tombstone, merge, load;
     }
 
     public int ongoingCompaction(CompactionFamily family) {
-        Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
         return got.size();
     }
 
-    public void beginCompaction(CompactionFamily family, String name) {
-        Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
-        got.put(name, System.currentTimeMillis());
+    public CompactionStats beginCompaction(CompactionFamily family, String name) {
+        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        CompactionStats compactionStats = new CompactionStats(family, name, System.currentTimeMillis());
+        got.put(name, compactionStats);
+        return compactionStats;
     }
 
-    public void endCompaction(CompactionFamily family, String name) {
-        Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
-        Long start = got.remove(name);
+    public class CompactionStats implements WALCompactionStats {
+
+        private final CompactionFamily family;
+        private final String name;
+        private final long startTime;
+        private long endTime;
+
+        private final Map<String, Long> counters = Maps.newConcurrentMap();
+        private final Map<String, Long> timmers = Maps.newConcurrentMap();
+
+        public CompactionStats(CompactionFamily family, String name, long startTime) {
+            this.family = family;
+            this.name = name;
+            this.startTime = startTime;
+        }
+
+        public long startTime() {
+            return startTime;
+        }
+
+        public void finished() {
+            this.endTime = System.currentTimeMillis();
+            endCompaction(family, name);
+        }
+
+        public long elapse() {
+            return System.currentTimeMillis() - startTime;
+        }
+
+        public long duration() {
+            if (endTime == 0) {
+                return elapse();
+            }
+            return endTime - startTime;
+        }
+
+        @Override
+        public Set<Map.Entry<String, Long>> getTimings() {
+            return timmers.entrySet();
+        }
+
+        @Override
+        public Set<Map.Entry<String, Long>> getCounts() {
+            return counters.entrySet();
+        }
+
+        @Override
+        public void add(String name, long count) {
+            counters.compute(name, (k, v) -> {
+                return v == null ? count : v + count;
+            });
+        }
+
+        @Override
+        public void start(String name) {
+            counters.compute(name, (k, v) -> {
+                return v == null ? System.currentTimeMillis() : v;
+            });
+        }
+
+        @Override
+        public void stop(String name) {
+            counters.compute(name, (k, v) -> {
+                return v == null ? null : System.currentTimeMillis() - v;
+            });
+        }
+
+    }
+
+    private void endCompaction(CompactionFamily family, String name) {
+        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        CompactionStats compactionStats = got.remove(name);
 
         totalCompactions.computeIfAbsent(family, (key) -> new AtomicLong()).incrementAndGet();
-        if (start != null) {
-            recentCompaction.add(new AbstractMap.SimpleEntry<>(family + " " + name, System.currentTimeMillis() - start));
+        if (compactionStats != null) {
+            compactionStats.finished();
+            recentCompaction.add(new AbstractMap.SimpleEntry<>(family + " " + name, compactionStats));
             while (recentCompaction.size() > 10_000) {
                 recentCompaction.remove(0);
             }
         }
     }
 
-    public List<Entry<String, Long>> recentCompaction() {
+    public List<Entry<String, CompactionStats>> recentCompaction() {
         return recentCompaction;
     }
 
-    public List<Entry<String, Long>> ongoingCompactions(CompactionFamily... families) {
-        List<Entry<String, Long>> ongoing = new ArrayList<>();
+    public List<Entry<String, CompactionStats>> ongoingCompactions(CompactionFamily... families) {
+        List<Entry<String, CompactionStats>> ongoing = new ArrayList<>();
         for (CompactionFamily family : families) {
-            Map<String, Long> got = ongoingCompaction.get(family);
+            Map<String, CompactionStats> got = ongoingCompaction.get(family);
             if (got != null) {
-                for (Entry<String, Long> e : got.entrySet()) {
-                    ongoing.add(new AbstractMap.SimpleEntry<>(e.getKey(), System.currentTimeMillis() - e.getValue()));
+                for (Entry<String, CompactionStats> e : got.entrySet()) {
+                    ongoing.add(new AbstractMap.SimpleEntry<>(e.getKey(), e.getValue()));
                 }
             }
         }

@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.api.wal.WALRow;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionStats;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -41,6 +42,7 @@ public class RowPartitionNGTest {
 
     @Test(enabled = false)
     public void concurrencyTest() throws Exception {
+        AmzaStats amzaStats = new AmzaStats();
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64, false);
@@ -70,13 +72,16 @@ public class RowPartitionNGTest {
 
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
         compact.scheduleAtFixedRate(() -> {
+            CompactionStats compactionStats = amzaStats.beginCompaction(AmzaStats.CompactionFamily.tombstone, walDir.getName());
             try {
-                indexedWAL.compactTombstone(walDir, walDir, RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, false,
+                indexedWAL.compactTombstone(compactionStats, walDir, walDir, RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, false,
                     (transitionToCompacted) -> transitionToCompacted.tx(() -> {
                         return null;
                     }));
             } catch (Exception x) {
                 x.printStackTrace();
+            } finally {
+                compactionStats.finished();
             }
         }, 1, 1, TimeUnit.SECONDS);
 

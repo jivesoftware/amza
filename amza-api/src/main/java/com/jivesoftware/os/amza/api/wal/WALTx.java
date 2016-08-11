@@ -29,7 +29,8 @@ public interface WALTx {
 
     void delete(File baseKey) throws Exception;
 
-    <I extends CompactableWALIndex> Compacted<I> compact(File fromBaseKey,
+    <I extends CompactableWALIndex> Compacted<I> compact(WALCompactionStats compactionStats,
+        File fromBaseKey,
         File toBaseKey,
         RowType compactToRowType,
         long tombstoneTimestampId,

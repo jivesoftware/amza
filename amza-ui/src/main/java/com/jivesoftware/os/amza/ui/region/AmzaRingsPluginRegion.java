@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -13,12 +12,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
 /**
  *
  */
 // soy.page.amzaRingPluginRegion
-public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPluginRegion.AmzaRingsPluginRegionInput>> {
+public class AmzaRingsPluginRegion implements PageRegion<AmzaRingsPluginRegion.AmzaRingsPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -54,20 +56,22 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
     }
 
     @Override
-    public String render(Optional<AmzaRingsPluginRegionInput> optionalInput) {
+    public String render(AmzaRingsPluginRegionInput input) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-            if (optionalInput.isPresent()) {
-                final AmzaRingsPluginRegionInput input = optionalInput.get();
 
-                if (input.action.equals("add")) {
-                    ringWriter.addRingMember(input.ringName.getBytes(), new RingMember(input.member));
-                } else if (input.action.equals("remove")) {
-                    ringWriter.removeRingMember(input.ringName.getBytes(), new RingMember(input.member));
-                }
+            if (input.action.equals("add")) {
+                ringWriter.addRingMember(input.ringName.getBytes(), new RingMember(input.member));
+            } else if (input.action.equals("remove")) {
+                ringWriter.removeRingMember(input.ringName.getBytes(), new RingMember(input.member));
+            }
 
-                final List<Map<String, String>> rows = new ArrayList<>();
+            List<Map<String, String>> rows = new ArrayList<>();
+            if (!input.ringName.isEmpty() || !input.member.isEmpty()) {
+                long start = System.currentTimeMillis();
+                AtomicLong hits = new AtomicLong();
+                AtomicLong missed = new AtomicLong();
                 ringReader.allRings((byte[] ringName, RingMember ringMember, RingHost ringHost) -> {
                     if ((input.ringName.isEmpty() || new String(ringName).contains(input.ringName))
                         && (input.member.isEmpty() || "".contains(input.member))
@@ -79,11 +83,19 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
                         row.put("host", ringHost.getHost());
                         row.put("port", String.valueOf(ringHost.getPort()));
                         rows.add(row);
+                        hits.incrementAndGet();
+                    } else {
+                        missed.incrementAndGet();
                     }
                     return true;
                 });
-                data.put("rings", rows);
+                data.put("message", "Found " + hits + "/" + missed + " in " + getDurationBreakdown(System.currentTimeMillis() - start));
+                data.put("mesategType", "info");
+            } else {
+                data.put("message", "Please input Ring or Logical Name");
+                data.put("mesategType", "info");
             }
+            data.put("rings", rows);
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);
         }

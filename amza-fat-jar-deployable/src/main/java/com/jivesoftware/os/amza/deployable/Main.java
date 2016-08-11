@@ -41,7 +41,6 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
-import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
@@ -76,6 +75,7 @@ import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.InstanceDescriptor;
 import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescriptorProvider;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -87,27 +87,67 @@ import org.merlin.config.BindInterfaceToConfiguration;
 public class Main {
 
     public static void main(String[] args) throws Exception {
-        new Main().run(args);
+
+        try {
+            if (args.length == 0) {
+                System.out.println("Usage:");
+                System.out.println("");
+                System.out.println("    java -jar amza.jar <hostName>                        (manual cluster discovery)");
+                System.out.println(" or ");
+                System.out.println("    java -jar amza.jar <hostName> <clusterName>          (manual cluster discovery)");
+                System.out.println(" or ");
+                System.out.println("    java -jar amza.jar <hostName> <clusterName> <peers>  (automatic cluster discovery)");
+                System.out.println("");
+                System.out.println("Overridable properties:");
+                System.out.println("");
+                System.out.println("    -Damza.logicalName=<logicalName>");
+                System.out.println("    -Dhost.datacenter=<datacenterId>");
+                System.out.println("    -Dhost.rack=<rackId>");
+                System.out.println("");
+                System.out.println("    -Damza.port=1175");
+                System.out.println("         (change the port used to interact with other nodes.) ");
+                System.out.println("");
+                System.out.println("    -Damza.id=<writerId>");
+                System.out.println("    -Damza.working.dirs=<workingDirs>");
+                System.out.println("    -Damza.leap.cache.max.capacity=1000000");
+                System.out.println("");
+                System.out.println("     Only applicable if you have specified a <clusterName>.");
+                System.out.println("          -Damza.discovery.group=225.4.5.6");
+                System.out.println("          -Damza.discovery.port=1223");
+                System.out.println("");
+                System.out.println("Example:");
+                System.out.println("java -jar amza.jar " + InetAddress.getLocalHost().getHostName() + " dev");
+                System.out.println("");
+                System.exit(1);
+            } else {
+                new Main().run(args);
+            }
+        } catch (Exception x) {
+            x.printStackTrace();
+            System.exit(1);
+        }
     }
 
     public void run(String[] args) throws Exception {
 
         String hostname = args[0];
-        int port = Integer.parseInt(System.getProperty("amza.port", "1175"));
-        String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
-        int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1223"));
         String clusterName = (args.length > 1 ? args[1] : "unnamed");
         String hostPortPeers = (args.length > 2 ? args[2] : null);
 
+        int port = Integer.parseInt(System.getProperty("amza.port", "1175"));
+        String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
+        int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1223"));
+
         String logicalName = System.getProperty("amza.logicalName", hostname + ":" + port);
-        String datacenter = System.getProperty("datacenter", "unknownDatacenetr");
-        String rack = System.getProperty("rack", "unknownRack");
+        String datacenter = System.getProperty("host.datacenter", "unknownDatacenter");
+        String rack = System.getProperty("host.rack", "unknownRack");
 
         RingMember ringMember = new RingMember(logicalName);
         RingHost ringHost = new RingHost(datacenter, rack, hostname, port);
 
-        // todo need a better way to create writter id.
+        // todo need a better way to create writer id.
         int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
+
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
         JiveEpochTimestampProvider timestampProvider = new JiveEpochTimestampProvider();
         final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(writerId),
@@ -122,14 +162,12 @@ public class Main {
         final SickThreads sickThreads = new SickThreads();
         final SickPartitions sickPartitions = new SickPartitions();
 
-        final String[] workingDirs = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
+        amzaServiceConfig.workingDirectories = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
             .split(",");
-        amzaServiceConfig.workingDirectories = workingDirs;
 
         BAInterner interner = new BAInterner();
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
-
             @Override
             public PartitionProperties fromBytes(byte[] bytes) {
                 try {
@@ -172,13 +210,17 @@ public class Main {
                 throw new RuntimeException(e);
             }
         };
+        TenantsServiceConnectionDescriptorProvider<String> connectionPoolProvider = new TenantsServiceConnectionDescriptorProvider<>(
+            Executors.newScheduledThreadPool(1),
+            "",
+            connectionsProvider,
+            "",
+            "",
+            10_000); // TODO config
+        connectionPoolProvider.start();
+
         TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().builder(
-            new TenantsServiceConnectionDescriptorProvider<>(Executors.newScheduledThreadPool(1),
-                "",
-                connectionsProvider,
-                "",
-                "",
-                10_000), // TODO config
+            connectionPoolProvider,
             new HttpDeliveryClientHealthProvider("", null, "", 5000, 100))
             .deadAfterNErrors(10)
             .checkDeadEveryNMillis(10_000)
@@ -235,14 +277,12 @@ public class Main {
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
             .addInjectable(AmzaInstance.class, amzaService)
-            .addInjectable(AmzaStats.class, amzaStats)
             .addEndpoint(AmzaClientRestEndpoints.class)
             .addInjectable(BAInterner.class, interner)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
-
                 @Override
                 public void addEndpoint(Class clazz) {
                     System.out.println("Adding endpoint=" + clazz);
@@ -280,7 +320,7 @@ public class Main {
                 String[] peers = hostPortPeers.split(",");
                 for (String peer : peers) {
                     String[] hostPort = peer.trim().split(":");
-                    if (hostPort.length > 2) {
+                    if (hostPort.length != 2 && hostPort.length != 3) {
                         System.out.println("|     Malformed peer:" + peer + " expected form: <host>:<port> or <logicalName>:<host>:<port>");
                     } else {
                         String peerLogicalName = (hostPort.length == 2) ? hostPort[0] + ":" + hostPort[1] : hostPort[0];
@@ -312,4 +352,5 @@ public class Main {
             System.out.println("-----------------------------------------------------------------------");
         }
     }
+
 }

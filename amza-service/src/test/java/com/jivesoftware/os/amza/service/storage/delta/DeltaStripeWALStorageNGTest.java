@@ -32,6 +32,7 @@ import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionStats;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
@@ -107,7 +108,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = { partitionTmpDir };
+        File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
@@ -217,7 +218,7 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(interner, ids, member, partitionCreator, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        workingDirectories = new File[] { tmp };
+        workingDirectories = new File[]{tmp};
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
@@ -249,6 +250,7 @@ public class DeltaStripeWALStorageNGTest {
 
     @Test
     public void test() throws Exception {
+        AmzaStats amzaStats = new AmzaStats();
         WALStorage storage1 = partitionStore1.getWalStorage();
         WALStorage storage2 = partitionStore2.getWalStorage();
         byte[] prefix = UIO.intBytes(-1);
@@ -311,14 +313,20 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
         File baseKey = indexedWALStorageProvider.baseKey(versionedPartitionName1, 0);
-        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, true,
+        CompactionStats compactionStats = amzaStats.beginCompaction(AmzaStats.CompactionFamily.tombstone, "foo");
+
+        storage1.compactTombstone(compactionStats, baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, true,
             (transitionToCompacted) -> transitionToCompacted.tx(() -> {
                 return null;
             }));
-        storage1.compactTombstone(baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, true,
+        compactionStats.finished();
+
+        compactionStats = amzaStats.beginCompaction(AmzaStats.CompactionFamily.tombstone, "bar");
+        storage1.compactTombstone(compactionStats, baseKey, baseKey, testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, -1, -1, 0, true,
             (transitionToCompacted) -> transitionToCompacted.tx(() -> {
                 return null;
             })); // Bla
+        compactionStats.finished();
 
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
 

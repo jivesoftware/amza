@@ -459,7 +459,8 @@ public class AmzaServiceInitializer {
             primaryRowMarshaller,
             highwaterRowMarshaller);
 
-        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(walStorageProvider,
+        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(amzaStats,
+            walStorageProvider,
             partitionCreator,
             partitionIndex,
             storageVersionProvider,

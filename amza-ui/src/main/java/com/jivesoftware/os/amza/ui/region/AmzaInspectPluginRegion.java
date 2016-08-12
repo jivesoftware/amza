@@ -158,7 +158,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 AtomicLong max = new AtomicLong(0);
 
                 long start = System.currentTimeMillis();
-                partition.scan(input.consistency,
+                partition.scanKeys(input.consistency,
                     true,
                     stream -> stream.stream(getPrefix(input.prefix),
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),

@@ -74,8 +74,7 @@ public class AmzaRingsPluginRegion implements PageRegion<AmzaRingsPluginRegion.A
                 AtomicLong missed = new AtomicLong();
                 ringReader.allRings((byte[] ringName, RingMember ringMember, RingHost ringHost) -> {
                     if ((input.ringName.isEmpty() || new String(ringName).contains(input.ringName))
-                        && (input.member.isEmpty() || "".contains(input.member))
-                        && (input.status.isEmpty() || "".contains(input.status))) {
+                        && (input.member.isEmpty() || ringMember.getMember().contains(input.member))) {
 
                         Map<String, String> row = new HashMap<>();
                         row.put("ringName", new String(ringName));

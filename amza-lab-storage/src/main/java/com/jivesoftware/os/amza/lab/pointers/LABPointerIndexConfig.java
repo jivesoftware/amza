@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.lab.pointers;
 
 import org.merlin.config.Config;
-import org.merlin.config.defaults.BooleanDefault;
 import org.merlin.config.defaults.IntDefault;
 import org.merlin.config.defaults.LongDefault;
 
@@ -12,9 +11,6 @@ public interface LABPointerIndexConfig extends Config {
 
     @IntDefault(16)
     int getMaxMergeDebt();
-
-    @BooleanDefault(true)
-    boolean getUseMemMap();
 
     @IntDefault(4096)
     int getEntriesBetweenLeaps();
@@ -44,4 +40,13 @@ public interface LABPointerIndexConfig extends Config {
 
     @LongDefault(1024 * 1024)
     long getMaxHeapPressureInBytes();
+
+    @LongDefault(1024 * 1024 * 10)
+    long getMaxWALSizeInBytes();
+
+    @LongDefault(100_000)
+    long getMaxEntriesPerWAL();
+
+    @LongDefault(1024 * 1024 * 1024)
+    long getMaxEntrySizeInBytes();
 }

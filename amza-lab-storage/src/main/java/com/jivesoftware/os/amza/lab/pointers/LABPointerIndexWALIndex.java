@@ -20,9 +20,10 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.lab.LABEnvironment;
 import com.jivesoftware.os.lab.LABRawhide;
-import com.jivesoftware.os.lab.api.FormatTransformerProvider;
-import com.jivesoftware.os.lab.api.RawEntryFormat;
+import com.jivesoftware.os.lab.api.MemoryRawEntryFormat;
+import com.jivesoftware.os.lab.api.NoOpFormatTransformerProvider;
 import com.jivesoftware.os.lab.api.ValueIndex;
+import com.jivesoftware.os.lab.api.ValueIndexConfig;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
@@ -75,24 +76,24 @@ public class LABPointerIndexWALIndex implements WALIndex {
         this.config = config;
         this.environments = environments;
         this.currentStripe = currentStripe;
-        this.primaryDb = environments[currentStripe].open(name.getPrimaryName(),
+        this.primaryDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrimaryName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxHeapPressureInBytes(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-            FormatTransformerProvider.NO_OP,
-            new LABRawhide(),
-            RawEntryFormat.MEMORY);
-        this.prefixDb = environments[currentStripe].open(name.getPrefixName(),
+            NoOpFormatTransformerProvider.NAME,
+            LABRawhide.NAME,
+            MemoryRawEntryFormat.NAME));
+        this.prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxHeapPressureInBytes(),
             config.getSplitWhenKeysTotalExceedsNBytes(),
             config.getSplitWhenValuesTotalExceedsNBytes(),
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-            FormatTransformerProvider.NO_OP,
-            new LABRawhide(),
-            RawEntryFormat.MEMORY);
+            NoOpFormatTransformerProvider.NAME,
+            LABRawhide.NAME,
+            MemoryRawEntryFormat.NAME));
     }
 
     @Override
@@ -384,7 +385,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             long[] delta = new long[1];
             boolean completed = keyPointers.consume(
                 (prefix, key, requestTimestamp, requestTombstoned, requestVersion, requestFp, requestIndexValue, requestValue)
-                    -> getPointer(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
+                -> getPointer(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
                     // indexFp, indexTombstoned, requestTombstoned, delta
                     // -1       false            false              1
                     // -1       false            true               0
@@ -553,25 +554,25 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             }
                             removeDatabase(currentStripe, Type.backup);
 
-                            primaryDb = environments[compactionStripe].open(name.getPrimaryName(),
+                            primaryDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrimaryName(),
                                 config.getEntriesBetweenLeaps(),
                                 config.getMaxHeapPressureInBytes(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-                                FormatTransformerProvider.NO_OP,
-                                new LABRawhide(),
-                                RawEntryFormat.MEMORY);
+                                NoOpFormatTransformerProvider.NAME,
+                                LABRawhide.NAME,
+                                MemoryRawEntryFormat.NAME));
 
-                            prefixDb = environments[compactionStripe].open(name.getPrefixName(),
+                            prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
                                 config.getMaxHeapPressureInBytes(),
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-                                FormatTransformerProvider.NO_OP,
-                                new LABRawhide(),
-                                RawEntryFormat.MEMORY);
+                                NoOpFormatTransformerProvider.NAME,
+                                LABRawhide.NAME,
+                                MemoryRawEntryFormat.NAME));
 
                             currentStripe = compactionStripe;
                             LOG.debug("Committing after swap: {}", name.getPrimaryName());

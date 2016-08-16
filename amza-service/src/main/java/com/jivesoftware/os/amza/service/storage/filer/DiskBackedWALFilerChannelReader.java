@@ -56,7 +56,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
                 int read = fc.read(singleByteBuffer, fp);
                 fp++;
                 singleByteBuffer.position(0);
-                return read != 1 ? -1 : singleByteBuffer.get();
+                return read != 1 ? -1 : singleByteBuffer.get() & 0xFF;
             } catch (ClosedChannelException e) {
                 fc = parent.getFileChannel();
             }

@@ -1,0 +1,85 @@
+{namespace soy.content.page}
+
+/**
+ * Content  page
+ *
+ * @param? message
+ * @param? tenantId
+ * @param? version
+ * @param? contentId
+ * @param? contents
+ */
+{template .main}
+    {if $message}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                "Message"
+            </div>
+            <div class="panel-body">
+                {$message}
+            </div>
+        </div>
+    {/if}
+    <div class="panel panel-default">
+        <div class="panel-heading">Inspect Content</div>
+        <div class="panel-body">
+            <form id="requestPickerForm" data-active-class="btn-default" method="get" name="requestPickerForm">
+                <table>
+                    <tr>
+                        <td>TenantId</td>
+                        <td>
+                            <input type="text"  placeholder="TenantId" value="{$tenantId?:''}"
+                                name="tenantId" id="tenantIdPicker" data-original-title="" title="">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Version</td>
+                        <td>
+                            <input type="text"  placeholder="Tenant" value="{$version?:''}"
+                                name="version" id="versionPicker" data-original-title="" title="">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>ContentId</td>
+                        <td>
+                            <input type="text"  placeholder="ContentId" value="{$contentId?:''}"
+                                name="contentId" id="contentIdPicker" data-original-title="" title="">
+                        </td>
+                    </tr>
+                </table>
+                <input type="submit" value="Run"/>
+            </form>
+        </div>
+    </div>
+    {if $contents}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                Found
+            </div>
+            <div class="panel-body">
+                <ul>
+                    {foreach $c in $contents}
+                        <li>
+                            {$c.contentId} latestVersion:{$c.latestVersion}
+                            <ul>
+                                {foreach $v in $c.versions}
+                                    <li>
+                                        version:{$v.version}
+                                        <ul>
+                                            {foreach $f in $v.content}
+                                                <li>
+                                                    {$f.key}={$f.value}
+                                                </li>
+                                            {/foreach}
+                                        </ul>
+                                    </li>
+                                {/foreach}
+                            </ul>
+                        </li>
+                    {/foreach}
+                </ul>
+            </div>
+        </div>
+    {/if}
+
+{/template}

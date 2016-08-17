@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import java.util.concurrent.Callable;
 
 /**
  *

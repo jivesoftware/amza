@@ -228,8 +228,8 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     private boolean shouldOffer(Session session, long highestTxId) {
-        return highestTxId > -1 && (highestTxId > session.offeredTxId || (highestTxId > session.tookTxId && System.currentTimeMillis() > session
-            .reofferAtTimeInMillis));
+        return highestTxId > -1 && (highestTxId > session.offeredTxId
+            || (highestTxId > session.tookTxId && System.currentTimeMillis() > session.reofferAtTimeInMillis));
     }
 
     void updateTxId(VersionedRing versionedRing, boolean replicated, long updateTxId, boolean invalidateOnline) throws Exception {
@@ -292,7 +292,7 @@ public class TakeVersionedPartitionCoordinator {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (replicated) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
-            int[] fastEnough = { 0 };
+            int[] fastEnough = {0};
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
                 if (fastEnough[0] < versionedRing.takeFromFactor) {
@@ -310,9 +310,7 @@ public class TakeVersionedPartitionCoordinator {
                             }
                         }
                     }
-                }/* else if (candidate.getValue() > worstCategory) {
-                    sessions.remove(candidate.getKey());
-                }*/
+                }
             }
             currentCategory.set(worstCategory);
         }

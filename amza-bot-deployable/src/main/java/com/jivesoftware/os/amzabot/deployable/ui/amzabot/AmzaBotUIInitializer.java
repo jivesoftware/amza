@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amzabot.deployable.ui.amzabot;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotService;

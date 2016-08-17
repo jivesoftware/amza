@@ -114,7 +114,13 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        WALKeyPointerStream stream,
+        boolean hydrateValues) throws Exception {
+
         byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
         byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
         return WALKey.decompose(

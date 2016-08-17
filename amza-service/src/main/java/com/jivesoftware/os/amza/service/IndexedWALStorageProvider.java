@@ -15,7 +15,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Random;
 import org.apache.commons.io.FileUtils;
 

@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -17,7 +18,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
-import jersey.repackaged.com.google.common.collect.Maps;
 
 /**
  * @author jonathan.colt

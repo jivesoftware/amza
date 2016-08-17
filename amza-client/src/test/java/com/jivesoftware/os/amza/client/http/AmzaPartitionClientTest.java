@@ -91,7 +91,8 @@ public class AmzaPartitionClientTest {
                 new RingMemberAndHost[]{
                     new RingMemberAndHost(new RingMember("test1"), new RingHost("", "", "host1", 1234)),
                     new RingMemberAndHost(new RingMember("test2"), new RingHost("", "", "host2", 1234)),
-                    new RingMemberAndHost(new RingMember("test3"), new RingHost("", "", "host3", 1234)),});
+                    new RingMemberAndHost(new RingMember("test3"), new RingHost("", "", "host3", 1234))
+                });
         }
     }
 

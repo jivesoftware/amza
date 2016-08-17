@@ -169,7 +169,7 @@ public class AmzaClientService implements AmzaRestClient {
 
     @Override
     public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out, boolean hydrateValues) throws Exception {
- 
+
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
 

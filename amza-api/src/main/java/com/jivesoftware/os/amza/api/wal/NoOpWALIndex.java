@@ -134,7 +134,12 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        WALKeyPointerStream stream,
+        boolean hydrateValues) throws Exception {
         return true;
     }
 

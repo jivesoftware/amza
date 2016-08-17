@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.495</version>
+        <version>0.496</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -15,7 +15,7 @@
     </properties>
 
     <dependencies>
-       <dependency>
+        <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>collections</artifactId>
         </dependency>
@@ -104,12 +104,12 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
-            <version>0.495</version>
+            <version>${project.version}</version>
         </dependency>
-
-
-
-        
+        <dependency>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>merlin-config</artifactId>
+        </dependency>
         <dependency>
             <groupId>de.sven-jacobs</groupId>
             <artifactId>loremipsum</artifactId>
@@ -119,15 +119,14 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.495</version>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-lab-storage</artifactId>
-            <version>0.495</version>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
-    <name>amza-service</name>
 </project>

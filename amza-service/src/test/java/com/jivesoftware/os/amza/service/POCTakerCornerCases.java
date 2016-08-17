@@ -61,15 +61,9 @@ public class POCTakerCornerCases {
     A2,B1,C3
     A3,B2,C1
     A3,B1,C2
+     */
 
-
-
-    
-
-
-    */
-
-    /*
+ /*
     Workload % Read % Scans % Inserts
 R 95 0 5
 RW 50 0 50

@@ -104,7 +104,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             try {
                 stripeLocks[i].release();
             } catch (IOException x) {
-                LOG.error("Failed to release stripe lock {} for {}", new Object[] { i, workingIndexDirectories[i] }, x);
+                LOG.error("Failed to release stripe lock {} for {}", new Object[]{i, workingIndexDirectories[i]}, x);
             }
         }
     }
@@ -315,9 +315,9 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         } else {
             throw new IllegalStateException(
                 "Failed to transition to versionedPartitionName:" + versionedPartitionName
-                    + " stripe:" + rebalanceToStripe
-                    + " from " + currentStorageVersion
-                    + " to " + requireStorageVersion);
+                + " stripe:" + rebalanceToStripe
+                + " from " + currentStorageVersion
+                + " to " + requireStorageVersion);
         }
     }
 
@@ -468,7 +468,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
 
     void clearCache(byte[] walKey, byte[] walValue) throws Exception {
         int o = 0;
-        o++;// serializationVersion
+        o++; // serializationVersion
         int ringMemberLength = UIO.bytesInt(walKey, o);
         o += 4;
         RingMember ringMember = RingMember.fromBytes(walKey, o, ringMemberLength, interner);

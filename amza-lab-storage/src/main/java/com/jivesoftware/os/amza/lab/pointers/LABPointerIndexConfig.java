@@ -35,6 +35,9 @@ public interface LABPointerIndexConfig extends Config {
     @LongDefault(60_000)
     long getLeapCacheCleanupIntervalInMillis();
 
+    @LongDefault(1024 * 1024 * 1024 * 2L)
+    long getGlobalBlockOnHeapPressureInBytes();
+
     @LongDefault(1024 * 1024 * 1024)
     long getGlobalMaxHeapPressureInBytes();
 

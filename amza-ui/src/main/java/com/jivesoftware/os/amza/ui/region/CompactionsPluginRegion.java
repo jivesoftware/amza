@@ -113,7 +113,7 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
             data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
                 (Map.Entry<String, CompactionStats> input1) -> {
                     return ImmutableMap.of("name", input1.getKey(),
-                        "age", getDurationBreakdown(System.currentTimeMillis()-input1.getValue().startTime()),
+                        "age", getDurationBreakdown(System.currentTimeMillis() - input1.getValue().startTime()),
                         "duration", getDurationBreakdown(input1.getValue().duration()),
                         "timers", Iterables.transform(Iterables.filter(input1.getValue().getTimings(), Predicates.notNull()),
                             (Map.Entry<String, Long> input2) -> {

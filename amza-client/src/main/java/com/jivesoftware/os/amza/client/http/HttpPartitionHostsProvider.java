@@ -21,7 +21,6 @@ import com.jivesoftware.os.routing.bird.shared.ClientCall;
 import com.jivesoftware.os.routing.bird.shared.ClientCall.ClientResponse;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.NextClientStrategy;
-import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.http.HttpStatus;

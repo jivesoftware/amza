@@ -132,9 +132,9 @@ public class AmzaMain {
             Set<RingMember> blacklistRingMembers = Sets.newHashSet();
             for (String b : blacklist != null ? blacklist.split("\\s*,\\s*") : new String[0]) {
                 if (b != null) {
-                    b = b.trim();
-                    if (!b.isEmpty()) {
-                        blacklistRingMembers.add(new RingMember(b));
+                    String trimmedB = b.trim();
+                    if (!trimmedB.isEmpty()) {
+                        blacklistRingMembers.add(new RingMember(trimmedB));
                     }
                 }
             }

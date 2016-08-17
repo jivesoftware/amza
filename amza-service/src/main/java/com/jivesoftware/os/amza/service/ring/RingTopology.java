@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.ring;
 
-import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import java.util.List;
 

@@ -35,6 +35,9 @@
             <groupId>com.jivesoftware.os.aquarium</groupId>
             <artifactId>aquarium</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.mlogger</groupId>
+            <artifactId>core</artifactId>
+        </dependency>
     </dependencies>
-    <name>amza-api</name>
 </project>

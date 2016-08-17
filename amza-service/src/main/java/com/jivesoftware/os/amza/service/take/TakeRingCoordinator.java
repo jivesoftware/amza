@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.take;
 
-import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -23,7 +22,6 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**

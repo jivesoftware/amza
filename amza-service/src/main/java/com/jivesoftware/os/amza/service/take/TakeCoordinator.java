@@ -17,7 +17,6 @@ import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.jive.utils.collections.bah.BAHEqualer;
 import com.jivesoftware.os.jive.utils.collections.bah.BAHMapState;
-import com.jivesoftware.os.jive.utils.collections.bah.BAHState;
 import com.jivesoftware.os.jive.utils.collections.bah.BAHash;
 import com.jivesoftware.os.jive.utils.collections.bah.BAHasher;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;

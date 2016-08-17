@@ -1,13 +1,11 @@
 package com.jivesoftware.os.amza.service.take;
 
 import com.google.common.collect.Lists;
-import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.take.TakeRingCoordinator.VersionedRing;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.testng.annotations.Test;

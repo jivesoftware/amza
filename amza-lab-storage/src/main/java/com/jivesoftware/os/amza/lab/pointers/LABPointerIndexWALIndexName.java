@@ -21,7 +21,7 @@ public class LABPointerIndexWALIndexName {
     private final Type type;
     private final String name;
 
-    public LABPointerIndexWALIndexName(int modulo, Type type,String name) {
+    public LABPointerIndexWALIndexName(int modulo, Type type, String name) {
         this.modulo = modulo;
         this.type = type;
         this.name = name;

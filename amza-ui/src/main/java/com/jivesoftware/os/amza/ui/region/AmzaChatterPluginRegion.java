@@ -158,10 +158,12 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 if (totals != null) {
                     cells[partitionInteractionIndex] = new Element[]{
                         totals.gets.get() < 1 ? null : new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null),
-                        totals.getsLatency.get() < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLatency.get()),
+                        totals.getsLatency.get() < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLatency
+                        .get()),
                         null),
                         totals.scans.get() < 1 ? null : new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null),
-                        totals.scansLatency.get() < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLatency.get()),
+                        totals.scansLatency.get() < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLatency
+                        .get()),
                         null),
                         totals.directApplies.get() < 1 ? null : new Element("interactions", "interactions", "directApplies", numberFormat.format(
                         totals.directApplies.get()), null),
@@ -170,7 +172,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                         totals.updates.get() < 1 ? null : new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()),
                         null),
                         totals.updatesLag.get() < 1 ? null : new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag
-                        .get()), null),};
+                        .get()), null)};
 
                     cells[partitionStatsIndex] = new Element[]{
                         totals.offers.get() < 1 ? null : new Element("stats", "stats", "offers", numberFormat.format(totals.offers.get()), null),
@@ -296,7 +298,8 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                             unhealthy.compareAndSet(false, true);
                             cells[index] = new Element[]{
-                                new Element("id", "id", null, ringMember.getMember(), "danger"),};
+                                new Element("id", "id", null, ringMember.getMember(), "danger")
+                            };
                         }
                         return true;
                     });

@@ -39,7 +39,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         this.name = name;
         this.environments = new LABEnvironment[numberOfStripes];
 
-        ExecutorService heapThreadPool = LABEnvironment.buildLABHeapSchedulerThreadPool(config.getConcurrency());
+        ExecutorService heapThreadPool = LABEnvironment.buildLABHeapSchedulerThreadPool(environments.length);
         ExecutorService schedulerThreadPool = LABEnvironment.buildLABSchedulerThreadPool(config.getConcurrency());
         ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
@@ -47,8 +47,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         LabHeapPressure labHeapPressure = new LabHeapPressure(heapThreadPool,
             config.getGlobalMaxHeapPressureInBytes(),
             config.getGlobalBlockOnHeapPressureInBytes(),
-            new AtomicLong()
-        );
+            new AtomicLong());
 
         this.leapCache = LABEnvironment.buildLeapsCache((int) config.getLeapCacheMaxCapacity(), config.getConcurrency());
 

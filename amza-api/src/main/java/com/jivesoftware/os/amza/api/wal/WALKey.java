@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.api.wal;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class WALKey {
@@ -106,6 +107,13 @@ public class WALKey {
         byte[] key = new byte[rawKey.length - 2 - prefixLengthInBytes];
         System.arraycopy(rawKey, 2 + prefixLengthInBytes, key, 0, key.length);
         return key;
+    }
+
+    public static ByteBuffer rawKeyKey(ByteBuffer rawKey) {
+        rawKey.clear();
+        short prefixLengthInBytes = rawKey.getShort();
+        rawKey.position(2 + prefixLengthInBytes);
+        return rawKey.slice();
     }
 
     public static byte[] prefixUpperExclusive(byte[] keyFragment) {

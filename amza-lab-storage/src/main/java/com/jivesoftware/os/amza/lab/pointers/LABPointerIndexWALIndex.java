@@ -14,7 +14,6 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
-import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
@@ -24,9 +23,11 @@ import com.jivesoftware.os.lab.api.MemoryRawEntryFormat;
 import com.jivesoftware.os.lab.api.NoOpFormatTransformerProvider;
 import com.jivesoftware.os.lab.api.ValueIndex;
 import com.jivesoftware.os.lab.api.ValueIndexConfig;
+import com.jivesoftware.os.lab.guts.IndexUtil;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -34,9 +35,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static com.jivesoftware.os.amza.api.wal.WALKey.rawKeyKey;
-import static com.jivesoftware.os.amza.api.wal.WALKey.rawKeyPrefix;
 
 /**
  * @author jonathan.colt
@@ -144,7 +142,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return primaryDb.get(
                     (stream1) -> stream1.key(0, key, 0, key.length),
                     (index1, key1, timestamp1, tombstoned1, version1, payload) -> {
-                        long pointer = (payload == null) ? -1 : UIO.bytesLong(payload);
+                        long pointer = (payload == null) ? -1 : payload.getLong(0);
                         if (pointer != -1) {
                             int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
                             mode[0] = (c < 0) ? WALMergeKeyPointerStream.clobbered : WALMergeKeyPointerStream.ignored;
@@ -275,14 +273,15 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             byte[] fromFpPk = WALKey.compose(prefix, new byte[0]);
             byte[] toFpPk = WALKey.prefixUpperExclusive(fromFpPk);
+            ByteBuffer bbToFpPk = ByteBuffer.wrap(toFpPk);
             return prefixDb.rangeScan(fromFpPk, toFpPk, (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                if (KeyUtil.compare(rawKey, toFpPk) >= 0) {
+                if (IndexUtil.compare(rawKey, bbToFpPk) >= 0) {
                     return false;
                 }
-                byte[] key = WALKey.rawKeyKey(rawKey);
-                long takeTxId = UIO.bytesLong(key, 0);
-                long takeFp = UIO.bytesLong(key, 8);
-                return fromPayload(takeTxId, takeFp, payload, txFpStream, true);
+                ByteBuffer key = WALKey.rawKeyKey(rawKey);
+                long takeTxId = key.getLong(0);
+                long takeFp = key.getLong(8);
+                return fromPayload(takeTxId, takeFp, IndexUtil.toByteArray(payload), txFpStream, true);
             }, true);
         } finally {
             lock.release();
@@ -300,7 +299,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             byte[] pk = WALKey.compose(prefix, key);
             return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
                 (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                    return fromPayload(prefix, key, timestamp, tombstoned, version, payload, stream, true);
+                    return fromPayload(prefix, key, timestamp, tombstoned, version, IndexUtil.toByteArray(payload), stream, true);
                 },
                 true);
         } finally {
@@ -316,7 +315,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
                     (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                        return fromPayload(prefix, key, timestamp, tombstoned, version, payload, stream, true);
+                        return fromPayload(prefix, key, timestamp, tombstoned, version, IndexUtil.toByteArray(payload), stream, true);
                     },
                     true);
             });
@@ -342,7 +341,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             timestamp,
                             tombstoned,
                             version,
-                            payload,
+                            IndexUtil.toByteArray(payload),
                             stream,
                             true);
                     },
@@ -444,14 +443,17 @@ public class LABPointerIndexWALIndex implements WALIndex {
         lock.acquire();
         try {
             return primaryDb.rowScan(
-                (index, rawKey, timestamp, tombstoned, version, payload) -> fromPayload(rawKeyPrefix(rawKey),
-                    rawKeyKey(rawKey),
-                    timestamp,
-                    tombstoned,
-                    version,
-                    payload,
-                    stream,
-                    hydrateValues),
+                (index, rawKey, timestamp, tombstoned, version, payload) -> {
+                    byte[] rawKeyBytes = IndexUtil.toByteArray(rawKey);
+                    return fromPayload(WALKey.rawKeyPrefix(rawKeyBytes),
+                        WALKey.rawKeyKey(rawKeyBytes),
+                        timestamp,
+                        tombstoned,
+                        version,
+                        IndexUtil.toByteArray(payload),
+                        stream,
+                        hydrateValues);
+                },
                 hydrateValues);
         } finally {
             lock.release();
@@ -472,14 +474,17 @@ public class LABPointerIndexWALIndex implements WALIndex {
             byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
             return primaryDb.rangeScan(fromPk,
                 toPk,
-                (index, rawKey, timestamp, tombstoned, version, payload) -> fromPayload(rawKeyPrefix(rawKey),
-                    rawKeyKey(rawKey),
-                    timestamp,
-                    tombstoned,
-                    version,
-                    payload,
-                    stream,
-                    hydrateValues),
+                (index, rawKey, timestamp, tombstoned, version, payload) -> {
+                    byte[] rawKeyBytes = IndexUtil.toByteArray(rawKey);
+                    return fromPayload(WALKey.rawKeyPrefix(rawKeyBytes),
+                        WALKey.rawKeyKey(rawKeyBytes),
+                        timestamp,
+                        tombstoned,
+                        version,
+                         IndexUtil.toByteArray(payload),
+                        stream,
+                        hydrateValues);
+                },
                 hydrateValues);
         } finally {
             lock.release();

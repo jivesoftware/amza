@@ -45,6 +45,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
 
         LabHeapPressure labHeapPressure = new LabHeapPressure(heapThreadPool,
+            config.getHeapPressureName(),
             config.getGlobalMaxHeapPressureInBytes(),
             config.getGlobalBlockOnHeapPressureInBytes(),
             new AtomicLong());

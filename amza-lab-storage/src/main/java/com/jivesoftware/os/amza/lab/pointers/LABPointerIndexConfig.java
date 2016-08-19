@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.lab.pointers;
 import org.merlin.config.Config;
 import org.merlin.config.defaults.IntDefault;
 import org.merlin.config.defaults.LongDefault;
+import org.merlin.config.defaults.StringDefault;
 
 public interface LABPointerIndexConfig extends Config {
 
@@ -34,6 +35,9 @@ public interface LABPointerIndexConfig extends Config {
 
     @LongDefault(60_000)
     long getLeapCacheCleanupIntervalInMillis();
+
+    @StringDefault("amza")
+    String getHeapPressureName();
 
     @LongDefault(1024 * 1024 * 1024 * 2L)
     long getGlobalBlockOnHeapPressureInBytes();

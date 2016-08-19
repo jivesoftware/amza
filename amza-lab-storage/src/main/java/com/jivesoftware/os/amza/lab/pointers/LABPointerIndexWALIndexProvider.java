@@ -68,6 +68,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 config.getMaxEntrySizeInBytes(),
                 config.getMaxEntriesPerWAL(),
                 config.getMaxEntrySizeInBytes(),
+                config.getMaxWALOnOpenHeapPressureOverride(),
                 active,
                 labHeapPressure,
                 config.getMinMergeDebt(),

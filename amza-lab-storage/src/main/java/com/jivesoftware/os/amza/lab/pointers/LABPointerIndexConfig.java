@@ -56,4 +56,8 @@ public interface LABPointerIndexConfig extends Config {
 
     @LongDefault(1024 * 1024 * 1024)
     long getMaxEntrySizeInBytes();
+
+    @LongDefault(1024 * 1024 * 1024)
+    long getMaxWALOnOpenHeapPressureOverride();
+
 }

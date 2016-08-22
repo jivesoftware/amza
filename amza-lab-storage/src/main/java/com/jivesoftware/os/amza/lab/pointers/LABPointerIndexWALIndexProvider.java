@@ -73,7 +73,8 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 labHeapPressure,
                 config.getMinMergeDebt(),
                 config.getMaxMergeDebt(),
-                leapCache);
+                leapCache,
+                false);
 
             File[] files = active.listFiles();
             if (files != null) {

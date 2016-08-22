@@ -5,6 +5,7 @@ import com.jivesoftware.os.amzabot.deployable.ui.SoyRenderer;
 import com.jivesoftware.os.amzabot.deployable.ui.UiPageRegion;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -60,14 +61,14 @@ public class UiHomeRegion implements UiPageRegion<Void> {
         data.put("ingressedRecency", "0");
         data.put("ingressedLatency", "0");
         data.put("ingressedTotal", "0");
-        data.put("ingressedStatus", "0");
+        data.put("ingressedStatus", Collections.emptyList());
     }
 
     private void egressed(Map<String, Object> data) {
         data.put("egressedRecency", "0");
         data.put("egressedLatency", "0");
         data.put("egressedTotal", "0");
-        data.put("egressedStatus", "0");
+        data.put("egressedStatus", Collections.emptyList());
     }
 
     @Override

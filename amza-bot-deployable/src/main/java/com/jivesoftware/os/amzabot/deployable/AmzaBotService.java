@@ -74,7 +74,7 @@ public class AmzaBotService {
     }
 
     public void set(String k, String v) throws Exception {
-        LOG.info("set {}:{}", k, truncVal(v));
+        LOG.debug("set {}:{}", k, truncVal(v));
 
         if (amzaBotConfig.getDropEverythingOnTheFloor()) {
             LOG.warn("Dropping sets on the floor.");
@@ -99,7 +99,7 @@ public class AmzaBotService {
     }
 
     public String get(String k) throws Exception {
-        LOG.info("get {}", k);
+        LOG.debug("get {}", k);
 
         PartitionClient partitionClient = clientProvider.getPartition(
             partitionName,
@@ -131,7 +131,7 @@ public class AmzaBotService {
     }
 
     public void delete(String k) throws Exception {
-        LOG.info("delete {}", k);
+        LOG.debug("delete {}", k);
 
         PartitionClient partitionClient = clientProvider.getPartition(
             partitionName,
@@ -183,7 +183,7 @@ public class AmzaBotService {
                     truncVal(entry.getValue()),
                     truncVal(value));
             } else {
-                LOG.info("Found key {}", entry.getKey());
+                LOG.debug("Found key {}", entry.getKey());
             }
         } else if (op == 1) {
             // delete
@@ -198,7 +198,7 @@ public class AmzaBotService {
                     amzaKeyClearingHouse.delete(entry.getKey());
                     delete(entry.getKey());
 
-                    LOG.info("Deleted {}", entry.getKey());
+                    LOG.debug("Deleted {}", entry.getKey());
                 } catch (Exception e) {
                     amzaKeyClearingHouse.quarantineKey(entry, "deleted");
                     LOG.error("Error deleting {}", entry.getKey(), e);
@@ -223,10 +223,10 @@ public class AmzaBotService {
                         set(keySeed, value);
                     }
 
-                    LOG.info("Wrote {}:{}", keySeed, truncVal(value));
+                    LOG.debug("Wrote {}:{}", keySeed, truncVal(value));
                 }
             } else {
-                LOG.warn("Above write threshold of {} for {}.", amzaBotConfig.getWriteThreshold(), keySeed);
+                LOG.info("Above write threshold of {} for {}.", amzaBotConfig.getWriteThreshold(), keySeed);
             }
         }
 

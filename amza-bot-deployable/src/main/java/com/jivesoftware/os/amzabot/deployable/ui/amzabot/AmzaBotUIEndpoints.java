@@ -11,7 +11,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-@Path("/content/ui")
+@Path("/amzabot/ui")
 public class AmzaBotUIEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();

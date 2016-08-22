@@ -33,7 +33,7 @@ interface AmzaBotConfig extends Config {
     long getWriteThreshold();
     void setWriteThreshold(long value);
 
-    @IntDefault(1_000)
+    @IntDefault(100)
     int getValueSizeThreshold();
     void setValueSizeThreshold(int value);
 

@@ -18,8 +18,8 @@ public class AmzaBotUIEndpoints {
 
     private final AmzaBotUIService service;
 
-    public AmzaBotUIEndpoints(@Context AmzaBotUIService diveService) {
-        this.service = diveService;
+    public AmzaBotUIEndpoints(@Context AmzaBotUIService service) {
+        this.service = service;
     }
 
     @GET

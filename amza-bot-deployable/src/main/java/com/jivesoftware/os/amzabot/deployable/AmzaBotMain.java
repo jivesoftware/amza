@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amzabot.deployable.AmzaBotHealthCheck.AmzaBotHealthCheckConfig;
 import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotEndpoints;
 import com.jivesoftware.os.amzabot.deployable.ui.amzabot.AmzaBotUIEndpoints;
 import com.jivesoftware.os.amzabot.deployable.ui.amzabot.AmzaBotUIInitializer;
@@ -63,13 +64,20 @@ public class AmzaBotMain {
                 new HasUI.UI("Thread Dump", "manage", "/manage/threadDump"),
                 new HasUI.UI("Health", "manage", "/manage/ui"),
                 new HasUI.UI("AmzaBot", "main", "/"))));
-            deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
-            deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));
-            deployable.addHealthCheck(new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)));
-            deployable.addHealthCheck(new LoadAverageHealthChecker(deployable.config(LoadAverageHealthChecker.LoadAverageHealthCheckerConfig.class)));
-            deployable.addHealthCheck(
-                new FileDescriptorCountHealthChecker(deployable.config(FileDescriptorCountHealthChecker.FileDescriptorCountHealthCheckerConfig.class)));
-            deployable.addHealthCheck(serviceStartupHealthCheck);
+
+            AmzaKeyClearingHouse amzaKeyClearingHouse = new AmzaKeyClearingHouse();
+            AmzaBotHealthCheck amzaBotHealthCheck =
+                new AmzaBotHealthCheck(instanceConfig,
+                    deployable.config(AmzaBotHealthCheckConfig.class),
+                    amzaKeyClearingHouse);
+
+            deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)),
+                new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)),
+                new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)),
+                new LoadAverageHealthChecker(deployable.config(LoadAverageHealthChecker.LoadAverageHealthCheckerConfig.class)),
+                new FileDescriptorCountHealthChecker(deployable.config(FileDescriptorCountHealthChecker.FileDescriptorCountHealthCheckerConfig.class)),
+                amzaBotHealthCheck,
+                serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
             deployable.buildManageServer().start();
 
@@ -105,7 +113,11 @@ public class AmzaBotMain {
 
             String cacheToken = String.valueOf(System.currentTimeMillis());
             AmzaBotUIServiceConfig contentUIServiceConfig = deployable.config(AmzaBotUIServiceConfig.class);
-            AmzaBotService amzaBotService = new AmzaBotService(amzaBotConfig, amzaClientProvider);
+
+            AmzaBotService amzaBotService =
+                new AmzaBotService(amzaBotConfig, amzaClientProvider, amzaKeyClearingHouse);
+            amzaBotService.start();
+
             AmzaBotUIService contentUIService = new AmzaBotUIInitializer()
                 .initialize(cacheToken, contentUIServiceConfig, amzaBotService);
 

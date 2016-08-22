@@ -25,4 +25,16 @@ interface AmzaBotConfig extends Config {
     boolean getDropEverythingOnTheFloor();
     void setDropEverythingOnTheFloor(boolean value);
 
+    @IntDefault(100)
+    int getHesitationFactorMs();
+    void setHesitationFactorMs(int value);
+
+    @LongDefault(10_000)
+    long getWriteThreshold();
+    void setWriteThreshold(long value);
+
+    @IntDefault(1_000)
+    int getValueSizeThreshold();
+    void setValueSizeThreshold(int value);
+
 }

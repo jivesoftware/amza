@@ -82,7 +82,10 @@ public class AmzaBotServiceTest {
             Assert.assertEquals(v, "value:" + i);
         }
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
+
+        // success
     }
 
     @Test
@@ -95,7 +98,8 @@ public class AmzaBotServiceTest {
             amzaBotService.delete("key:" + i);
         }
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
 
         // success
     }
@@ -129,7 +133,8 @@ public class AmzaBotServiceTest {
 
         Assert.assertEquals(amzaKeyClearingHouse.getQuarantinedKeyMap().size(), 0);
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
     }
 
     @Test
@@ -153,7 +158,8 @@ public class AmzaBotServiceTest {
             seq.inc();
         }
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
     }
 
     @Test
@@ -171,7 +177,8 @@ public class AmzaBotServiceTest {
 
         Assert.assertEquals(amzaKeyClearingHouse.getQuarantinedKeyMap().size(), 0);
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
     }
 
 }

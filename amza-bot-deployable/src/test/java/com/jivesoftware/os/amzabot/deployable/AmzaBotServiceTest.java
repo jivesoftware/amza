@@ -58,6 +58,7 @@ public class AmzaBotServiceTest {
         amzaBotConfig.setHesitationFactorMs(100);
         amzaBotConfig.setWriteThreshold(100);
         amzaBotConfig.setValueSizeThreshold(20);
+        amzaBotConfig.setPartitionSize(1);
 
         amzaKeyClearingHouse = new AmzaKeyClearingHouse();
         amzaBotService = new AmzaBotService(amzaBotConfig, partitionClientProvider, amzaKeyClearingHouse);

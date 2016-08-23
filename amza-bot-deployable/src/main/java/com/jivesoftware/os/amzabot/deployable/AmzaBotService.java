@@ -83,7 +83,7 @@ public class AmzaBotService {
 
         PartitionClient partitionClient = clientProvider.getPartition(
             partitionName,
-            3,
+            amzaBotConfig.getPartitionSize(),
             AMZABOT_PROPERTIES);
 
         partitionClient.commit(

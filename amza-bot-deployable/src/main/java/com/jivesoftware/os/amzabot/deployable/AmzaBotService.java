@@ -83,7 +83,7 @@ public class AmzaBotService {
 
         PartitionClient partitionClient = clientProvider.getPartition(
             partitionName,
-            3,
+            amzaBotConfig.getPartitionSize(),
             AMZABOT_PROPERTIES);
 
         partitionClient.commit(
@@ -174,7 +174,7 @@ public class AmzaBotService {
             String value = get(entry.getKey());
 
             if (value == null) {
-                amzaKeyClearingHouse.quarantineKey(entry, value);
+                amzaKeyClearingHouse.quarantineKey(entry, null);
                 LOG.error("Did not find key {}:{}", entry.getKey());
             } else if (!entry.getValue().equals(value)) {
                 amzaKeyClearingHouse.quarantineKey(entry, value);
@@ -226,7 +226,7 @@ public class AmzaBotService {
                     LOG.debug("Wrote {}:{}", keySeed, truncVal(value));
                 }
             } else {
-                LOG.info("Above write threshold of {} for {}.", amzaBotConfig.getWriteThreshold(), keySeed);
+                LOG.debug("Above write threshold of {} for {}.", amzaBotConfig.getWriteThreshold(), keySeed);
             }
         }
 
@@ -261,12 +261,16 @@ public class AmzaBotService {
         return amzaKeyClearingHouse.getKeyMap();
     }
 
+    public void clearKeyMap() {
+        amzaKeyClearingHouse.clearKeyMap();
+    }
+
     public ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
         return amzaKeyClearingHouse.getQuarantinedKeyMap();
     }
 
-    public void clearQuarantinedKeys() {
-        amzaKeyClearingHouse.clearQuarantinedKeys();
+    public void clearQuarantinedKeyMap() {
+        amzaKeyClearingHouse.clearQuarantinedKeyMap();
     }
 
 }

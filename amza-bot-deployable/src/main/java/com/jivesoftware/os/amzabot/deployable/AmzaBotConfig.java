@@ -37,4 +37,8 @@ interface AmzaBotConfig extends Config {
     int getValueSizeThreshold();
     void setValueSizeThreshold(int value);
 
+    @IntDefault(3)
+    int getPartitionSize();
+    void setPartitionSize(int value);
+
 }

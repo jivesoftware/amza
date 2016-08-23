@@ -8,25 +8,29 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
 
-public class AmzaKeyClearingHouse {
+class AmzaKeyClearingHouse {
 
     private Random rand = new Random();
 
     // key, value
     private ConcurrentMap<String, String> keyMap = Maps.newConcurrentMap();
 
-    public ConcurrentMap<String, String> getKeyMap() {
+    ConcurrentMap<String, String> getKeyMap() {
         return keyMap;
+    }
+
+    void clearKeyMap() {
+        keyMap.clear();
     }
 
     // key, <expected value, actual value>
     private ConcurrentMap<String, Entry<String, String>> quarantinedKeyMap = Maps.newConcurrentMap();
 
-    public ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
+    ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
         return quarantinedKeyMap;
     }
 
-    public void clearQuarantinedKeys() {
+    void clearQuarantinedKeyMap() {
         quarantinedKeyMap.clear();
     }
 
@@ -38,11 +42,11 @@ public class AmzaKeyClearingHouse {
         return keyMap.get(key);
     }
 
-    public void delete(String key) {
+    void delete(String key) {
         keyMap.remove(key);
     }
 
-    public Entry<String, String> getRandomKey() {
+    Entry<String, String> getRandomKey() {
         if (keyMap.isEmpty()) {
             return null;
         }
@@ -53,7 +57,7 @@ public class AmzaKeyClearingHouse {
         return array.get(randIdx);
     }
 
-    public void quarantineKey(Entry<String, String> entry, String value) {
+    void quarantineKey(Entry<String, String> entry, String value) {
         quarantinedKeyMap.put(entry.getKey(),
             new AbstractMap.SimpleEntry<>(entry.getValue(), value));
         keyMap.remove(entry.getKey());

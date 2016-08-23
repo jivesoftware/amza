@@ -85,6 +85,13 @@ public class AmzaBotEndpoints {
         return Response.ok(sb.toString(), MediaType.TEXT_PLAIN).build();
     }
 
+    @POST
+    @Path("/resetValidKeys")
+    public Response resetKeys() {
+        service.clearKeyMap();
+        return Response.accepted().build();
+    }
+
     @GET
     @Path("/invalidKeys")
     @Produces(MediaType.TEXT_PLAIN)
@@ -105,7 +112,7 @@ public class AmzaBotEndpoints {
     @POST
     @Path("/resetInvalidKeys")
     public Response resetErrors() {
-        service.clearQuarantinedKeys();
+        service.clearQuarantinedKeyMap();
         return Response.accepted().build();
     }
 

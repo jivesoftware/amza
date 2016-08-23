@@ -58,6 +58,7 @@ public class AmzaBotServiceTest {
         amzaBotConfig.setHesitationFactorMs(100);
         amzaBotConfig.setWriteThreshold(100);
         amzaBotConfig.setValueSizeThreshold(20);
+        amzaBotConfig.setPartitionSize(1);
 
         amzaKeyClearingHouse = new AmzaKeyClearingHouse();
         amzaBotService = new AmzaBotService(amzaBotConfig, partitionClientProvider, amzaKeyClearingHouse);
@@ -82,7 +83,10 @@ public class AmzaBotServiceTest {
             Assert.assertEquals(v, "value:" + i);
         }
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
+
+        // success
     }
 
     @Test
@@ -95,7 +99,8 @@ public class AmzaBotServiceTest {
             amzaBotService.delete("key:" + i);
         }
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
 
         // success
     }
@@ -129,7 +134,8 @@ public class AmzaBotServiceTest {
 
         Assert.assertEquals(amzaKeyClearingHouse.getQuarantinedKeyMap().size(), 0);
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
     }
 
     @Test
@@ -153,7 +159,8 @@ public class AmzaBotServiceTest {
             seq.inc();
         }
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
     }
 
     @Test
@@ -171,7 +178,8 @@ public class AmzaBotServiceTest {
 
         Assert.assertEquals(amzaKeyClearingHouse.getQuarantinedKeyMap().size(), 0);
 
-        amzaBotService.clearQuarantinedKeys();
+        amzaBotService.clearKeyMap();
+        amzaBotService.clearQuarantinedKeyMap();
     }
 
 }

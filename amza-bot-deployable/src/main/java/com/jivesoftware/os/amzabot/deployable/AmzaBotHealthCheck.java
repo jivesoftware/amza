@@ -25,9 +25,9 @@ import java.util.Map.Entry;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.StringDefault;
 
-public class AmzaBotHealthCheck implements HealthCheck {
+class AmzaBotHealthCheck implements HealthCheck {
 
-    public interface AmzaBotHealthCheckConfig extends HealthCheckConfig {
+    interface AmzaBotHealthCheckConfig extends HealthCheckConfig {
         @Override
         @StringDefault("amzabot>fault>count")
         String getName();
@@ -44,7 +44,7 @@ public class AmzaBotHealthCheck implements HealthCheck {
     private final AmzaBotHealthCheckConfig config;
     private final AmzaKeyClearingHouse amzaKeyClearingHouse;
 
-    public AmzaBotHealthCheck(InstanceConfig instanceConfig,
+    AmzaBotHealthCheck(InstanceConfig instanceConfig,
         AmzaBotHealthCheckConfig config,
         AmzaKeyClearingHouse amzaKeyClearingHouse) {
         this.instanceConfig = instanceConfig;
@@ -96,7 +96,7 @@ public class AmzaBotHealthCheck implements HealthCheck {
                 public String getResolution() {
                     return "Investigate invalid Amza keys. Reset via " +
                         "http://" +
-                        instanceConfig.getHost() + ":" + instanceConfig.getManagePort() +
+                        instanceConfig.getHost() + ":" + instanceConfig.getMainPort() +
                         "/api/amzabot/v1/resetInvalidKeys";
                 }
 

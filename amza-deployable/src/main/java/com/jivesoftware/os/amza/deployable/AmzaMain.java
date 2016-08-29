@@ -31,6 +31,7 @@ import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
+import com.jivesoftware.os.routing.bird.endpoints.base.LoadBalancerHealthCheckEndpoints;
 import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.ScheduledMinMaxHealthCheckConfig;
@@ -174,6 +175,7 @@ public class AmzaMain {
 
             lifecycle.startAmzaService();
             lifecycle.startRoutingBirdAmzaDiscovery();
+            deployable.addEndpoints(LoadBalancerHealthCheckEndpoints.class);
             deployable.buildServer().start();
             clientHealthProvider.start();
             serviceStartupHealthCheck.success();

@@ -1,36 +1,50 @@
 package com.jivesoftware.os.amzabot.deployable;
 
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.mlogger.core.AtomicCounter;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.commons.lang.RandomStringUtils;
 
-class AmzaKeyClearingHouse {
+public class AmzaKeyClearingHouse {
 
-    private Random rand = new Random();
+    private final Random RANDOM = new Random();
+
+    private final AtomicBoolean honorCapacity = new AtomicBoolean(false);
+    private final AtomicCounter currentCapacity = new AtomicCounter();
 
     // key, value
     private ConcurrentMap<String, String> keyMap = Maps.newConcurrentMap();
 
-    ConcurrentMap<String, String> getKeyMap() {
+    public AmzaKeyClearingHouse() {
+    }
+
+    public AmzaKeyClearingHouse(long capacity) {
+        honorCapacity.set(true);
+        currentCapacity.set(capacity);
+    }
+
+    public ConcurrentMap<String, String> getKeyMap() {
         return keyMap;
     }
 
-    void clearKeyMap() {
+    public void clearKeyMap() {
         keyMap.clear();
     }
 
     // key, <expected value, actual value>
     private ConcurrentMap<String, Entry<String, String>> quarantinedKeyMap = Maps.newConcurrentMap();
 
-    ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
+    public ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
         return quarantinedKeyMap;
     }
 
-    void clearQuarantinedKeyMap() {
+    public void clearQuarantinedKeyMap() {
         quarantinedKeyMap.clear();
     }
 
@@ -42,24 +56,50 @@ class AmzaKeyClearingHouse {
         return keyMap.get(key);
     }
 
-    void delete(String key) {
+    public void delete(String key) {
         keyMap.remove(key);
     }
 
-    Entry<String, String> getRandomKey() {
+    public Entry<String, String> genRandomEntry(String key, int valueSizeThreshold) {
+        if (honorCapacity.get() && currentCapacity.getValue() < 1) {
+            return null;
+        }
+        currentCapacity.dec();
+
+        return new AbstractMap.SimpleEntry<>(
+            key,
+            RandomStringUtils.randomAlphanumeric(RANDOM.nextInt(valueSizeThreshold)));
+    }
+
+    public Entry<String, String> popRandomEntry() {
+        if (keyMap.isEmpty()) {
+            return null;
+        }
+
+        Entry<String, String> entry;
+
+        synchronized (this) {
+            List<Entry<String, String>> array = new ArrayList<>(keyMap.entrySet());
+            entry = array.get(RANDOM.nextInt(keyMap.size()));
+            keyMap.remove(entry.getKey());
+        }
+
+        return entry;
+    }
+
+    public Entry<String, String> getRandomEntry() {
         if (keyMap.isEmpty()) {
             return null;
         }
 
         List<Entry<String, String>> array = new ArrayList<>(keyMap.entrySet());
-        int randIdx = rand.nextInt(keyMap.size());
-
-        return array.get(randIdx);
+        return array.get(RANDOM.nextInt(keyMap.size()));
     }
 
-    void quarantineKey(Entry<String, String> entry, String value) {
+    public void quarantineEntry(Entry<String, String> entry, String value) {
         quarantinedKeyMap.put(entry.getKey(),
             new AbstractMap.SimpleEntry<>(entry.getValue(), value));
         keyMap.remove(entry.getKey());
     }
+
 }

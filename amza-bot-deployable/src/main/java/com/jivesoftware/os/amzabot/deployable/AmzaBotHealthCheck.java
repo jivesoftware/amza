@@ -1,18 +1,3 @@
-/*
- * Copyright 2015 jonathan.colt.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.jivesoftware.os.amzabot.deployable;
 
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
@@ -42,18 +27,18 @@ class AmzaBotHealthCheck implements HealthCheck {
 
     private final InstanceConfig instanceConfig;
     private final AmzaBotHealthCheckConfig config;
-    private final AmzaKeyClearingHouse amzaKeyClearingHouse;
+    private final AmzaKeyClearingHousePool amzaKeyClearingHousePool;
 
     AmzaBotHealthCheck(InstanceConfig instanceConfig,
         AmzaBotHealthCheckConfig config,
-        AmzaKeyClearingHouse amzaKeyClearingHouse) {
+        AmzaKeyClearingHousePool amzaKeyClearingHousePool) {
         this.instanceConfig = instanceConfig;
         this.config = config;
-        this.amzaKeyClearingHouse = amzaKeyClearingHouse;
+        this.amzaKeyClearingHousePool = amzaKeyClearingHousePool;
     }
 
     public HealthCheckResponse checkHealth() throws Exception {
-        Map<String, Entry<String, String>> quarantinedKeys = amzaKeyClearingHouse.getQuarantinedKeyMap();
+        Map<String, Entry<String, String>> quarantinedKeys = amzaKeyClearingHousePool.getAllQuarantinedEntries();
 
         if (quarantinedKeys.isEmpty()) {
             return new HealthCheckResponseImpl(config.getName(), 1.0, "Healthy", config.getDescription(), "", System.currentTimeMillis());
@@ -84,9 +69,9 @@ class AmzaBotHealthCheck implements HealthCheck {
                         }
                         sb.append(key);
                         sb.append(":");
-                        sb.append(AmzaBotService.truncVal(entry.getKey()));
+                        sb.append(AmzaBotUtil.truncVal(entry.getKey()));
                         sb.append(":");
-                        sb.append(AmzaBotService.truncVal(entry.getValue()));
+                        sb.append(AmzaBotUtil.truncVal(entry.getValue()));
                     });
 
                     return sb.toString();

@@ -15,15 +15,12 @@ public class AmzaBotRegion implements UiPageRegion<AmzaBotInput> {
 
     private final String mainTemplate;
     private final SoyRenderer renderer;
-    private final AmzaBotService amzaBotService;
 
     public AmzaBotRegion(String mainTemplate,
-        SoyRenderer renderer,
-        AmzaBotService amzaBotService) {
+        SoyRenderer renderer) {
 
         this.mainTemplate = mainTemplate;
         this.renderer = renderer;
-        this.amzaBotService = amzaBotService;
     }
 
     @Override

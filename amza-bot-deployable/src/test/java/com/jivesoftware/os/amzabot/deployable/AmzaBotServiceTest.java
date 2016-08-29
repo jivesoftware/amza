@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amzabot.deployable;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
+import com.beust.jcommander.internal.Sets;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -12,24 +11,21 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
-import com.jivesoftware.os.mlogger.core.AtomicCounter;
-import com.jivesoftware.os.mlogger.core.ValueType;
-import java.util.List;
+import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.merlin.config.BindInterfaceToConfiguration;
 import org.testng.Assert;
-import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class AmzaBotServiceTest {
 
-    private AmzaBotService amzaBotService;
-    private AmzaKeyClearingHouse amzaKeyClearingHouse;
-    private AmzaBotConfig amzaBotConfig;
-
+    private AmzaBotService service;
 
     @BeforeMethod
     public void setUp() throws Exception {
@@ -51,135 +47,88 @@ public class AmzaBotServiceTest {
             }
         };
 
-        amzaBotConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
-        amzaBotConfig.setDropEverythingOnTheFloor(false);
-        amzaBotConfig.setAdditionalSolverAfterNMillis(10_000);
-        amzaBotConfig.setAbandonSolutionAfterNMillis(30_000);
-        amzaBotConfig.setHesitationFactorMs(100);
-        amzaBotConfig.setWriteThreshold(100);
-        amzaBotConfig.setValueSizeThreshold(20);
-        amzaBotConfig.setPartitionSize(1);
+        AmzaBotConfig config = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
+        config.setPartitionSize(1);
 
-        amzaKeyClearingHouse = new AmzaKeyClearingHouse();
-        amzaBotService = new AmzaBotService(amzaBotConfig, partitionClientProvider, amzaKeyClearingHouse);
-        amzaBotService.start();
-    }
-
-    @AfterMethod
-    public void tearDown() throws Exception {
-        amzaBotService.stop();
+        service = new AmzaBotServiceInitializer(
+            config, partitionClientProvider).initialize();
     }
 
     @Test
-    public void testBotSet() throws Exception {
+    public void testBotSetGet() throws Exception {
         for (long i = 0; i < 10; i++) {
-            amzaBotService.set("key:" + i, "value:" + i);
+            service.set("key:" + i, "value:" + i);
         }
 
         for (long i = 0; i < 10; i++) {
-            String v = amzaBotService.get("key:" + i);
+            String v = service.get("key:" + i);
 
             Assert.assertNotNull(v);
             Assert.assertEquals(v, "value:" + i);
         }
-
-        amzaBotService.clearKeyMap();
-        amzaBotService.clearQuarantinedKeyMap();
-
-        // success
     }
 
     @Test
-    public void testBotDelete() throws Exception {
+    public void testBotBatchSetGet() throws Exception {
+        Set<Entry<String, String>> entries = Sets.newHashSet();
         for (long i = 0; i < 10; i++) {
-            amzaBotService.set("key:" + i, "value:" + i);
+            entries.add(new AbstractMap.SimpleEntry<>("key:" + i, "value:" + i));
         }
+        service.set(entries);
 
         for (long i = 0; i < 10; i++) {
-            amzaBotService.delete("key:" + i);
+            String v = service.get("key:" + i);
+
+            Assert.assertNotNull(v);
+            Assert.assertEquals(v, "value:" + i);
+        }
+    }
+
+    @Test
+    public void testBotSetDelete() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
         }
 
-        amzaBotService.clearKeyMap();
-        amzaBotService.clearQuarantinedKeyMap();
-
-        // success
-    }
-
-    @Test
-    public void testGetEndpointJoinUsage() throws Exception {
-        List<String> noValues = Lists.newArrayList();
-        Assert.assertEquals(noValues.size(), 0);
-
-        String noValue = Joiner.on(',').join(noValues);
-        Assert.assertEquals(noValue, "");
-
-        List<String> oneValues = Lists.newArrayList();
-        oneValues.add("one");
-        String oneValue = Joiner.on(',').join(oneValues);
-        Assert.assertEquals(oneValue, "one");
-
-        List<String> twoValues = Lists.newArrayList();
-        twoValues.add("one");
-        twoValues.add("two");
-        String twoValue = Joiner.on(',').join(twoValues);
-        Assert.assertEquals(twoValue, "one,two");
-    }
-
-    @Test
-    public void testWaitOnProcessor() throws InterruptedException {
-        Thread.sleep(1_000);
-
-        System.out.println("Outstanding key count: " +
-            amzaKeyClearingHouse.getKeyMap().size());
-
-        Assert.assertEquals(amzaKeyClearingHouse.getQuarantinedKeyMap().size(), 0);
-
-        amzaBotService.clearKeyMap();
-        amzaBotService.clearQuarantinedKeyMap();
-    }
-
-    @Test
-    public void testWRDRandomOp() throws Exception {
-        boolean write, read, delete;
-        write = read = delete = false;
-
-        AtomicCounter seq = new AtomicCounter(ValueType.COUNT);
-
-        while (!write || !read || !delete) {
-            int op = amzaBotService.randomOp("test:" + String.valueOf(seq.getValue()));
-
-            if (op == 0) {
-                read = true;
-            } else if (op == 1) {
-                delete = true;
-            } else {
-                write = true;
-            }
-
-            seq.inc();
+        for (long i = 0; i < 10; i++) {
+            service.delete("key:" + i);
         }
 
-        amzaBotService.clearKeyMap();
-        amzaBotService.clearQuarantinedKeyMap();
+        for (long i = 0; i < 10; i++) {
+            String v = service.get("key:" + i);
+
+            Assert.assertNull(v);
+        }
     }
 
     @Test
-    public void testMultipleRandomOps() throws Exception {
-        AtomicCounter seq = new AtomicCounter(ValueType.COUNT);
+    public void testBotSetGetAll() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
+        }
+
+        Map<String, String> all = service.getAll();
+        Assert.assertEquals(all.size(), 10);
+
         for (int i = 0; i < 10; i++) {
-            amzaBotService.randomOp("test:" + String.valueOf(seq.getValue()));
-            Thread.sleep(amzaBotConfig.getHesitationFactorMs());
-
-            seq.inc();
+            String value = all.remove("key:" + i);
+            Assert.assertNotNull(value);
+            Assert.assertEquals(value, "value:" + i);
         }
 
-        System.out.println("Outstanding key count: " +
-            amzaKeyClearingHouse.getKeyMap().size());
+        Assert.assertEquals(all.size(), 0);
+    }
 
-        Assert.assertEquals(amzaKeyClearingHouse.getQuarantinedKeyMap().size(), 0);
-
-        amzaBotService.clearKeyMap();
-        amzaBotService.clearQuarantinedKeyMap();
+    @Test
+    public void emitRoundRobinLogic() throws Exception {
+        for (int last = 0; last < 6; last++) {
+            int len = 3;
+            int[] indexes = new int[len];
+            for (int i = 0; i < len; i++) {
+                indexes[i] = (last + i + 1) % len;
+            }
+            System.out.println(Arrays.toString(indexes));
+        }
     }
 
 }

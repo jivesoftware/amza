@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,11 +22,13 @@ public class AckWaters {
 
     private final AmzaStats amzaStats;
     private final AwaitNotify<VersionedPartitionName> awaitNotify;
+    private final boolean verboseLogTimeouts;
     private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId>> ackWaters = new ConcurrentHashMap<>();
 
-    public AckWaters(AmzaStats amzaStats, int stripingLevel) {
+    public AckWaters(AmzaStats amzaStats, int stripingLevel, boolean verboseLogTimeouts) {
         this.amzaStats = amzaStats;
         this.awaitNotify = new AwaitNotify<>(stripingLevel);
+        this.verboseLogTimeouts = verboseLogTimeouts;
     }
 
     public void set(RingMember ringMember, VersionedPartitionName partitionName, long txId, long leadershipToken) throws Exception {
@@ -77,6 +80,8 @@ public class AckWaters {
 
         RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
         int[] passed = new int[1];
+        long[] tookToTxId = new long[ringMembers.length];
+        Arrays.fill(tookToTxId, -1);
         try {
             long start = System.currentTimeMillis();
             Integer quorum = awaitNotify.awaitChange(versionedPartitionName, () -> {
@@ -94,6 +99,7 @@ public class AckWaters {
                         passed[0]++;
                         ringMembers[i] = null;
                     }
+                    tookToTxId[i] = leadershipTokenAndTxId != null ? leadershipTokenAndTxId.txId : -1;
                     if (passed[0] >= desiredTakeQuorum) {
                         return Optional.of(passed[0]);
                     }
@@ -103,6 +109,10 @@ public class AckWaters {
             amzaStats.quorums(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return quorum;
         } catch (TimeoutException e) {
+            if (verboseLogTimeouts) {
+                LOG.warn("Failed to achieve quorum for partition:{} desiredTxId:{} desiredTakeQuorum:{} passed:{} leadershipToken:{} tookToTxId:{}",
+                    versionedPartitionName, desiredTxId, desiredTakeQuorum, passed[0], leadershipToken, Arrays.toString(tookToTxId));
+            }
             amzaStats.quorumTimeouts(versionedPartitionName.getPartitionName(), 1);
             throw e;
         }

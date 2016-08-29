@@ -46,4 +46,7 @@ public interface AmzaConfig extends Config {
 
     @StringDefault("")
     String getBlacklistRingMembers();
+
+    @BooleanDefault(true)
+    boolean getAckWatersVerboseLogTimeouts();
 }

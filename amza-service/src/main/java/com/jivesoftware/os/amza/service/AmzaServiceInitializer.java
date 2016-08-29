@@ -111,6 +111,7 @@ public class AmzaServiceInitializer {
         public int deltaMaxValueSizeInIndex = 8;
 
         public int ackWatersStripingLevel = 1024;
+        public boolean ackWatersVerboseLogTimeouts = false;
         public int awaitOnlineStripingLevel = 1024;
 
         public boolean hardFsync = false;
@@ -263,7 +264,7 @@ public class AmzaServiceInitializer {
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        AckWaters ackWaters = new AckWaters(amzaStats, config.ackWatersStripingLevel);
+        AckWaters ackWaters = new AckWaters(amzaStats, config.ackWatersStripingLevel, config.ackWatersVerboseLogTimeouts);
 
         DeltaStripeWALStorage[] deltaStripeWALStorages = new DeltaStripeWALStorage[numberOfStripes];
 

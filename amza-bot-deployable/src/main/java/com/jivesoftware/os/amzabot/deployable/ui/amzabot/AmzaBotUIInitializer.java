@@ -2,7 +2,6 @@ package com.jivesoftware.os.amzabot.deployable.ui.amzabot;
 
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
-import com.jivesoftware.os.amzabot.deployable.AmzaBotService;
 import com.jivesoftware.os.amzabot.deployable.ui.SoyDataUtils;
 import com.jivesoftware.os.amzabot.deployable.ui.SoyRenderer;
 import com.jivesoftware.os.amzabot.deployable.ui.health.UiChromeRegion;
@@ -25,8 +24,7 @@ public class AmzaBotUIInitializer {
     }
 
     public AmzaBotUIService initialize(String cacheToken,
-        AmzaBotUIServiceConfig config,
-        AmzaBotService streamService) {
+        AmzaBotUIServiceConfig config) {
 
         File soyPath = new File(System.getProperty("user.dir"), config.getPathToSoyResources());
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
@@ -37,9 +35,7 @@ public class AmzaBotUIInitializer {
         SoyTofu tofu = sfs.compileToTofu();
         SoyRenderer renderer = new SoyRenderer(tofu, new SoyDataUtils());
 
-        AmzaBotRegion contentRegion = new AmzaBotRegion("soy.content.page.main",
-            renderer,
-            streamService);
+        AmzaBotRegion contentRegion = new AmzaBotRegion("soy.content.page.main", renderer);
 
         UiHeaderRegion headerRegion = new UiHeaderRegion("soy.ui.chrome.headerRegion", renderer);
         return new AmzaBotUIService(

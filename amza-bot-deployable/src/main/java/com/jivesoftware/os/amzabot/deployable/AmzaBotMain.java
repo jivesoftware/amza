@@ -8,7 +8,14 @@ import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotHealthCheck.AmzaBotHealthCheckConfig;
+import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineConfig;
+import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineService;
+import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpConfig;
+import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpService;
+import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpServiceInitializer;
+import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotCoalmineEndpoints;
 import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotEndpoints;
+import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotRandomOpEndpoints;
 import com.jivesoftware.os.amzabot.deployable.ui.amzabot.AmzaBotUIEndpoints;
 import com.jivesoftware.os.amzabot.deployable.ui.amzabot.AmzaBotUIInitializer;
 import com.jivesoftware.os.amzabot.deployable.ui.amzabot.AmzaBotUIInitializer.AmzaBotUIServiceConfig;
@@ -65,11 +72,11 @@ public class AmzaBotMain {
                 new HasUI.UI("Health", "manage", "/manage/ui"),
                 new HasUI.UI("AmzaBot", "main", "/"))));
 
-            AmzaKeyClearingHouse amzaKeyClearingHouse = new AmzaKeyClearingHouse();
+            AmzaKeyClearingHousePool amzaKeyClearingHousePool = new AmzaKeyClearingHousePool();
             AmzaBotHealthCheck amzaBotHealthCheck =
                 new AmzaBotHealthCheck(instanceConfig,
                     deployable.config(AmzaBotHealthCheckConfig.class),
-                    amzaKeyClearingHouse);
+                    amzaKeyClearingHousePool);
 
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)),
                 new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)),
@@ -85,10 +92,8 @@ public class AmzaBotMain {
                 HttpRequestHelperUtils.buildRequestHelper(instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
                 instanceConfig.getConnectionsHealth(), 5_000, 100);
 
-            TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
-
             @SuppressWarnings("unchecked")
-            TenantAwareHttpClient<String> amzaClient = tenantRoutingHttpClientInitializer.builder(
+            TenantAwareHttpClient<String> amzaClient = new TenantRoutingHttpClientInitializer<>().builder(
                 deployable.getTenantRoutingProvider().getConnections("amza", "main", 10_000), // TODO config
                 clientHealthProvider)
                 .deadAfterNErrors(10)
@@ -99,9 +104,10 @@ public class AmzaBotMain {
             objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
             AmzaBotConfig amzaBotConfig = configBinder.bind(AmzaBotConfig.class);
+            AmzaBotCoalmineConfig amzaBotCoalmineConfig = configBinder.bind(AmzaBotCoalmineConfig.class);
+            AmzaBotRandomOpConfig amzaBotRandomOpConfig = configBinder.bind(AmzaBotRandomOpConfig.class);
 
             BAInterner interner = new BAInterner();
-
             AmzaClientProvider<HttpClient, HttpClientException> amzaClientProvider = new AmzaClientProvider<>(
                 new HttpPartitionClientFactory(interner),
                 new HttpPartitionHostsProvider(interner, amzaClient, objectMapper),
@@ -111,15 +117,28 @@ public class AmzaBotMain {
                 -1,
                 -1);
 
+            AmzaBotService amzaBotService = new AmzaBotServiceInitializer(
+                amzaBotConfig,
+                amzaClientProvider).initialize();
+
+            AmzaBotRandomOpService amzaBotRandomOpService = new AmzaBotRandomOpServiceInitializer(
+                amzaBotConfig,
+                amzaBotRandomOpConfig,
+                amzaClientProvider,
+                amzaKeyClearingHousePool.genAmzaKeyClearingHouse()).initialize();
+            amzaBotRandomOpService.start();
+
+            AmzaBotCoalmineService amzaBotCoalmineService = new AmzaBotCoalmineService(
+                amzaBotConfig,
+                amzaBotCoalmineConfig,
+                amzaClientProvider,
+                amzaKeyClearingHousePool);
+            amzaBotCoalmineService.start();
+
             String cacheToken = String.valueOf(System.currentTimeMillis());
             AmzaBotUIServiceConfig contentUIServiceConfig = deployable.config(AmzaBotUIServiceConfig.class);
-
-            AmzaBotService amzaBotService =
-                new AmzaBotService(amzaBotConfig, amzaClientProvider, amzaKeyClearingHouse);
-            amzaBotService.start();
-
             AmzaBotUIService contentUIService = new AmzaBotUIInitializer()
-                .initialize(cacheToken, contentUIServiceConfig, amzaBotService);
+                .initialize(cacheToken, contentUIServiceConfig);
 
             UiServiceConfig uiServiceConfig = deployable.config(UiServiceConfig.class);
             UiService uiService = new UiServiceInitializer().initialize(cacheToken, uiServiceConfig);
@@ -129,8 +148,13 @@ public class AmzaBotMain {
                 .addResourcePath(contentUIServiceConfig.getPathToStaticResources())
                 .setContext("/amzabot/static");
 
-            deployable.addEndpoints(AmzaBotEndpoints.class);
             deployable.addInjectables(AmzaBotService.class, amzaBotService);
+            deployable.addInjectables(AmzaBotRandomOpService.class, amzaBotRandomOpService);
+            deployable.addInjectables(AmzaBotCoalmineService.class, amzaBotCoalmineService);
+
+            deployable.addEndpoints(AmzaBotEndpoints.class);
+            deployable.addEndpoints(AmzaBotRandomOpEndpoints.class);
+            deployable.addEndpoints(AmzaBotCoalmineEndpoints.class);
 
             deployable.addEndpoints(AmzaBotUIEndpoints.class);
             deployable.addInjectables(AmzaBotUIService.class, contentUIService);

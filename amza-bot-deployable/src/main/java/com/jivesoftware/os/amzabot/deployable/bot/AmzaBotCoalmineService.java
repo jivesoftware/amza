@@ -45,9 +45,16 @@ public class AmzaBotCoalmineService {
         this.amzaKeyClearingHousePool = amzaKeyClearingHousePool;
     }
 
-    public AmzaBotCoalminer newMiner() throws Exception {
+    public AmzaBotCoalminer newMinerWithConfig(AmzaBotCoalmineConfig config) throws Exception {
+        LOG.info("Coalmine capacity {}", config.getCoalmineCapacity());
+        LOG.info("Canary size threshold {}", config.getCanarySizeThreshold());
+        LOG.info("Hesitation {}ms", config.getHesitationMs());
+        LOG.info("Durability {}", config.getDurability());
+        LOG.info("Consistency {}", config.getConsistency());
+        LOG.info("Partition size {}", config.getPartitionSize());
+
         PartitionProperties partitionProperties = new PartitionProperties(
-            Durability.valueOf(amzaBotCoalmineConfig.getDurability()),
+            Durability.valueOf(config.getDurability()),
             0,
             0,
             0,
@@ -57,7 +64,7 @@ public class AmzaBotCoalmineService {
             0,
             0,
             false,
-            Consistency.valueOf(amzaBotCoalmineConfig.getConsistency()),
+            Consistency.valueOf(config.getConsistency()),
             true,
             true,
             false,
@@ -74,16 +81,20 @@ public class AmzaBotCoalmineService {
 
         PartitionClient partitionClient = partitionClientProvider.getPartition(
             partitionName,
-            amzaBotCoalmineConfig.getPartitionSize(),
+            config.getPartitionSize(),
             partitionProperties);
         LOG.info("Created partition for coalmine {}", partitionName);
 
         return new AmzaBotCoalminer(
-            amzaBotCoalmineConfig,
+            config,
             new AmzaBotService(amzaBotConfig,
                 partitionClient,
-                Consistency.valueOf(amzaBotCoalmineConfig.getConsistency())),
+                Consistency.valueOf(config.getConsistency())),
             amzaKeyClearingHousePool);
+    }
+
+    public AmzaBotCoalminer newMiner() throws Exception {
+        return newMinerWithConfig(amzaBotCoalmineConfig);
     }
 
     public void start() {
@@ -99,13 +110,6 @@ public class AmzaBotCoalmineService {
         processor.scheduleWithFixedDelay(() -> {
             if (running.get()) {
                 LOG.info("Scheduling coalmine thread");
-
-                LOG.info("Coalmine capacity {}", amzaBotCoalmineConfig.getCoalmineCapacity());
-                LOG.info("Canary size threshold {}", amzaBotCoalmineConfig.getCanarySizeThreshold());
-                LOG.info("Hesitation {}ms", amzaBotCoalmineConfig.getHesitationMs());
-                LOG.info("Durability {}", amzaBotCoalmineConfig.getDurability());
-                LOG.info("Consistency {}", amzaBotCoalmineConfig.getConsistency());
-                LOG.info("Partition size {}", amzaBotCoalmineConfig.getPartitionSize());
 
                 try {
                     ExecutorService executor = Executors.newSingleThreadExecutor(
@@ -126,4 +130,3 @@ public class AmzaBotCoalmineService {
     }
 
 }
-

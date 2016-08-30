@@ -54,7 +54,7 @@ public class AmzaBotRandomOpTest {
         AmzaBotConfig amzaBotConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
 
         config = BindInterfaceToConfiguration.bindDefault(AmzaBotRandomOpConfig.class);
-        config.setEnabled(true);
+        config.setEnabled(false);
         config.setHesitationFactorMs(100);
         config.setWriteThreshold(100);
         config.setValueSizeThreshold(20);

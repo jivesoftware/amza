@@ -52,7 +52,7 @@ public class AmzaBotCoalmineTest {
         amzaBotConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
 
         amzaBotCoalmineConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotCoalmineConfig.class);
-        amzaBotCoalmineConfig.setEnabled(true);
+        amzaBotCoalmineConfig.setEnabled(false);
         amzaBotCoalmineConfig.setFrequencyMs(60_000L);
         amzaBotCoalmineConfig.setCoalmineCapacity(10L);
         amzaBotCoalmineConfig.setCanarySizeThreshold(10);

@@ -13,7 +13,6 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
-import org.merlin.config.BindInterfaceToConfiguration;
 
 @Singleton
 @Path("/api/amzabot/v1")
@@ -32,14 +31,11 @@ public class AmzaBotCoalmineEndpoints {
     @Path("/newminer")
     public Response newCoalminer(AmzaBotCoalmineRequest request) {
         try {
-            AmzaBotCoalmineConfig config =
-                BindInterfaceToConfiguration.bindDefault(AmzaBotCoalmineConfig.class);
-            if (request != null) {
-                config = request.genConfig();
-            }
+            AmzaBotCoalmineConfig config = AmzaBotCoalmineRequest.genConfig(request);
 
             ExecutorService executor = Executors.newSingleThreadExecutor(
                 new ThreadFactoryBuilder().setNameFormat("amzabot-coalmine-%d").build());
+
             executor.submit(service.newMinerWithConfig(config));
 
             return Response.accepted().build();

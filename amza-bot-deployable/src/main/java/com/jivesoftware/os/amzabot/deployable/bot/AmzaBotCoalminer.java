@@ -22,7 +22,7 @@ public class AmzaBotCoalminer implements Runnable {
     private final AmzaBotService service;
     private final AmzaKeyClearingHousePool amzaKeyClearingHousePool;
 
-    public AmzaBotCoalminer(AmzaBotCoalmineConfig config,
+    AmzaBotCoalminer(AmzaBotCoalmineConfig config,
         AmzaBotService service,
         AmzaKeyClearingHousePool amzaKeyClearingHousePool) {
         this.config = config;
@@ -32,6 +32,8 @@ public class AmzaBotCoalminer implements Runnable {
 
     public void run() {
         try {
+            long start = System.currentTimeMillis();
+
             LOG.info("Generating a clearing house of {} canaries.", config.getCoalmineCapacity());
             AmzaKeyClearingHouse amzaKeyClearingHouse =
                 amzaKeyClearingHousePool.genAmzaKeyClearingHouse(config.getCoalmineCapacity());
@@ -61,33 +63,7 @@ public class AmzaBotCoalminer implements Runnable {
                 }
             }
 
-            LOG.info("Verify clearing house matches partition");
-            {
-                Map<String, String> keyMapCopy = new HashMap<>(amzaKeyClearingHouse.getKeyMap());
-                for (Entry<String, String> canary : service.getAll().entrySet()) {
-                    String value = keyMapCopy.remove(canary.getKey());
-
-                    if (value == null) {
-                        amzaKeyClearingHouse.quarantineEntry(canary, null);
-                        LOG.error("Canary not found {}:{}",
-                            canary.getKey(),
-                            AmzaBotUtil.truncVal(canary.getValue()));
-                    } else if (!value.equals(canary.getValue())) {
-                        amzaKeyClearingHouse.quarantineEntry(canary, value);
-                        LOG.error("Canary value differs {}:{}:{}",
-                            canary.getKey(),
-                            AmzaBotUtil.truncVal(canary.getValue()),
-                            AmzaBotUtil.truncVal(value));
-                    }
-                }
-
-                for (Entry<String, String> canary : keyMapCopy.entrySet()) {
-                    amzaKeyClearingHouse.quarantineEntry(canary, "extra");
-                    LOG.error("Extra canary found {}:{}",
-                        canary.getKey(),
-                        AmzaBotUtil.truncVal(canary.getValue()));
-                }
-            }
+            amzaKeyClearingHouse.verifyKeyMap(service.getAll());
 
             LOG.info("Drain clearing house and corresponding partition entries");
             {
@@ -125,11 +101,11 @@ public class AmzaBotCoalminer implements Runnable {
             }
 
             if (amzaKeyClearingHouse.getQuarantinedKeyMap().size() == 0) {
-                LOG.info("No quarantined keys generated. Removing clearing house.");
+                LOG.info("No quarantined keys generated. Removing clean clearing house.");
                 amzaKeyClearingHousePool.removeAmzaKeyClearingHouse(amzaKeyClearingHouse);
             }
 
-            LOG.info("Coalmine test completed");
+            LOG.info("Coalmine test completed in {}ms", System.currentTimeMillis() - start);
         } catch (Exception e) {
             LOG.error("Error occurred mining coal", e);
         }

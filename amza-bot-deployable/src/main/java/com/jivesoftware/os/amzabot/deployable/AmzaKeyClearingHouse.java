@@ -2,9 +2,13 @@ package com.jivesoftware.os.amzabot.deployable;
 
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.mlogger.core.AtomicCounter;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
@@ -12,6 +16,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.lang.RandomStringUtils;
 
 public class AmzaKeyClearingHouse {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final Random RANDOM = new Random();
 
@@ -21,10 +27,10 @@ public class AmzaKeyClearingHouse {
     // key, value
     private ConcurrentMap<String, String> keyMap = Maps.newConcurrentMap();
 
-    public AmzaKeyClearingHouse() {
+    AmzaKeyClearingHouse() {
     }
 
-    public AmzaKeyClearingHouse(long capacity) {
+    AmzaKeyClearingHouse(long capacity) {
         honorCapacity.set(true);
         currentCapacity.set(capacity);
     }
@@ -76,13 +82,9 @@ public class AmzaKeyClearingHouse {
             return null;
         }
 
-        Entry<String, String> entry;
-
-        synchronized (this) {
-            List<Entry<String, String>> array = new ArrayList<>(keyMap.entrySet());
-            entry = array.get(RANDOM.nextInt(keyMap.size()));
-            keyMap.remove(entry.getKey());
-        }
+        List<Entry<String, String>> array = new ArrayList<>(keyMap.entrySet());
+        Entry<String, String> entry = array.get(RANDOM.nextInt(keyMap.size()));
+        keyMap.remove(entry.getKey());
 
         return entry;
     }
@@ -102,4 +104,50 @@ public class AmzaKeyClearingHouse {
         keyMap.remove(entry.getKey());
     }
 
+    public boolean verifyKeyMap(Map<String, String> partitionMap) throws Exception {
+        boolean res = true;
+
+        LOG.info("Verify key map with partition snapshot of size {}.", partitionMap.size());
+
+        Map<String, String> keyMapCopy = new HashMap<>(keyMap);
+
+        for (Entry<String, String> entry : partitionMap.entrySet()) {
+            String value = keyMapCopy.remove(entry.getKey());
+
+            if (value == null) {
+                quarantineEntry(entry, null);
+                LOG.error("Key's value not found {}:{}:{}",
+                    entry.getKey(),
+                    AmzaBotUtil.truncVal(entry.getValue()),
+                    null);
+
+                res = false;
+            } else if (!value.equals(entry.getValue())) {
+                quarantineEntry(entry, value);
+                LOG.error("Key's value differs {}:{}:{}",
+                    entry.getKey(),
+                    AmzaBotUtil.truncVal(entry.getValue()),
+                    AmzaBotUtil.truncVal(value));
+
+                res = false;
+            }
+        }
+
+        for (Entry<String, String> entry : keyMapCopy.entrySet()) {
+            quarantineEntry(entry, "extra");
+            LOG.error("Extra key found in clearing house {}:{}",
+                entry.getKey(),
+                AmzaBotUtil.truncVal(entry.getValue()));
+
+            res = false;
+        }
+
+        if (res) {
+            LOG.info("Clearing house is clean");
+        } else {
+            LOG.error("Clearing house is unclean");
+        }
+
+        return res;
+    }
 }

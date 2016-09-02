@@ -56,11 +56,13 @@ public class AmzaBotRandomOpTest {
         config = BindInterfaceToConfiguration.bindDefault(AmzaBotRandomOpConfig.class);
         config.setEnabled(false);
         config.setHesitationFactorMs(100);
-        config.setWriteThreshold(100);
+        config.setWriteThreshold(100L);
         config.setValueSizeThreshold(20);
-        config.setPartitionSize(1);
         config.setDurability("fsync_async");
         config.setConsistency("leader_quorum");
+        config.setPartitionSize(1);
+        config.setRetryWaitMs(100);
+        config.setSnapshotFrequency(10);
 
         amzaKeyClearingHouse = new AmzaKeyClearingHouse();
         service = new AmzaBotRandomOpServiceInitializer(

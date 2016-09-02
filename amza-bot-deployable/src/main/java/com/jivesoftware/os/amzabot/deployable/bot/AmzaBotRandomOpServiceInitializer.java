@@ -13,6 +13,7 @@ import com.jivesoftware.os.amzabot.deployable.AmzaKeyClearingHouse;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 public class AmzaBotRandomOpServiceInitializer {
 
@@ -40,6 +41,8 @@ public class AmzaBotRandomOpServiceInitializer {
         LOG.info("Durability {}", amzaBotRandomOpConfig.getDurability());
         LOG.info("Consistency {}", amzaBotRandomOpConfig.getConsistency());
         LOG.info("Partition size {}", amzaBotRandomOpConfig.getPartitionSize());
+        LOG.info("Retry wait {}ms", amzaBotRandomOpConfig.getRetryWaitMs());
+        LOG.info("Snapshot frequency {}", amzaBotRandomOpConfig.getSnapshotFrequency());
 
         PartitionProperties partitionProperties = new PartitionProperties(
             Durability.valueOf(amzaBotRandomOpConfig.getDurability()),
@@ -65,7 +68,7 @@ public class AmzaBotRandomOpServiceInitializer {
 
         PartitionName partitionName = new PartitionName(false,
             ("amzabot").getBytes(StandardCharsets.UTF_8),
-            ("amzabot-randomops").getBytes(StandardCharsets.UTF_8));
+            ("amzabot-randomops-" + UUID.randomUUID().toString()).getBytes(StandardCharsets.UTF_8));
 
         PartitionClient partitionClient = partitionClientProvider.getPartition(
             partitionName,

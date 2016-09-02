@@ -99,7 +99,7 @@ public class AmzaBotCoalmineService {
 
     public void start() {
         if (!amzaBotCoalmineConfig.getEnabled()) {
-            LOG.warn("Not starting coalminer; not enabled.");
+            LOG.warn("Not starting coalminer service; not enabled.");
             return;
         }
 

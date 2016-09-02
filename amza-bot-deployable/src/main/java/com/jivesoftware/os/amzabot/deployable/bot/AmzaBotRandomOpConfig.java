@@ -36,4 +36,12 @@ public interface AmzaBotRandomOpConfig extends Config {
     int getPartitionSize();
     void setPartitionSize(int value);
 
+    @IntDefault(5_000)
+    int getRetryWaitMs();
+    void setRetryWaitMs(int value);
+
+    @IntDefault(10_000)
+    int getSnapshotFrequency();
+    void setSnapshotFrequency(int value);
+
 }

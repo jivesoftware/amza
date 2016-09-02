@@ -30,30 +30,32 @@ class AmzaBotCoalmineRequest {
         this.partitionSize = partitionSize;
     }
 
-    public AmzaBotCoalmineConfig genConfig() {
+    static AmzaBotCoalmineConfig genConfig(AmzaBotCoalmineRequest request) {
         AmzaBotCoalmineConfig res =
             BindInterfaceToConfiguration.bindDefault(AmzaBotCoalmineConfig.class);
 
-        if (coalmineCapacity > 0) {
-            res.setCoalmineCapacity(coalmineCapacity);
-        }
+        if (request != null) {
+            if (request.coalmineCapacity > 0) {
+                res.setCoalmineCapacity(request.coalmineCapacity);
+            }
 
-        if (canarySizeThreshold > 0) {
-            res.setCanarySizeThreshold(canarySizeThreshold);
-        }
+            if (request.canarySizeThreshold > 0) {
+                res.setCanarySizeThreshold(request.canarySizeThreshold);
+            }
 
-        res.setHesitationMs(hesitationMs);
+            res.setHesitationMs(request.hesitationMs);
 
-        if (durability != null) {
-            res.setDurability(durability);
-        }
+            if (request.durability != null) {
+                res.setDurability(request.durability);
+            }
 
-        if (consistency != null) {
-            res.setConsistency(consistency);
-        }
+            if (request.consistency != null) {
+                res.setConsistency(request.consistency);
+            }
 
-        if (partitionSize > 0) {
-            res.setPartitionSize(partitionSize);
+            if (request.partitionSize > 0) {
+                res.setPartitionSize(request.partitionSize);
+            }
         }
 
         return res;

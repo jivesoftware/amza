@@ -43,7 +43,11 @@ public class AmzaBotService {
             consistency,
             null,
             (commitKeyValueStream) -> {
-                commitKeyValueStream.commit(k.getBytes(StandardCharsets.UTF_8), v.getBytes(StandardCharsets.UTF_8), -1, false);
+                commitKeyValueStream.commit(
+                    k.getBytes(StandardCharsets.UTF_8),
+                    v.getBytes(StandardCharsets.UTF_8),
+                    -1,
+                    false);
                 return true;
             },
             config.getAdditionalSolverAfterNMillis(),
@@ -84,6 +88,37 @@ public class AmzaBotService {
             Optional.empty());
     }
 
+    public void setWithRetry(String k, String v,
+        int retryCount, int retryIntervalMs) throws Exception {
+        int currentRetryCount = retryCount;
+        if (currentRetryCount < Integer.MAX_VALUE) {
+            currentRetryCount++;
+        }
+
+        while (currentRetryCount > 0) {
+            try {
+                set(k, v);
+                currentRetryCount = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred writing key {}:{} - {}",
+                    k,
+                    AmzaBotUtil.truncVal(v),
+                    e.getLocalizedMessage());
+
+                if (currentRetryCount > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry writing in {}ms", retryIntervalMs);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry writing value");
+                    }
+                }
+            } finally {
+                currentRetryCount--;
+            }
+        }
+    }
+
     public String get(String k) throws Exception {
         LOG.debug("get {}", k);
 
@@ -111,6 +146,40 @@ public class AmzaBotService {
         return Joiner.on(',').join(values);
     }
 
+    public String getWithRetry(String k,
+        int retryCount, int retryIntervalMs) throws Exception {
+        int currentRetryCount = retryCount;
+        if (currentRetryCount < Integer.MAX_VALUE) {
+            currentRetryCount++;
+        }
+
+        String res = "";
+
+        while (currentRetryCount > 0) {
+            try {
+                res = get(k);
+                currentRetryCount = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred getting key {} - {}",
+                    k,
+                    e.getLocalizedMessage());
+
+                if (currentRetryCount > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry getting in {}ms", retryIntervalMs);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry getting value");
+                    }
+                }
+            } finally {
+                currentRetryCount--;
+            }
+        }
+
+        return res;
+    }
+
     public String delete(String k) throws Exception {
         LOG.debug("delete {}", k);
 
@@ -125,6 +194,40 @@ public class AmzaBotService {
             config.getAdditionalSolverAfterNMillis(),
             config.getAbandonSolutionAfterNMillis(),
             Optional.empty());
+
+        return res;
+    }
+
+    public String deleteWithRetry(String k,
+        int retryCount, int retryIntervalMs) throws Exception {
+        int currentRetryCount = retryCount;
+        if (currentRetryCount < Integer.MAX_VALUE) {
+            currentRetryCount++;
+        }
+
+        String res = "";
+
+        while (currentRetryCount > 0) {
+            try {
+                res = delete(k);
+                currentRetryCount = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred deleting key {} - {}",
+                    k,
+                    e.getLocalizedMessage());
+
+                if (currentRetryCount > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry deleting in {}ms", retryIntervalMs);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry deleting value");
+                    }
+                }
+            } finally {
+                currentRetryCount--;
+            }
+        }
 
         return res;
     }

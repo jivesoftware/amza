@@ -65,10 +65,10 @@ public class AmzaBotRandomOpService {
                 return op;
             }
 
-            String value = service.get(entry.getKey());
+            String value = service.getWithRetry(entry.getKey(), Integer.MAX_VALUE, config.getRetryWaitMs());
 
             if (value == null) {
-                LOG.error("Did not find key {}:{}", entry.getKey());
+                LOG.error("Did not find key {}", entry.getKey());
 
                 amzaKeyClearingHouse.quarantineEntry(entry, null);
             } else if (!entry.getValue().equals(value)) {
@@ -78,7 +78,7 @@ public class AmzaBotRandomOpService {
                     AmzaBotUtil.truncVal(value));
 
                 amzaKeyClearingHouse.quarantineEntry(entry, value);
-                service.delete(entry.getKey());
+                service.deleteWithRetry(entry.getKey(), Integer.MAX_VALUE, config.getRetryWaitMs());
             } else {
                 LOG.debug("Found key {}", entry.getKey());
             }
@@ -90,15 +90,10 @@ public class AmzaBotRandomOpService {
                 return op;
             }
 
-            try {
-                service.delete(entry.getKey());
-                amzaKeyClearingHouse.delete(entry.getKey());
+            service.deleteWithRetry(entry.getKey(), 0, config.getRetryWaitMs());
+            amzaKeyClearingHouse.delete(entry.getKey());
 
-                LOG.debug("Deleted {}", entry.getKey());
-            } catch (Exception e) {
-                LOG.error("Error deleting {} - {}", entry.getKey(), e.getLocalizedMessage());
-                throw e;
-            }
+            LOG.debug("Deleted {}", entry.getKey());
         } else {
             // write, odds are double that of read or delete
             if (amzaKeyClearingHouse.getKeyMap().size() < config.getWriteThreshold()) {
@@ -108,23 +103,16 @@ public class AmzaBotRandomOpService {
                 if (entry == null) {
                     LOG.error("No random entry was generated for {}", keySeed);
                 } else {
-                    try {
-                        service.set(entry.getKey(), entry.getValue());
+                    service.setWithRetry(entry.getKey(), entry.getValue(),
+                        Integer.MAX_VALUE, config.getRetryWaitMs());
 
-                        String oldValue = amzaKeyClearingHouse.set(entry.getKey(), entry.getValue());
-                        if (oldValue != null) {
-                            LOG.error("Found existing kv pair: {}:{}", entry.getKey(), oldValue);
+                    String oldValue = amzaKeyClearingHouse.set(entry.getKey(), entry.getValue());
+                    if (oldValue != null) {
+                        LOG.error("Found existing kv pair: {}:{}", entry.getKey(), oldValue);
 
-                            amzaKeyClearingHouse.quarantineEntry(
-                                new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()), oldValue);
-                            service.delete(entry.getKey());
-                        }
-                    } catch (Exception e) {
-                        LOG.error("Error writing {}:{} - {}",
-                            entry.getKey(),
-                            AmzaBotUtil.truncVal(entry.getValue()),
-                            e.getLocalizedMessage());
-                        throw e;
+                        amzaKeyClearingHouse.quarantineEntry(
+                            new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()), oldValue);
+                        service.deleteWithRetry(entry.getKey(), Integer.MAX_VALUE, config.getRetryWaitMs());
                     }
 
                     LOG.debug("Wrote {}:{}", entry.getKey(), AmzaBotUtil.truncVal(entry.getValue()));
@@ -176,13 +164,7 @@ public class AmzaBotRandomOpService {
                     }
                 } catch (Exception e) {
                     LOG.error("Error occurred running random operation.", e.getLocalizedMessage());
-
-                    if (config.getRetryWaitMs() > 0) {
-                        LOG.info("Restart random operations in {}ms", config.getRetryWaitMs());
-                        Thread.sleep(config.getRetryWaitMs());
-                    } else {
-                        running.set(false);
-                    }
+                    running.set(false);
                 }
             }
 

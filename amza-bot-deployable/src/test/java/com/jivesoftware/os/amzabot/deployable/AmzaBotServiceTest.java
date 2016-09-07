@@ -85,6 +85,34 @@ public class AmzaBotServiceTest {
     }
 
     @Test
+    public void testBotSetWithNoRetryGet() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.setWithRetry("key:" + i, "value:" + i, 0, 0);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            String v = service.getWithRetry("key:" + i, 0, 0);
+
+            Assert.assertNotNull(v);
+            Assert.assertEquals(v, "value:" + i);
+        }
+    }
+
+    @Test
+    public void testBotSetWithRetryGet() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.setWithRetry("key:" + i, "value:" + i, Integer.MAX_VALUE, 10);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            String v = service.getWithRetry("key:" + i, Integer.MAX_VALUE, 10);
+
+            Assert.assertNotNull(v);
+            Assert.assertEquals(v, "value:" + i);
+        }
+    }
+
+    @Test
     public void testBotSetDelete() throws Exception {
         for (long i = 0; i < 10; i++) {
             service.set("key:" + i, "value:" + i);
@@ -92,6 +120,40 @@ public class AmzaBotServiceTest {
 
         for (long i = 0; i < 10; i++) {
             service.delete("key:" + i);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            String v = service.get("key:" + i);
+
+            Assert.assertNull(v);
+        }
+    }
+
+    @Test
+    public void testBotSetDeleteWithNoRetry() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            service.deleteWithRetry("key:" + i, 0, 0);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            String v = service.get("key:" + i);
+
+            Assert.assertNull(v);
+        }
+    }
+
+    @Test
+    public void testBotSetDeleteWithRetry() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            service.deleteWithRetry("key:" + i, Integer.MAX_VALUE, 10);
         }
 
         for (long i = 0; i < 10; i++) {

@@ -1,0 +1,4 @@
+# Use goreman to run `go get github.com/mattn/goreman`
+amza-node1: java -Damza.port=10001 -Damza.logicalName=node1 -Damza.working.dirs=./data1 -jar target/amza.jar localhost dev node2:localhost:10002,node3:localhost:10003
+amza-node2: java -Damza.port=10002 -Damza.logicalName=node2 -Damza.working.dirs=./data2 -jar target/amza.jar localhost dev node1:localhost:10001,node3:localhost:10003
+amza-node3: java -Damza.port=10003 -Damza.logicalName=node3 -Damza.working.dirs=./data3 -jar target/amza.jar localhost dev node1:localhost:10001,node2:localhost:10002

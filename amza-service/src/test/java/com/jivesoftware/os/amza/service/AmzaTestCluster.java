@@ -126,7 +126,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.aquariumLivelinessFeedEveryMillis = 500;
         config.maxUpdatesBeforeDeltaStripeCompaction = 10;
         config.deltaStripeCompactionIntervalInMillis = 1000;
@@ -270,9 +270,9 @@ public class AmzaTestCluster {
                 LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
 
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
-                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                    partitionStripeFunction,
-                    workingIndexDirectories),
+                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                        partitionStripeFunction,
+                        workingIndexDirectories),
                     persistentRowIOProvider);
 
             },
@@ -505,9 +505,11 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = {0};
-                    partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, version) -> {
-                        count[0]++;
+                    int[] count = { 0 };
+                    partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, tombstoned, version) -> {
+                        if (!tombstoned) {
+                            count[0]++;
+                        }
                         return true;
                     }, true);
                     if (count[0] > 0) {
@@ -606,38 +608,47 @@ public class AmzaTestCluster {
             final MutableBoolean passed = new MutableBoolean(true);
             try {
                 a.scan(Collections.singletonList(ScanRange.ROW_SCAN),
-                    (prefix, key, aValue, aTimestamp, aVersion) -> {
+                    (prefix, key, aValue, aTimestamp, aTombstoned, aVersion) -> {
                         try {
                             compared.increment();
-                            long[] btimestamp = new long[1];
+                            long[] btimestamp = { -1L };
                             byte[][] bvalue = new byte[1][];
+                            boolean[] btombstoned = new boolean[1];
                             long[] bversion = new long[1];
                             b.get(consistency, prefix, stream -> stream.stream(key),
                                 (_prefix, _key, value, timestamp, tombstoned, version) -> {
-                                    if (timestamp != -1 && !tombstoned) {
-                                        btimestamp[0] = timestamp;
-                                        bvalue[0] = value;
-                                        bversion[0] = version;
-                                    }
+                                    btimestamp[0] = timestamp;
+                                    bvalue[0] = value;
+                                    btombstoned[0] = tombstoned;
+                                    bversion[0] = version;
                                     return true;
                                 });
 
-                            long bTimetamp = btimestamp[0];
+                            long bTimestamp = btimestamp[0];
                             byte[] bValue = bvalue[0];
+                            boolean bTombstoned = btombstoned[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
-                            if (bValue == null) {
-                                System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)
-                                    + " != null"
-                                    + "' \n" + Arrays.toString(aValue) + " vs null");
+                            if (bTimestamp == -1) {
+                                System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + bTimestamp
+                                    + "' != -1"
+                                    + " \n" + Arrays.toString(aValue) + " vs null");
                                 passed.setValue(false);
                                 return false;
                             }
-                            if (aTimestamp != bTimetamp) {
+                            if (aTimestamp != bTimestamp) {
                                 System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aTimestamp
-                                    + "' != '" + bTimetamp
+                                    + "' != '" + bTimestamp
+                                    + "' \n" + Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
+                                passed.setValue(false);
+                                System.out.println("----------------------------------");
+                                return false;
+                            }
+                            if (aTombstoned != bTombstoned) {
+                                System.out.println("INCONSISTENCY: " + comparing + " tombstoned:'" + aTombstoned
+                                    + "' != '" + bTombstoned
                                     + "' \n" + Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                                 passed.setValue(false);
                                 System.out.println("----------------------------------");

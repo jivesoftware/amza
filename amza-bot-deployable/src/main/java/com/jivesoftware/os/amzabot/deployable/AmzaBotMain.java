@@ -146,6 +146,7 @@ public class AmzaBotMain {
             File staticResourceDir = new File(System.getProperty("user.dir"));
             Resource sourceTree = new Resource(staticResourceDir)
                 .addResourcePath(contentUIServiceConfig.getPathToStaticResources())
+                .setDirectoryListingAllowed(false)
                 .setContext("/amzabot/static");
 
             deployable.addInjectables(AmzaBotService.class, amzaBotService);

@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -14,7 +14,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan.colt
  */
 public class QuorumScanNGTest {
@@ -26,21 +25,24 @@ public class QuorumScanNGTest {
         List<byte[]> outputKeys = new ArrayList<>();
         List<byte[]> outputValues = new ArrayList<>();
         List<Long> outputTimestamps = new ArrayList<>();
+        List<Boolean> outputTombstones = new ArrayList<>();
         List<Long> outputVersions = new ArrayList<>();
 
         int numStreams = 10;
 
-        KeyValueTimestampStream capture = (prefix, key, value, timestamp, version) -> {
+        KeyValueStream capture = (prefix, key, value, timestamp, tombstoned, version) -> {
             outputPrefixes.add(prefix);
             outputKeys.add(key);
             outputValues.add(value);
             outputTimestamps.add(timestamp);
+            outputTombstones.add(tombstoned);
             outputVersions.add(version);
 
             System.out.println("\tOUTPUT -> prefix:" + null
                 + " key:" + Arrays.toString(key)
                 + " value:" + Arrays.toString(value)
                 + " timestamp:" + timestamp
+                + " tombstoned:" + tombstoned
                 + " version:" + version);
 
             return true;
@@ -71,22 +73,24 @@ public class QuorumScanNGTest {
                     lastKey[i] += advance;
                     expectedKeys.add(lastKey[i]);
 
-                    byte[] key = new byte[]{lastKey[i]};
-                    byte[] value = new byte[]{(byte) r.nextInt(127)};
+                    byte[] key = new byte[] { lastKey[i] };
+                    byte[] value = new byte[] { (byte) r.nextInt(127) };
                     long timestamp = r.nextInt(numStreams);
+                    boolean tombstoned = r.nextBoolean();
                     long version = v[i];
 
                     System.out.println("INPUT -> index:" + i + " prefix:" + null
                         + " key:" + Arrays.toString(key)
                         + " value:" + Arrays.toString(value)
                         + " timestamp:" + timestamp
+                        + " tombstoned:" + tombstoned
                         + " version:" + version);
 
-                    quorumScannable.fill(i, null, key, value, timestamp, version);
+                    quorumScannable.fill(i, null, key, value, timestamp, tombstoned, version);
 
                     expectedTimestamp.compute(lastKey[i], (k, vv) -> {
                         if (vv == null) {
-                            return new ValueTimestampVersion(value, timestamp, version);
+                            return new ValueTimestampVersion(value, timestamp, tombstoned, version);
                         } else {
                             int c = Long.compare(timestamp, vv.timestamp);
                             if (c == 0) {
@@ -99,7 +103,7 @@ public class QuorumScanNGTest {
                             } else if (c < 0) {
                                 return vv;
                             }
-                            return new ValueTimestampVersion(value, timestamp, version);
+                            return new ValueTimestampVersion(value, timestamp, tombstoned, version);
                         }
                     });
                     v[i]++;
@@ -138,6 +142,7 @@ public class QuorumScanNGTest {
         ValueTimestampVersion expected = expectedTimestamp.get(outputKeys.get(i)[0]);
         Assert.assertEquals(outputValues.get(i), expected.value);
         Assert.assertEquals((long) outputTimestamps.get(i), expected.timestamp);
+        Assert.assertEquals((boolean) outputTombstones.get(i), expected.tombstoned);
         Assert.assertEquals((long) outputVersions.get(i), expected.version);
         Assert.assertTrue(expectedKeys.remove(outputKeys.get(i)[0]));
         i++;
@@ -146,6 +151,7 @@ public class QuorumScanNGTest {
             expected = expectedTimestamp.get(outputKeys.get(i)[0]);
             Assert.assertEquals(outputValues.get(i), expected.value);
             Assert.assertEquals((long) outputTimestamps.get(i), expected.timestamp);
+            Assert.assertEquals((boolean) outputTombstones.get(i), expected.tombstoned);
             Assert.assertEquals((long) outputVersions.get(i), expected.version);
             Assert.assertTrue(expectedKeys.remove(outputKeys.get(i)[0]), "expectedKeys lacks key:" + outputKeys.get(i)[0]);
 
@@ -160,11 +166,13 @@ public class QuorumScanNGTest {
 
         public final byte[] value;
         public final long timestamp;
+        public final boolean tombstoned;
         public final long version;
 
-        public ValueTimestampVersion(byte[] value, long timestamp, long version) {
+        public ValueTimestampVersion(byte[] value, long timestamp, boolean tombstoned, long version) {
             this.value = value;
             this.timestamp = timestamp;
+            this.tombstoned = tombstoned;
             this.version = version;
         }
     }

@@ -21,7 +21,7 @@ public interface Partition {
 
     boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
 
-    boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan, boolean hydrateValues) throws Exception;
+    boolean scan(Iterable<ScanRange> ranges, KeyValueStream stream, boolean hydrateValues) throws Exception;
 
     TakeResult takeFromTransactionId(long txId,
         Highwaters highwaters,

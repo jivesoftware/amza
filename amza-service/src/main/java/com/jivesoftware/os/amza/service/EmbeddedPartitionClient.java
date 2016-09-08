@@ -87,7 +87,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
     private boolean scanInternal(Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
-        KeyValueTimestampStream scan,
+        KeyValueTimestampStream stream,
         boolean hydrateValues,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
@@ -99,7 +99,11 @@ public class EmbeddedPartitionClient implements PartitionClient {
             scanRanges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
             return true;
         });
-        return partition.scan(scanRanges, scan, hydrateValues);
+        return partition.scan(scanRanges,
+            (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
+            },
+            hydrateValues);
     }
 
     @Override

@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import java.util.Arrays;
 
 /**
@@ -15,6 +15,7 @@ class QuorumScan {
     private final byte[][] key;
     private final byte[][] value;
     private final long[] timestamp;
+    private final boolean[] tombstoned;
     private final long[] version;
 
     QuorumScan(int streamerCount) {
@@ -24,6 +25,7 @@ class QuorumScan {
         this.key = new byte[streamerCount][];
         this.value = new byte[streamerCount][];
         this.timestamp = new long[streamerCount];
+        this.tombstoned = new boolean[streamerCount];
         this.version = new long[streamerCount];
     }
 
@@ -31,21 +33,23 @@ class QuorumScan {
         return used[index];
     }
 
-    void fill(int index, byte[] prefix, byte[] key, byte[] value, long timestamp, long version) throws Exception {
+    void fill(int index, byte[] prefix, byte[] key, byte[] value, long timestamp, boolean tombstoned, long version) throws Exception {
         this.used[index] = false;
         this.prefix[index] = prefix;
         this.key[index] = key;
         this.value[index] = value;
         this.timestamp[index] = timestamp;
+        this.tombstoned[index] = tombstoned;
         this.version[index] = version;
     }
 
-    boolean stream(int wi, KeyValueTimestampStream stream) throws Exception {
+    boolean stream(int wi, KeyValueStream stream) throws Exception {
         this.used[wi] = true;
         return stream.stream(this.prefix[wi],
             this.key[wi],
             this.value[wi],
             this.timestamp[wi],
+            this.tombstoned[wi],
             this.version[wi]);
     }
 

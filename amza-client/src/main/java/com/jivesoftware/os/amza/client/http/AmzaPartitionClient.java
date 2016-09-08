@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -134,6 +135,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                     byte[] latestKey = null;
                     byte[] latestValue = null;
                     long latestTimestamp = Long.MIN_VALUE;
+                    boolean latestTombstoned = false;
                     long latestVersion = Long.MIN_VALUE;
                     for (FilerInputStream fis : streams) {
                         if (!UIO.readBoolean(fis, "eos")) {
@@ -150,6 +152,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                                 latestKey = k;
                                 latestValue = v;
                                 latestTimestamp = t;
+                                latestTombstoned = d;
                                 latestVersion = z;
                             }
                         } else {
@@ -159,7 +162,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                     if (eosed > 0 && eosed < answers.size()) {
                         throw new RuntimeException("Mismatched response lengths");
                     }
-                    if (eosed == 0 && !valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestVersion)) {
+                    if (eosed == 0 && !latestTombstoned && !valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestVersion)) {
                         break;
                     }
                 }
@@ -212,6 +215,10 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
             return remotePartitionCaller.scan(leader, ringMember, client, consistency, compressed, ranges, hydrateValues);
         };
 
+        KeyValueStream keyValueStream = (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
+        };
+
         return partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, hydrateValues ? "scan" : "scanKeys",
             partitionCall,
             (answers) -> {
@@ -240,7 +247,8 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                                     quorumScan.fill(i, UIO.readByteArray(fis, "prefix", intLongBuffer),
                                         UIO.readByteArray(fis, "key", intLongBuffer),
                                         hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null,
-                                        UIO.readLong(fis, "timestampId", intLongBuffer),
+                                        UIO.readLong(fis, "timestamp", intLongBuffer),
+                                        UIO.readBoolean(fis, "tombstone"),
                                         UIO.readLong(fis, "version", intLongBuffer));
                                 } else {
                                     eosed++;
@@ -248,13 +256,13 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                             }
                         }
                         int wi = quorumScan.findWinningIndex();
-                        if (wi == -1 || !quorumScan.stream(wi, stream)) {
+                        if (wi == -1 || !quorumScan.stream(wi, keyValueStream)) {
                             return false;
                         }
                     }
                     int wi;
                     while ((wi = quorumScan.findWinningIndex()) > -1) {
-                        if (!quorumScan.stream(wi, stream)) {
+                        if (!quorumScan.stream(wi, keyValueStream)) {
                             return false;
                         }
                     }

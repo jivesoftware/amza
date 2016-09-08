@@ -150,17 +150,10 @@ public class AmzaClientService implements AmzaRestClient {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, prefix1, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, key, "key", intLongBuffer);
-                if (tombstoned) {
-                    UIO.writeByteArray(out, null, "value", intLongBuffer);
-                    UIO.writeLong(out, -1L, "timestamp");
-                    UIO.writeByte(out, (byte) 1, "tombstoned");
-                    UIO.writeLong(out, -1L, "version");
-                } else {
-                    UIO.writeByteArray(out, value, "value", intLongBuffer);
-                    UIO.writeLong(out, timestamp, "timestamp");
-                    UIO.writeByte(out, (byte) 0, "tombstoned");
-                    UIO.writeLong(out, version, "version");
-                }
+                UIO.writeByteArray(out, null, "value", intLongBuffer);
+                UIO.writeLong(out, timestamp, "timestamp");
+                UIO.writeByte(out, (byte) (tombstoned ? 1 : 0), "tombstoned");
+                UIO.writeLong(out, version, "version");
                 return true;
             });
 
@@ -174,14 +167,15 @@ public class AmzaClientService implements AmzaRestClient {
         Partition partition = partitionProvider.getPartition(partitionName);
 
         partition.scan(ranges,
-            (prefix, key, value, timestamp, version) -> {
+            (prefix, key, value, timestamp, tombstoned, version) -> {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, key, "key", intLongBuffer);
                 if (hydrateValues) {
                     UIO.writeByteArray(out, value, "value", intLongBuffer);
                 }
-                UIO.writeLong(out, timestamp, "timestampId");
+                UIO.writeLong(out, timestamp, "timestamp");
+                UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
                 UIO.writeLong(out, version, "version");
                 return true;
             }, hydrateValues);
@@ -292,7 +286,7 @@ public class AmzaClientService implements AmzaRestClient {
                         State.not_the_leader, "Leader has changed.", null);
                 }
             } catch (Exception x) {
-                Object[] vals = new Object[]{partitionName, consistency};
+                Object[] vals = new Object[] { partitionName, consistency };
                 LOG.warn("Failed while determining leader {} at {}. ", vals, x);
                 return new StateMessageCause(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis,
                     State.error, "Failed while determining leader: " + Arrays.toString(vals), x);

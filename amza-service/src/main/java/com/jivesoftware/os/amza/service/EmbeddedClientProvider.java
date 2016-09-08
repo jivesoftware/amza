@@ -86,7 +86,11 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
 
         public void scan(Iterable<ScanRange> ranges,
             KeyValueTimestampStream stream, boolean hydrateValues) throws Exception {
-            partitionProvider.getPartition(partitionName).scan(ranges, stream, hydrateValues);
+            partitionProvider.getPartition(partitionName).scan(ranges,
+                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
+                },
+                hydrateValues);
         }
 
         public TakeCursors takeFromTransactionId(long transactionId, TxKeyValueStream stream) throws Exception {

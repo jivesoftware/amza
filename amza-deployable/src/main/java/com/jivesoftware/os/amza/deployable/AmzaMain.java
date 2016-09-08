@@ -171,6 +171,7 @@ public class AmzaMain {
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());
             Resource sourceTree = new Resource(staticResourceDir)
                 .addResourcePath("resources/static")
+                .setDirectoryListingAllowed(false)
                 .setContext("/static");
             deployable.addResource(sourceTree);
 

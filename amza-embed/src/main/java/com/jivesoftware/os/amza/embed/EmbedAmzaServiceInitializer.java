@@ -238,6 +238,7 @@ public class EmbedAmzaServiceInitializer {
 
         Resource staticResource = new Resource(null)
             .addClasspathResource("resources/static/amza")
+            .setDirectoryListingAllowed(false)
             .setContext("/static/amza");
         deployable.addResource(staticResource);
 

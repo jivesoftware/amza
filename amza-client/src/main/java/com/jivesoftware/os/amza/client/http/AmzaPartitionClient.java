@@ -272,11 +272,17 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 } else if (size == 1) {
                     FilerInputStream fis = streams.get(0);
                     while (!UIO.readBoolean(fis, "eos")) {
-                        if (!stream.stream(UIO.readByteArray(fis, "prefix", intLongBuffer),
-                            UIO.readByteArray(fis, "key", intLongBuffer),
-                            hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null,
-                            UIO.readLong(fis, "timestampId", intLongBuffer),
-                            UIO.readLong(fis, "version", intLongBuffer))) {
+                        byte[] prefix = UIO.readByteArray(fis, "prefix", intLongBuffer);
+                        byte[] key = UIO.readByteArray(fis, "key", intLongBuffer);
+                        byte[] value = hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null;
+                        long timestamp = UIO.readLong(fis, "timestamp", intLongBuffer);
+                        boolean tombstoned = UIO.readBoolean(fis, "tombstone");
+                        long version = UIO.readLong(fis, "version", intLongBuffer);
+                        if (!tombstoned && !stream.stream(prefix,
+                            key,
+                            value,
+                            timestamp,
+                            version)) {
                             return false;
                         }
                     }

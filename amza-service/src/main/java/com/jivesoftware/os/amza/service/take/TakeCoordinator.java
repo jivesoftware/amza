@@ -360,9 +360,13 @@ public class TakeCoordinator {
                         offered.setValue(0);
                         deliverCallback.call();
                     }
-                    lock.wait(timeToWait);
-                    timeRemaining -= heartbeatIntervalMillis;
-                    if (timeRemaining < 0) {
+                    if (timeToWait > 0) {
+                        lock.wait(timeToWait);
+                        timeRemaining -= heartbeatIntervalMillis;
+                    } else {
+                        timeRemaining = 0;
+                    }
+                    if (timeRemaining <= 0) {
                         break;
                     }
                 }

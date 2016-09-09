@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
+import com.jivesoftware.os.lab.BolBuffer;
 import com.jivesoftware.os.lab.LABEnvironment;
 import com.jivesoftware.os.lab.LABRawhide;
 import com.jivesoftware.os.lab.api.MemoryRawEntryFormat;
@@ -137,6 +138,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             byte[] mode = new byte[1];
             byte[] txFpBytes = new byte[16];
+            BolBuffer bolBuffer = new BolBuffer();
             return pointers.consume((txId, prefix, key, value, timestamp, tombstoned, version, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get(
@@ -154,7 +156,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             byte[] mergePayload = toPayload(fp, value);
                             primaryDb.append((pointerStream) -> {
                                 return pointerStream.stream(-1, pk, timestamp, tombstoned, version, mergePayload);
-                            }, true);
+                            }, true, bolBuffer);
 
                             if (prefix != null) {
                                 UIO.longBytes(txId, txFpBytes, 0);
@@ -162,7 +164,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
                                 prefixDb.append((pointerStream) -> {
                                     return pointerStream.stream(-1, prefixTxFp, timestamp, tombstoned, version, mergePayload);
-                                }, true);
+                                }, true, bolBuffer);
                             }
                         }
                         if (stream != null) {

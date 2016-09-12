@@ -138,7 +138,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             byte[] mode = new byte[1];
             byte[] txFpBytes = new byte[16];
-            BolBuffer bolBuffer = new BolBuffer();
+            BolBuffer entryBuffer = new BolBuffer();
+            BolBuffer keyBuffer = new BolBuffer();
             return pointers.consume((txId, prefix, key, value, timestamp, tombstoned, version, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get(
@@ -156,7 +157,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             byte[] mergePayload = toPayload(fp, value);
                             primaryDb.append((pointerStream) -> {
                                 return pointerStream.stream(-1, pk, timestamp, tombstoned, version, mergePayload);
-                            }, true, bolBuffer);
+                            }, true, entryBuffer, keyBuffer);
 
                             if (prefix != null) {
                                 UIO.longBytes(txId, txFpBytes, 0);
@@ -164,7 +165,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
                                 prefixDb.append((pointerStream) -> {
                                     return pointerStream.stream(-1, prefixTxFp, timestamp, tombstoned, version, mergePayload);
-                                }, true, bolBuffer);
+                                }, true, entryBuffer, keyBuffer);
                             }
                         }
                         if (stream != null) {

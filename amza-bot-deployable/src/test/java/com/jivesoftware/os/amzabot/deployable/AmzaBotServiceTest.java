@@ -99,6 +99,20 @@ public class AmzaBotServiceTest {
     }
 
     @Test
+    public void testBotSetWithInfiniteRetryGet() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.setWithInfiniteRetry("key:" + i, "value:" + i, 10);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            String v = service.getWithInfiniteRetry("key:" + i, 10);
+
+            Assert.assertNotNull(v);
+            Assert.assertEquals(v, "value:" + i);
+        }
+    }
+
+    @Test
     public void testBotSetWithRetryGet() throws Exception {
         for (long i = 0; i < 10; i++) {
             service.setWithRetry("key:" + i, "value:" + i, Integer.MAX_VALUE, 10);
@@ -137,6 +151,23 @@ public class AmzaBotServiceTest {
 
         for (long i = 0; i < 10; i++) {
             service.deleteWithRetry("key:" + i, 0, 0);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            String v = service.get("key:" + i);
+
+            Assert.assertNull(v);
+        }
+    }
+
+    @Test
+    public void testBotSetDeleteWithInfiniteRetry() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
+        }
+
+        for (long i = 0; i < 10; i++) {
+            service.deleteWithInfiniteRetry("key:" + i, 10);
         }
 
         for (long i = 0; i < 10; i++) {

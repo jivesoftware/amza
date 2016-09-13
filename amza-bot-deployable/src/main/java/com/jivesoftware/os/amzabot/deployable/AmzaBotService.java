@@ -88,7 +88,11 @@ public class AmzaBotService {
             Optional.empty());
     }
 
-    public void setWithRetry(String k, String v,
+    public void setWithInfiniteRetry(String k, String v, int retryIntervalMs) throws Exception {
+        setWithRetry(k, v, Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    void setWithRetry(String k, String v,
         int retryCount, int retryIntervalMs) throws Exception {
         int currentRetryCount = retryCount;
         if (currentRetryCount < Integer.MAX_VALUE) {
@@ -107,10 +111,10 @@ public class AmzaBotService {
 
                 if (currentRetryCount > 0) {
                     if (retryIntervalMs > 0) {
-                        LOG.info("Retry writing in {}ms", retryIntervalMs);
+                        LOG.info("Retry writing in {}ms. Tried {} times.", retryIntervalMs, currentRetryCount);
                         Thread.sleep(retryIntervalMs);
                     } else {
-                        LOG.info("Retry writing value");
+                        LOG.info("Retry writing value. Tried {} times.", currentRetryCount);
                     }
                 }
             } finally {
@@ -146,7 +150,11 @@ public class AmzaBotService {
         return Joiner.on(',').join(values);
     }
 
-    public String getWithRetry(String k,
+    public String getWithInfiniteRetry(String k, int retryIntervalMs) throws Exception {
+        return getWithRetry(k, Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    String getWithRetry(String k,
         int retryCount, int retryIntervalMs) throws Exception {
         int currentRetryCount = retryCount;
         if (currentRetryCount < Integer.MAX_VALUE) {
@@ -166,10 +174,10 @@ public class AmzaBotService {
 
                 if (currentRetryCount > 0) {
                     if (retryIntervalMs > 0) {
-                        LOG.info("Retry getting in {}ms", retryIntervalMs);
+                        LOG.info("Retry getting in {}ms. Tried {} times.", retryIntervalMs, currentRetryCount);
                         Thread.sleep(retryIntervalMs);
                     } else {
-                        LOG.info("Retry getting value");
+                        LOG.info("Retry getting value. Tried {} times.", currentRetryCount);
                     }
                 }
             } finally {
@@ -198,9 +206,15 @@ public class AmzaBotService {
         return res;
     }
 
-    public String deleteWithRetry(String k,
+    public String deleteWithInfiniteRetry(String k, int retryIntervalMs) throws Exception {
+        return deleteWithRetry(k, Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    String deleteWithRetry(String k,
         int retryCount, int retryIntervalMs) throws Exception {
         int currentRetryCount = retryCount;
+
+        // prevent a sign roll for pseudo-infinite retry
         if (currentRetryCount < Integer.MAX_VALUE) {
             currentRetryCount++;
         }
@@ -218,10 +232,10 @@ public class AmzaBotService {
 
                 if (currentRetryCount > 0) {
                     if (retryIntervalMs > 0) {
-                        LOG.info("Retry deleting in {}ms", retryIntervalMs);
+                        LOG.info("Retry deleting in {}ms. Tried {} times.", retryIntervalMs, currentRetryCount);
                         Thread.sleep(retryIntervalMs);
                     } else {
-                        LOG.info("Retry deleting value");
+                        LOG.info("Retry deleting value. Tried {} times.", currentRetryCount);
                     }
                 }
             } finally {

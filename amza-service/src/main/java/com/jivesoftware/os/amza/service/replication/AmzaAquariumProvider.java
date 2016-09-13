@@ -337,11 +337,10 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                         && !leadershipTokenAndTookFully.tookFully.isEmpty()
                         && properties.consistency.requiresLeader()) {
                         Waterline demoted = State.highest(rootAquariumMember, State.demoted, readCurrent, existing);
-                        // if there is no demoted member, assume this is the first election and declare the node repaired
-                        if (demoted == null
-                            || (demoted.isAtQuorum()
+                        if (demoted != null
+                            && demoted.isAtQuorum()
                             && liveliness.isAlive(demoted.getMember())
-                            && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember())))) {
+                            && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember()))) {
                             repairedFromDemoted = true;
                         }
                     }

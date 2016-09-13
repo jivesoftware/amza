@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.jive.utils.collections.bah.LRUConcurrentBAHLinkedHash;
 import com.jivesoftware.os.lab.LABEnvironment;
 import com.jivesoftware.os.lab.LabHeapPressure;
+import com.jivesoftware.os.lab.StripingBolBufferLocks;
 import com.jivesoftware.os.lab.guts.Leaps;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -74,6 +75,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 config.getMinMergeDebt(),
                 config.getMaxMergeDebt(),
                 leapCache,
+                new StripingBolBufferLocks(1024),
                 false);
 
             File[] files = active.listFiles();

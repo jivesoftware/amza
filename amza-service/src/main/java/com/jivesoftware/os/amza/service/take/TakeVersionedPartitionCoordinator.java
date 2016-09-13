@@ -98,6 +98,7 @@ public class TakeVersionedPartitionCoordinator {
                         versionedRing,
                         ringMember,
                         stable.isOnline(),
+                        stable.isNominated(),
                         availableStream);
                 } else {
                     LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
@@ -121,16 +122,19 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     private enum Stable {
-        dormant_online(true, true),
-        active_online(false, true),
-        active_offline(false, false);
+        dormant_online(true, true, false),
+        active_online(false, true, false),
+        active_nominated(false, true, true),
+        active_offline(false, false, false);
 
         private final boolean dormant;
         private final boolean online;
+        private final boolean nominated;
 
-        Stable(boolean dormant, boolean online) {
+        Stable(boolean dormant, boolean online, boolean nominated) {
             this.dormant = dormant;
             this.online = online;
+            this.nominated = nominated;
         }
 
         public boolean isDormant() {
@@ -139,6 +143,10 @@ public class TakeVersionedPartitionCoordinator {
 
         public boolean isOnline() {
             return online;
+        }
+
+        public boolean isNominated() {
+            return nominated;
         }
     }
 
@@ -152,10 +160,22 @@ public class TakeVersionedPartitionCoordinator {
                 return Stable.active_offline;
             }
 
+            boolean nominated = false;
             if (!session.online && versionedAquarium != null) {
                 session.online = versionedAquarium.isLivelyEndState(ringMember);
+                if (!session.online) {
+                    nominated = versionedAquarium.isMemberInState(ringMember, State.nominated);
+                }
             }
-            return (session.online && session.steadyState) ? Stable.dormant_online : (session.online) ? Stable.active_online : Stable.active_offline;
+            if (session.online && session.steadyState) {
+                return Stable.dormant_online;
+            } else if (session.online) {
+                return Stable.active_online;
+            } else if (nominated) {
+                return Stable.active_nominated;
+            } else {
+                return Stable.active_offline;
+            }
         }
     }
 
@@ -165,6 +185,7 @@ public class TakeVersionedPartitionCoordinator {
         VersionedRing versionedRing,
         RingMember ringMember,
         boolean takerIsOnline,
+        boolean takerIsNominated,
         AvailableStream availableStream) throws Exception {
 
         if (isInBootstrap.get()) {
@@ -204,7 +225,7 @@ public class TakeVersionedPartitionCoordinator {
                     session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
                     session.tookFully = false;
                     session.steadyState = false;
-                } else if (isSufficientCategory && (!takerIsOnline || shouldOffer(session, highestTxId))) {
+                } else if (takerIsNominated || isSufficientCategory && (!takerIsOnline || shouldOffer(session, highestTxId))) {
                     available = true;
                     session.sessionId = takeSessionId;
                     session.offeredTxId = highestTxId;
@@ -292,7 +313,7 @@ public class TakeVersionedPartitionCoordinator {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (replicated) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
-            int[] fastEnough = {0};
+            int[] fastEnough = { 0 };
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
                 if (fastEnough[0] < versionedRing.takeFromFactor) {

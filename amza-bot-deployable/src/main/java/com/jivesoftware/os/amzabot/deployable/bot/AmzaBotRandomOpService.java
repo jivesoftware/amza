@@ -65,7 +65,7 @@ public class AmzaBotRandomOpService {
                 return op;
             }
 
-            String value = service.getWithRetry(entry.getKey(), Integer.MAX_VALUE, config.getRetryWaitMs());
+            String value = service.getWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
 
             if (value == null) {
                 LOG.error("Did not find key {}", entry.getKey());
@@ -78,7 +78,7 @@ public class AmzaBotRandomOpService {
                     AmzaBotUtil.truncVal(value));
 
                 amzaKeyClearingHouse.quarantineEntry(entry, value);
-                service.deleteWithRetry(entry.getKey(), Integer.MAX_VALUE, config.getRetryWaitMs());
+                service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
             } else {
                 LOG.debug("Found key {}", entry.getKey());
             }
@@ -90,7 +90,7 @@ public class AmzaBotRandomOpService {
                 return op;
             }
 
-            service.deleteWithRetry(entry.getKey(), 0, config.getRetryWaitMs());
+            service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
             amzaKeyClearingHouse.delete(entry.getKey());
 
             LOG.debug("Deleted {}", entry.getKey());
@@ -103,8 +103,7 @@ public class AmzaBotRandomOpService {
                 if (entry == null) {
                     LOG.error("No random entry was generated for {}", keySeed);
                 } else {
-                    service.setWithRetry(entry.getKey(), entry.getValue(),
-                        Integer.MAX_VALUE, config.getRetryWaitMs());
+                    service.setWithInfiniteRetry(entry.getKey(), entry.getValue(), config.getRetryWaitMs());
 
                     String oldValue = amzaKeyClearingHouse.set(entry.getKey(), entry.getValue());
                     if (oldValue != null) {
@@ -112,7 +111,7 @@ public class AmzaBotRandomOpService {
 
                         amzaKeyClearingHouse.quarantineEntry(
                             new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()), oldValue);
-                        service.deleteWithRetry(entry.getKey(), Integer.MAX_VALUE, config.getRetryWaitMs());
+                        service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
                     }
 
                     LOG.debug("Wrote {}:{}", entry.getKey(), AmzaBotUtil.truncVal(entry.getValue()));

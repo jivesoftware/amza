@@ -40,7 +40,7 @@ public interface AmzaBotRandomOpConfig extends Config {
     int getRetryWaitMs();
     void setRetryWaitMs(int value);
 
-    @IntDefault(10_000)
+    @IntDefault(1_000)
     int getSnapshotFrequency();
     void setSnapshotFrequency(int value);
 

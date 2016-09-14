@@ -94,31 +94,34 @@ public class AmzaBotService {
 
     void setWithRetry(String k, String v,
         int retryCount, int retryIntervalMs) throws Exception {
-        int currentRetryCount = retryCount;
-        if (currentRetryCount < Integer.MAX_VALUE) {
-            currentRetryCount++;
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
         }
 
-        while (currentRetryCount > 0) {
+        int currentTryCount = 1;
+
+        while (retriesLeft > 0) {
             try {
                 set(k, v);
-                currentRetryCount = 0;
+                retriesLeft = 0;
             } catch (Exception e) {
                 LOG.error("Error occurred writing key {}:{} - {}",
                     k,
                     AmzaBotUtil.truncVal(v),
                     e.getLocalizedMessage());
 
-                if (currentRetryCount > 0) {
+                if (retriesLeft > 0) {
                     if (retryIntervalMs > 0) {
-                        LOG.info("Retry writing in {}ms. Tried {} times.", retryIntervalMs, currentRetryCount);
+                        LOG.info("Retry writing in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
                         Thread.sleep(retryIntervalMs);
                     } else {
-                        LOG.info("Retry writing value. Tried {} times.", currentRetryCount);
+                        LOG.info("Retry writing value. Tried {} times.", currentTryCount);
                     }
                 }
             } finally {
-                currentRetryCount--;
+                retriesLeft--;
+                currentTryCount++;
             }
         }
     }
@@ -156,32 +159,35 @@ public class AmzaBotService {
 
     String getWithRetry(String k,
         int retryCount, int retryIntervalMs) throws Exception {
-        int currentRetryCount = retryCount;
-        if (currentRetryCount < Integer.MAX_VALUE) {
-            currentRetryCount++;
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
         }
+
+        int currentTryCount = 1;
 
         String res = "";
 
-        while (currentRetryCount > 0) {
+        while (retriesLeft > 0) {
             try {
                 res = get(k);
-                currentRetryCount = 0;
+                retriesLeft = 0;
             } catch (Exception e) {
                 LOG.error("Error occurred getting key {} - {}",
                     k,
                     e.getLocalizedMessage());
 
-                if (currentRetryCount > 0) {
+                if (retriesLeft > 0) {
                     if (retryIntervalMs > 0) {
-                        LOG.info("Retry getting in {}ms. Tried {} times.", retryIntervalMs, currentRetryCount);
+                        LOG.info("Retry getting in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
                         Thread.sleep(retryIntervalMs);
                     } else {
-                        LOG.info("Retry getting value. Tried {} times.", currentRetryCount);
+                        LOG.info("Retry getting value. Tried {} times.", currentTryCount);
                     }
                 }
             } finally {
-                currentRetryCount--;
+                retriesLeft--;
+                currentTryCount++;
             }
         }
 
@@ -212,34 +218,35 @@ public class AmzaBotService {
 
     String deleteWithRetry(String k,
         int retryCount, int retryIntervalMs) throws Exception {
-        int currentRetryCount = retryCount;
-
-        // prevent a sign roll for pseudo-infinite retry
-        if (currentRetryCount < Integer.MAX_VALUE) {
-            currentRetryCount++;
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
         }
+
+        int currentTryCount = 1;
 
         String res = "";
 
-        while (currentRetryCount > 0) {
+        while (retriesLeft > 0) {
             try {
                 res = delete(k);
-                currentRetryCount = 0;
+                retriesLeft = 0;
             } catch (Exception e) {
                 LOG.error("Error occurred deleting key {} - {}",
                     k,
                     e.getLocalizedMessage());
 
-                if (currentRetryCount > 0) {
+                if (retriesLeft > 0) {
                     if (retryIntervalMs > 0) {
-                        LOG.info("Retry deleting in {}ms. Tried {} times.", retryIntervalMs, currentRetryCount);
+                        LOG.info("Retry deleting in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
                         Thread.sleep(retryIntervalMs);
                     } else {
-                        LOG.info("Retry deleting value. Tried {} times.", currentRetryCount);
+                        LOG.info("Retry deleting value. Tried {} times.", currentTryCount);
                     }
                 }
             } finally {
-                currentRetryCount--;
+                retriesLeft--;
+                currentTryCount++;
             }
         }
 

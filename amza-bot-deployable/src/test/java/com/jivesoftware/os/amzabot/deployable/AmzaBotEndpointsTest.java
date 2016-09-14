@@ -4,8 +4,10 @@ import com.beust.jcommander.internal.Sets;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import java.util.AbstractMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import org.testng.Assert;
@@ -50,4 +52,20 @@ public class AmzaBotEndpointsTest {
         //   10.126.5.87:10000/api/amzabot/v1/keys
     }
 
+    @Test
+    public void verifyMultiSetPost() throws Exception {
+        Map<String, String> values = Maps.newHashMap();
+        values.put("foo", "bar");
+        values.put("ham", "eggs");
+
+        String mapJson = new ObjectMapper().writeValueAsString(values);
+        Assert.assertEquals(mapJson, "{\"ham\":\"eggs\",\"foo\":\"bar\"}");
+
+        // i.e.
+        //
+        // curl -X POST \
+        //   -H "Content-Type:application/json" \
+        //   -d '{"ham":"eggs","foo":"bar"}' \
+        //   10.126.5.87:1175/amza/multiSet/bad
+    }
 }

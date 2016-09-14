@@ -1,19 +1,14 @@
 package com.jivesoftware.os.amzabot.deployable.bot;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
-import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotConfig;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotService;
 import com.jivesoftware.os.amzabot.deployable.AmzaKeyClearingHousePool;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,43 +48,14 @@ public class AmzaBotCoalmineService {
         LOG.info("Consistency {}", config.getConsistency());
         LOG.info("Partition size {}", config.getPartitionSize());
 
-        PartitionProperties partitionProperties = new PartitionProperties(
-            Durability.valueOf(config.getDurability()),
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            false,
-            Consistency.valueOf(config.getConsistency()),
-            true,
-            true,
-            false,
-            RowType.snappy_primary,
-            "lab",
-            -1,
-            null,
-            -1,
-            -1);
-
-        PartitionName partitionName = new PartitionName(false,
-            ("amzabot").getBytes(StandardCharsets.UTF_8),
-            ("amzabot-coalmine-" + UUID.randomUUID().toString()).getBytes(StandardCharsets.UTF_8));
-
-        PartitionClient partitionClient = partitionClientProvider.getPartition(
-            partitionName,
-            config.getPartitionSize(),
-            partitionProperties);
-        LOG.info("Created partition for coalmine {}", partitionName);
-
         return new AmzaBotCoalminer(
             config,
             new AmzaBotService(amzaBotConfig,
-                partitionClient,
-                Consistency.valueOf(config.getConsistency())),
+                partitionClientProvider,
+                Durability.valueOf(config.getDurability()),
+                Consistency.valueOf(config.getConsistency()),
+                "amzabot-coalmine-" + UUID.randomUUID().toString(),
+                config.getPartitionSize()),
             amzaKeyClearingHousePool);
     }
 

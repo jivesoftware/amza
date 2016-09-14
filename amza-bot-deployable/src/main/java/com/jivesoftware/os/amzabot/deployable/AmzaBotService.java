@@ -4,7 +4,12 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.PartitionClient;
+import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
@@ -20,26 +25,75 @@ public class AmzaBotService {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaBotConfig config;
-    private final PartitionClient client;
+    private final PartitionClientProvider partitionClientProvider;
+    private final Durability durability;
     private final Consistency consistency;
+    private final String partitionNameName;
+    private final int partitionSize;
+
+    private PartitionClient partitionClient;
 
     public AmzaBotService(AmzaBotConfig config,
-        PartitionClient client,
-        Consistency consistency) {
+        PartitionClientProvider partitionClientProvider,
+        Durability durability,
+        Consistency consistency,
+        String partitionNameName,
+        int partitionSize) {
         this.config = config;
-        this.client = client;
+        this.partitionClientProvider = partitionClientProvider;
+        this.durability = durability;
         this.consistency = consistency;
+        this.partitionNameName = partitionNameName;
+        this.partitionSize = partitionSize;
+    }
+
+    private void initialize() throws Exception {
+        PartitionProperties partitionProperties = new PartitionProperties(
+            durability,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            false,
+            consistency,
+            true,
+            true,
+            false,
+            RowType.snappy_primary,
+            "lab",
+            -1,
+            null,
+            -1,
+            -1);
+
+        PartitionName partitionName = new PartitionName(false,
+            ("amzabot").getBytes(StandardCharsets.UTF_8),
+            partitionNameName.getBytes(StandardCharsets.UTF_8));
+
+        partitionClient = partitionClientProvider.getPartition(
+            partitionName,
+            partitionSize,
+            partitionProperties);
+        LOG.info("Created partition for amzabot {}", partitionName);
     }
 
     public void set(String k, String v) throws Exception {
         LOG.debug("set {}:{}", k, AmzaBotUtil.truncVal(v));
+
+        if (partitionClient == null) {
+            initialize();
+        }
 
         if (config.getDropEverythingOnTheFloor()) {
             LOG.warn("Dropping sets on the floor.");
             return;
         }
 
-        client.commit(
+        partitionClient.commit(
             consistency,
             null,
             (commitKeyValueStream) -> {
@@ -55,10 +109,14 @@ public class AmzaBotService {
             Optional.empty());
     }
 
-    public void set(Set<Entry<String, String>> entries) throws Exception {
+    public void multiSet(Set<Entry<String, String>> entries) throws Exception {
         if (entries == null) {
             LOG.warn("Empty set of entries.");
             return;
+        }
+
+        if (partitionClient == null) {
+            initialize();
         }
 
         for (Entry<String, String> entry : entries) {
@@ -70,7 +128,7 @@ public class AmzaBotService {
             return;
         }
 
-        client.commit(
+        partitionClient.commit(
             consistency,
             null,
             (commitKeyValueStream) -> {
@@ -129,8 +187,12 @@ public class AmzaBotService {
     public String get(String k) throws Exception {
         LOG.debug("get {}", k);
 
+        if (partitionClient == null) {
+            initialize();
+        }
+
         List<String> values = Lists.newArrayList();
-        client.get(consistency,
+        partitionClient.get(consistency,
             null,
             (keyStream) -> keyStream.stream(k.getBytes(StandardCharsets.UTF_8)),
             (prefix, key, value, timestamp, version) -> {
@@ -197,9 +259,13 @@ public class AmzaBotService {
     public String delete(String k) throws Exception {
         LOG.debug("delete {}", k);
 
+        if (partitionClient == null) {
+            initialize();
+        }
+
         String res = get(k);
 
-        client.commit(consistency,
+        partitionClient.commit(consistency,
             null,
             (commitKeyValueStream) -> {
                 commitKeyValueStream.commit(k.getBytes(StandardCharsets.UTF_8), null, -1, true);
@@ -256,7 +322,11 @@ public class AmzaBotService {
     public Map<String, String> getAll() throws Exception {
         ConcurrentMap<String, String> res = Maps.newConcurrentMap();
 
-        client.scan(consistency,
+        if (partitionClient == null) {
+            initialize();
+        }
+
+        partitionClient.scan(consistency,
             false,
             stream -> stream.stream(null, null, null, null),
             (prefix, key, value, timestamp, version) -> {

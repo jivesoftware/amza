@@ -2,13 +2,14 @@ package com.jivesoftware.os.amzabot.deployable;
 
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpConfig;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpService;
-import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpServiceInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -65,11 +66,15 @@ public class AmzaBotRandomOpTest {
         config.setSnapshotFrequency(10);
 
         amzaKeyClearingHouse = new AmzaKeyClearingHouse();
-        service = new AmzaBotRandomOpServiceInitializer(
-            amzaBotConfig,
+        service = new AmzaBotRandomOpService(
             config,
-            partitionClientProvider,
-            amzaKeyClearingHouse).initialize();
+            new AmzaBotService(amzaBotConfig,
+                partitionClientProvider,
+                Durability.valueOf(config.getDurability()),
+                Consistency.valueOf(config.getConsistency()),
+                "amzabot-randomop-test-",
+                config.getPartitionSize()),
+            amzaKeyClearingHouse);
         service.start();
     }
 

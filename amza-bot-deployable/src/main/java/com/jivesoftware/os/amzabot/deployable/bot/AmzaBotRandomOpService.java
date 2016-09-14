@@ -30,7 +30,7 @@ public class AmzaBotRandomOpService {
         new ThreadFactoryBuilder().setNameFormat("amzabot-processor-%d").build());
     private final AtomicBoolean running = new AtomicBoolean();
 
-    AmzaBotRandomOpService(AmzaBotRandomOpConfig config,
+    public AmzaBotRandomOpService(AmzaBotRandomOpConfig config,
         AmzaBotService service,
         AmzaKeyClearingHouse amzaKeyClearingHouse) {
         this.config = config;
@@ -125,6 +125,15 @@ public class AmzaBotRandomOpService {
     }
 
     public void start() {
+        LOG.info("Hesitation factor {}", config.getHesitationFactorMs());
+        LOG.info("Write threshold {}", config.getWriteThreshold());
+        LOG.info("Value size threshold {}", config.getValueSizeThreshold());
+        LOG.info("Durability {}", config.getDurability());
+        LOG.info("Consistency {}", config.getConsistency());
+        LOG.info("Partition size {}", config.getPartitionSize());
+        LOG.info("Retry wait {}ms", config.getRetryWaitMs());
+        LOG.info("Snapshot frequency {}", config.getSnapshotFrequency());
+
         if (!config.getEnabled()) {
             LOG.warn("Not starting random operations; not enabled.");
             return;

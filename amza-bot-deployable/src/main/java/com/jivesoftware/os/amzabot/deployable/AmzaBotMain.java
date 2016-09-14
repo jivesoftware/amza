@@ -3,6 +3,8 @@ package com.jivesoftware.os.amzabot.deployable;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
@@ -12,7 +14,6 @@ import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineConfig;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineService;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpConfig;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpService;
-import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpServiceInitializer;
 import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotCoalmineEndpoints;
 import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotEndpoints;
 import com.jivesoftware.os.amzabot.deployable.endpoint.AmzaBotRandomOpEndpoints;
@@ -46,6 +47,7 @@ import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientIniti
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 public class AmzaBotMain {
@@ -54,7 +56,7 @@ public class AmzaBotMain {
         new AmzaBotMain().run(args);
     }
 
-    public void run(String[] args) throws Exception {
+    private void run(String[] args) throws Exception {
 
         ServiceStartupHealthCheck serviceStartupHealthCheck = new ServiceStartupHealthCheck();
         try {
@@ -78,7 +80,8 @@ public class AmzaBotMain {
                     deployable.config(AmzaBotHealthCheckConfig.class),
                     amzaKeyClearingHousePool);
 
-            deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)),
+            deployable.addHealthCheck(
+                new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)),
                 new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)),
                 new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)),
                 new LoadAverageHealthChecker(deployable.config(LoadAverageHealthChecker.LoadAverageHealthCheckerConfig.class)),
@@ -117,15 +120,24 @@ public class AmzaBotMain {
                 -1,
                 -1);
 
-            AmzaBotService amzaBotService = new AmzaBotServiceInitializer(
+            AmzaBotService amzaBotService = new AmzaBotService(
                 amzaBotConfig,
-                amzaClientProvider).initialize();
-
-            AmzaBotRandomOpService amzaBotRandomOpService = new AmzaBotRandomOpServiceInitializer(
-                amzaBotConfig,
-                amzaBotRandomOpConfig,
                 amzaClientProvider,
-                amzaKeyClearingHousePool.genAmzaKeyClearingHouse()).initialize();
+                Durability.fsync_async,
+                Consistency.leader_quorum,
+                "amzabot-rest",
+                3);
+
+            AmzaBotRandomOpService amzaBotRandomOpService = new AmzaBotRandomOpService(
+                amzaBotRandomOpConfig,
+                new AmzaBotService(
+                    amzaBotConfig,
+                    amzaClientProvider,
+                    Durability.valueOf(amzaBotRandomOpConfig.getDurability()),
+                    Consistency.valueOf(amzaBotRandomOpConfig.getConsistency()),
+                    "amzabot-randomops-" + UUID.randomUUID().toString(),
+                    amzaBotRandomOpConfig.getPartitionSize()),
+                amzaKeyClearingHousePool.genAmzaKeyClearingHouse());
             amzaBotRandomOpService.start();
 
             AmzaBotCoalmineService amzaBotCoalmineService = new AmzaBotCoalmineService(
@@ -136,16 +148,16 @@ public class AmzaBotMain {
             amzaBotCoalmineService.start();
 
             String cacheToken = String.valueOf(System.currentTimeMillis());
-            AmzaBotUIServiceConfig contentUIServiceConfig = deployable.config(AmzaBotUIServiceConfig.class);
-            AmzaBotUIService contentUIService = new AmzaBotUIInitializer()
-                .initialize(cacheToken, contentUIServiceConfig);
+            AmzaBotUIServiceConfig amzabotUIServiceConfig = deployable.config(AmzaBotUIServiceConfig.class);
+            AmzaBotUIService amzabotUIService = new AmzaBotUIInitializer()
+                .initialize(cacheToken, amzabotUIServiceConfig);
 
             UiServiceConfig uiServiceConfig = deployable.config(UiServiceConfig.class);
             UiService uiService = new UiServiceInitializer().initialize(cacheToken, uiServiceConfig);
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             Resource sourceTree = new Resource(staticResourceDir)
-                .addResourcePath(contentUIServiceConfig.getPathToStaticResources())
+                .addResourcePath(amzabotUIServiceConfig.getPathToStaticResources())
                 .setDirectoryListingAllowed(false)
                 .setContext("/amzabot/static");
 
@@ -158,7 +170,7 @@ public class AmzaBotMain {
             deployable.addEndpoints(AmzaBotCoalmineEndpoints.class);
 
             deployable.addEndpoints(AmzaBotUIEndpoints.class);
-            deployable.addInjectables(AmzaBotUIService.class, contentUIService);
+            deployable.addInjectables(AmzaBotUIService.class, amzabotUIService);
 
             deployable.addEndpoints(UiEndpoints.class);
             deployable.addInjectables(UiService.class, uiService);

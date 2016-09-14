@@ -3,6 +3,8 @@ package com.jivesoftware.os.amzabot.deployable;
 import com.beust.jcommander.internal.Sets;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
@@ -50,8 +52,13 @@ public class AmzaBotServiceTest {
         AmzaBotConfig config = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
         config.setPartitionSize(1);
 
-        service = new AmzaBotServiceInitializer(
-            config, partitionClientProvider).initialize();
+        service = new AmzaBotService(
+            config,
+            partitionClientProvider,
+            Durability.fsync_async,
+            Consistency.leader_quorum,
+            "amzabot-servicetest-",
+            config.getPartitionSize());
     }
 
     @Test
@@ -74,7 +81,7 @@ public class AmzaBotServiceTest {
         for (long i = 0; i < 10; i++) {
             entries.add(new AbstractMap.SimpleEntry<>("key:" + i, "value:" + i));
         }
-        service.set(entries);
+        service.multiSet(entries);
 
         for (long i = 0; i < 10; i++) {
             String v = service.get("key:" + i);

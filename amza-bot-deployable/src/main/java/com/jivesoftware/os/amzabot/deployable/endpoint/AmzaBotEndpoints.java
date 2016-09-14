@@ -44,7 +44,7 @@ public class AmzaBotEndpoints {
     @Path("/keys")
     public Response set(Set<Entry<String, String>> entries) {
         try {
-            service.set(entries);
+            service.multiSet(entries);
             return Response.accepted().build();
         } catch (Exception e) {
             LOG.error("Failed to handle set batch: {}", new Object[] { entries }, e);

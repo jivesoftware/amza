@@ -319,6 +319,47 @@ public class AmzaBotService {
         return res;
     }
 
+    public Map<String, String> getAllWithInfiniteRetry(
+        int retryIntervalMs) throws Exception {
+        return getAllWithRetry(Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    Map<String, String> getAllWithRetry(
+        int retryCount, int retryIntervalMs) throws Exception {
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
+        }
+
+        int currentTryCount = 1;
+
+        Map<String, String> res = Maps.newConcurrentMap();
+
+        while (retriesLeft > 0) {
+            try {
+                res = getAll();
+                retriesLeft = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred getting all keys {}",
+                    e.getLocalizedMessage());
+
+                if (retriesLeft > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry getting all values in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry getting all values. Tried {} times.", currentTryCount);
+                    }
+                }
+            } finally {
+                retriesLeft--;
+                currentTryCount++;
+            }
+        }
+
+        return res;
+    }
+
     public Map<String, String> getAll() throws Exception {
         ConcurrentMap<String, String> res = Maps.newConcurrentMap();
 

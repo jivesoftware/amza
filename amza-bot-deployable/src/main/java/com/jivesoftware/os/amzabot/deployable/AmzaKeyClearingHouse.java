@@ -66,6 +66,10 @@ public class AmzaKeyClearingHouse {
         keyMap.remove(key);
     }
 
+    public String genRandomValue(int valueSizeThreshold) {
+        return RandomStringUtils.randomAlphanumeric(RANDOM.nextInt(valueSizeThreshold));
+    }
+
     public Entry<String, String> genRandomEntry(String key, int valueSizeThreshold) {
         if (honorCapacity.get() && currentCapacity.getValue() < 1) {
             return null;
@@ -74,7 +78,7 @@ public class AmzaKeyClearingHouse {
 
         return new AbstractMap.SimpleEntry<>(
             key,
-            RandomStringUtils.randomAlphanumeric(RANDOM.nextInt(valueSizeThreshold)));
+            genRandomValue(valueSizeThreshold));
     }
 
     public Entry<String, String> popRandomEntry() {

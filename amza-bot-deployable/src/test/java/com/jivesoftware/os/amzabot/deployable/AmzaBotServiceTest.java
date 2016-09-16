@@ -106,13 +106,13 @@ public class AmzaBotServiceTest {
     }
 
     @Test
-    public void testBotSetWithInfiniteRetryGet() throws Exception {
+    public void testBotSetWithRetryGet() throws Exception {
         for (long i = 0; i < 10; i++) {
-            service.setWithInfiniteRetry("key:" + i, "value:" + i, 10);
+            service.setWithRetry("key:" + i, "value:" + i, Integer.MAX_VALUE, 100);
         }
 
         for (long i = 0; i < 10; i++) {
-            String v = service.getWithInfiniteRetry("key:" + i, 10);
+            String v = service.get("key:" + i);
 
             Assert.assertNotNull(v);
             Assert.assertEquals(v, "value:" + i);
@@ -120,13 +120,13 @@ public class AmzaBotServiceTest {
     }
 
     @Test
-    public void testBotSetWithRetryGet() throws Exception {
+    public void testBotSetWithInfiniteRetryGet() throws Exception {
         for (long i = 0; i < 10; i++) {
-            service.setWithRetry("key:" + i, "value:" + i, Integer.MAX_VALUE, 10);
+            service.setWithInfiniteRetry("key:" + i, "value:" + i, 100);
         }
 
         for (long i = 0; i < 10; i++) {
-            String v = service.getWithRetry("key:" + i, Integer.MAX_VALUE, 10);
+            String v = service.get("key:" + i);
 
             Assert.assertNotNull(v);
             Assert.assertEquals(v, "value:" + i);
@@ -174,7 +174,7 @@ public class AmzaBotServiceTest {
         }
 
         for (long i = 0; i < 10; i++) {
-            service.deleteWithInfiniteRetry("key:" + i, 10);
+            service.deleteWithInfiniteRetry("key:" + i, 100);
         }
 
         for (long i = 0; i < 10; i++) {
@@ -191,7 +191,7 @@ public class AmzaBotServiceTest {
         }
 
         for (long i = 0; i < 10; i++) {
-            service.deleteWithRetry("key:" + i, Integer.MAX_VALUE, 10);
+            service.deleteWithRetry("key:" + i, Integer.MAX_VALUE, 100);
         }
 
         for (long i = 0; i < 10; i++) {
@@ -208,6 +208,42 @@ public class AmzaBotServiceTest {
         }
 
         Map<String, String> all = service.getAll();
+        Assert.assertEquals(all.size(), 10);
+
+        for (int i = 0; i < 10; i++) {
+            String value = all.remove("key:" + i);
+            Assert.assertNotNull(value);
+            Assert.assertEquals(value, "value:" + i);
+        }
+
+        Assert.assertEquals(all.size(), 0);
+    }
+
+    @Test
+    public void testBotSetGetAllWithRetry() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
+        }
+
+        Map<String, String> all = service.getAllWithRetry(Integer.MAX_VALUE, 100);
+        Assert.assertEquals(all.size(), 10);
+
+        for (int i = 0; i < 10; i++) {
+            String value = all.remove("key:" + i);
+            Assert.assertNotNull(value);
+            Assert.assertEquals(value, "value:" + i);
+        }
+
+        Assert.assertEquals(all.size(), 0);
+    }
+
+    @Test
+    public void testBotSetGetAllWithInfiniteRetry() throws Exception {
+        for (long i = 0; i < 10; i++) {
+            service.set("key:" + i, "value:" + i);
+        }
+
+        Map<String, String> all = service.getAllWithInfiniteRetry(100);
         Assert.assertEquals(all.size(), 10);
 
         for (int i = 0; i < 10; i++) {

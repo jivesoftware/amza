@@ -101,6 +101,7 @@ public class AmzaBotMain {
                 clientHealthProvider)
                 .deadAfterNErrors(10)
                 .checkDeadEveryNMillis(10_000)
+                .socketTimeoutInMillis(60_000)
                 .build(); // TODO expose to conf
 
             ObjectMapper objectMapper = new ObjectMapper();

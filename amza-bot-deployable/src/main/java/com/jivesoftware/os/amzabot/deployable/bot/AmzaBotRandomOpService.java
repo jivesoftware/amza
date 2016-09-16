@@ -27,7 +27,7 @@ public class AmzaBotRandomOpService {
 
     private Random RANDOM = new Random();
     private ExecutorService processor = Executors.newSingleThreadExecutor(
-        new ThreadFactoryBuilder().setNameFormat("amzabot-processor-%d").build());
+        new ThreadFactoryBuilder().setNameFormat("amzabot-randomops-%d").build());
     private final AtomicBoolean running = new AtomicBoolean();
 
     public AmzaBotRandomOpService(AmzaBotRandomOpConfig config,

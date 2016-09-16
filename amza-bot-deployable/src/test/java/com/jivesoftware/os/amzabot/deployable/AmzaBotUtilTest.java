@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amzabot.deployable;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -18,6 +19,19 @@ public class AmzaBotUtilTest {
 
         String eleven = "12345678901";
         Assert.assertEquals(AmzaBotUtil.truncVal(eleven), ten + "...");
+    }
+
+    @Test
+    public void verifyCompareAndSet() {
+        AtomicInteger ai = new AtomicInteger();
+        for (int i = 0; i < 10; i++) {
+            ai.set(i);
+
+            if (ai.compareAndSet(5, 10)) {
+                break;
+            }
+        }
+        Assert.assertEquals(ai.get(), 10);
     }
 
 }

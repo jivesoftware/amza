@@ -55,7 +55,7 @@ public class AmzaBotRandomOpService {
     }
 
     public int randomOp(String keySeed) throws Exception {
-        int op = RANDOM.nextInt(4);
+        int op = RANDOM.nextInt(7);
 
         if (op == 0) {
             // read
@@ -94,8 +94,51 @@ public class AmzaBotRandomOpService {
             amzaKeyClearingHouse.delete(entry.getKey());
 
             LOG.debug("Deleted {}", entry.getKey());
+        } else if (op == 2 || op == 3) {
+            // cas
+            // odds are double that of read or delete
+            Entry<String, String> entry = amzaKeyClearingHouse.getRandomEntry();
+            if (entry == null) {
+                // need at least one write
+                return op;
+            }
+
+            String oldPartitionValue = service.getWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
+
+            if (oldPartitionValue == null) {
+                LOG.error("Did not find key {}", entry.getKey());
+
+                amzaKeyClearingHouse.quarantineEntry(entry, null);
+            } else if (!entry.getValue().equals(oldPartitionValue)) {
+                LOG.error("Found key {}, but value differs. {} != {}",
+                    entry.getKey(),
+                    AmzaBotUtil.truncVal(entry.getValue()),
+                    AmzaBotUtil.truncVal(oldPartitionValue));
+
+                amzaKeyClearingHouse.quarantineEntry(entry, oldPartitionValue);
+                service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
+            } else {
+                String newValue = amzaKeyClearingHouse.genRandomValue(config.getValueSizeThreshold());
+
+                LOG.debug("Found key {}:{}. Set new value {}",
+                    entry.getKey(), AmzaBotUtil.truncVal(entry.getValue()), AmzaBotUtil.truncVal(newValue));
+
+                service.setWithInfiniteRetry(entry.getKey(), newValue, config.getRetryWaitMs());
+
+                String oldValue = amzaKeyClearingHouse.set(entry.getKey(), newValue);
+                if (oldValue == null) {
+                    LOG.error("Did not find key {}", entry.getKey());
+
+                    amzaKeyClearingHouse.quarantineEntry(
+                        new AbstractMap.SimpleEntry<>(entry.getKey(), newValue), null);
+                    service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
+                }
+
+                LOG.debug("CAS {}:{}", entry.getKey(), AmzaBotUtil.truncVal(newValue));
+            }
         } else {
-            // write, odds are double that of read or delete
+            // write
+            // odds are thrice that of read or delete
             if (amzaKeyClearingHouse.getKeyMap().size() < config.getWriteThreshold()) {
                 Entry<String, String> entry =
                     amzaKeyClearingHouse.genRandomEntry(keySeed, config.getValueSizeThreshold());
@@ -145,7 +188,7 @@ public class AmzaBotRandomOpService {
             AtomicCounter seq = new AtomicCounter(ValueType.COUNT);
 
             ConcurrentMap<Integer, AtomicCounter> opsCounter = Maps.newConcurrentMap();
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 7; i++) {
                 opsCounter.put(i, new AtomicCounter());
             }
 
@@ -162,16 +205,17 @@ public class AmzaBotRandomOpService {
                     }
 
                     if (seq.getValue() % config.getSnapshotFrequency() == 0) {
-                        LOG.info("Executed {} random operations. {} reads, {} deletes, {} writes",
+                        LOG.info("Executed {} random operations. {} reads, {} deletes, {} cas, {} writes",
                             seq.getCount(),
                             opsCounter.get(0).getValue(),
                             opsCounter.get(1).getValue(),
-                            opsCounter.get(2).getValue() + opsCounter.get(3).getValue());
+                            opsCounter.get(2).getValue() + opsCounter.get(3).getValue(),
+                            opsCounter.get(4).getValue() + opsCounter.get(5).getValue() + opsCounter.get(6).getValue());
 
-                        amzaKeyClearingHouse.verifyKeyMap(service.getAll());
+                        amzaKeyClearingHouse.verifyKeyMap(service.getAllWithInfiniteRetry(config.getRetryWaitMs()));
                     }
                 } catch (Exception e) {
-                    LOG.error("Error occurred running random operation.", e.getLocalizedMessage());
+                    LOG.error("Error occurred running random operation. {}", e.getLocalizedMessage());
                     running.set(false);
                 }
             }

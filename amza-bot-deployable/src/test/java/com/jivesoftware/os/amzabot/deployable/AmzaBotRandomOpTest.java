@@ -99,21 +99,23 @@ public class AmzaBotRandomOpTest {
     }
 
     @Test
-    public void testWRDRandomOp() throws Exception {
-        boolean write, read, delete;
-        write = read = delete = false;
+    public void testCRUDRandomOp() throws Exception {
+        boolean create, read, update, delete;
+        create = read = update = delete = false;
 
         AtomicCounter seq = new AtomicCounter(ValueType.COUNT);
 
-        while (!write || !read || !delete) {
+        while (!create || !read || !update || !delete) {
             int op = service.randomOp("test:" + String.valueOf(seq.getValue()));
 
             if (op == 0) {
                 read = true;
             } else if (op == 1) {
                 delete = true;
+            } else if (op == 2 || op == 3) {
+                update = true;
             } else {
-                write = true;
+                create = true;
             }
 
             seq.inc();

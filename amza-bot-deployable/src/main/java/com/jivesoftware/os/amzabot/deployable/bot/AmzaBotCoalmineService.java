@@ -46,7 +46,7 @@ public class AmzaBotCoalmineService {
         LOG.info("Hesitation {}ms", config.getHesitationMs());
         LOG.info("Durability {}", config.getDurability());
         LOG.info("Consistency {}", config.getConsistency());
-        LOG.info("Partition size {}", config.getPartitionSize());
+        LOG.info("Ring size {}", config.getRingSize());
 
         return new AmzaBotCoalminer(
             config,
@@ -55,7 +55,7 @@ public class AmzaBotCoalmineService {
                 Durability.valueOf(config.getDurability()),
                 Consistency.valueOf(config.getConsistency()),
                 "amzabot-coalmine-" + UUID.randomUUID().toString(),
-                config.getPartitionSize()),
+                config.getRingSize()),
             amzaKeyClearingHousePool);
     }
 

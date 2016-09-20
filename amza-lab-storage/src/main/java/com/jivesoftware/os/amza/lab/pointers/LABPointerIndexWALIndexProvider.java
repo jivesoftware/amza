@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.jive.utils.collections.bah.LRUConcurrentBAHLinkedHash;
 import com.jivesoftware.os.lab.LABEnvironment;
+import com.jivesoftware.os.lab.LABStats;
 import com.jivesoftware.os.lab.LabHeapPressure;
 import com.jivesoftware.os.lab.guts.Leaps;
 import com.jivesoftware.os.lab.guts.StripingBolBufferLocks;
@@ -44,8 +45,9 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         ExecutorService schedulerThreadPool = LABEnvironment.buildLABSchedulerThreadPool(config.getConcurrency());
         ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
         ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
+        LABStats labStats = new LABStats(); // grr
 
-        LabHeapPressure labHeapPressure = new LabHeapPressure(heapThreadPool,
+        LabHeapPressure labHeapPressure = new LabHeapPressure(labStats, heapThreadPool,
             config.getHeapPressureName(),
             config.getGlobalMaxHeapPressureInBytes(),
             config.getGlobalBlockOnHeapPressureInBytes(),
@@ -62,7 +64,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LABEnvironment(schedulerThreadPool,
+            this.environments[i] = new LABEnvironment(labStats, schedulerThreadPool,
                 compactorThreadPool,
                 destroyThreadPool,
                 "wal",

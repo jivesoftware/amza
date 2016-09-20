@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.client.http;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -49,11 +50,17 @@ public class Ring {
     public RingMemberAndHost[] orderedRing(List<RingMember> membersInOrder) {
         Map<RingMember, RingMemberAndHost> memberHosts = Maps.uniqueIndex(Arrays.asList(members),
             (input) -> input.ringMember);
-        RingMemberAndHost[] ordered = new RingMemberAndHost[membersInOrder.size()];
-        for (int i = 0; i < membersInOrder.size(); i++) {
-            ordered[i] = memberHosts.get(membersInOrder.get(i));
+        List<RingMemberAndHost> ordered = Lists.newArrayListWithCapacity(members.length);
+        for (RingMember ringMember : membersInOrder) {
+            RingMemberAndHost ringMemberAndHost = memberHosts.remove(ringMember);
+            if (ringMemberAndHost != null) {
+                ordered.add(ringMemberAndHost);
+            }
         }
-        return ordered;
+        for (RingMemberAndHost ringMemberAndHost : memberHosts.values()) {
+            ordered.add(ringMemberAndHost);
+        }
+        return ordered.toArray(new RingMemberAndHost[0]);
     }
 
     public RingMemberAndHost[] leaderlessRing() {

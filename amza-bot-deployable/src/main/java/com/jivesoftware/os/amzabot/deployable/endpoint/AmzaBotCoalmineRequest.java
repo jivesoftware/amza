@@ -12,7 +12,7 @@ class AmzaBotCoalmineRequest {
     private final int hesitationMs;
     private final String durability;
     private final String consistency;
-    private final int partitionSize;
+    private final int ringSize;
 
     @JsonCreator
     public AmzaBotCoalmineRequest(
@@ -21,13 +21,13 @@ class AmzaBotCoalmineRequest {
         @JsonProperty("hesitationMs") int hesitationMs,
         @JsonProperty("durability") String durability,
         @JsonProperty("consistency") String consistency,
-        @JsonProperty("partitionSize") int partitionSize) {
+        @JsonProperty("ringSize") int ringSize) {
         this.coalmineCapacity = coalmineCapacity;
         this.canarySizeThreshold = canarySizeThreshold;
         this.hesitationMs = hesitationMs;
         this.durability = durability;
         this.consistency = consistency;
-        this.partitionSize = partitionSize;
+        this.ringSize = ringSize;
     }
 
     static AmzaBotCoalmineConfig genConfig(AmzaBotCoalmineRequest request) {
@@ -53,8 +53,8 @@ class AmzaBotCoalmineRequest {
                 res.setConsistency(request.consistency);
             }
 
-            if (request.partitionSize > 0) {
-                res.setPartitionSize(request.partitionSize);
+            if (request.ringSize > 0) {
+                res.setRingSize(request.ringSize);
             }
         }
 

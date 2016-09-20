@@ -59,7 +59,7 @@ public class AmzaBotCoalmineTest {
         amzaBotCoalmineConfig.setHesitationMs(1);
         amzaBotCoalmineConfig.setDurability(String.valueOf(Durability.fsync_async));
         amzaBotCoalmineConfig.setConsistency(String.valueOf(Consistency.leader_quorum));
-        amzaBotCoalmineConfig.setPartitionSize(1);
+        amzaBotCoalmineConfig.setRingSize(1);
 
         service = new AmzaBotCoalmineService(
             amzaBotConfig,

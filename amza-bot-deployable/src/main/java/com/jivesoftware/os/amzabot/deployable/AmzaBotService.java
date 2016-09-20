@@ -29,7 +29,7 @@ public class AmzaBotService {
     private final Durability durability;
     private final Consistency consistency;
     private final String partitionNameName;
-    private final int partitionSize;
+    private final int ringSize;
 
     private PartitionClient partitionClient;
 
@@ -38,13 +38,13 @@ public class AmzaBotService {
         Durability durability,
         Consistency consistency,
         String partitionNameName,
-        int partitionSize) {
+        int ringSize) {
         this.config = config;
         this.partitionClientProvider = partitionClientProvider;
         this.durability = durability;
         this.consistency = consistency;
         this.partitionNameName = partitionNameName;
-        this.partitionSize = partitionSize;
+        this.ringSize = ringSize;
     }
 
     private void initialize() throws Exception {
@@ -76,7 +76,7 @@ public class AmzaBotService {
 
         partitionClient = partitionClientProvider.getPartition(
             partitionName,
-            partitionSize,
+            ringSize,
             partitionProperties);
         LOG.info("Created partition for amzabot {}", partitionName);
     }

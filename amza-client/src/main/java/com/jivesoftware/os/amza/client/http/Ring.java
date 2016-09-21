@@ -48,8 +48,10 @@ public class Ring {
     }
 
     public RingMemberAndHost[] orderedRing(List<RingMember> membersInOrder) {
-        Map<RingMember, RingMemberAndHost> memberHosts = Maps.uniqueIndex(Arrays.asList(members),
-            (input) -> input.ringMember);
+        Map<RingMember, RingMemberAndHost> memberHosts = Maps.newHashMapWithExpectedSize(members.length);
+        for (RingMemberAndHost member : members) {
+            memberHosts.put(member.ringMember, member);
+        }
         List<RingMemberAndHost> ordered = Lists.newArrayListWithCapacity(members.length);
         for (RingMember ringMember : membersInOrder) {
             RingMemberAndHost ringMemberAndHost = memberHosts.remove(ringMember);

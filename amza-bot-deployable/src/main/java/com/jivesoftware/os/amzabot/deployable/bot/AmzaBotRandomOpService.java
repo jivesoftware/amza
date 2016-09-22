@@ -38,7 +38,7 @@ public class AmzaBotRandomOpService {
         this.amzaKeyClearingHouse = amzaKeyClearingHouse;
     }
 
-    public ConcurrentMap<String, String> getKeyMap() {
+    public ConcurrentMap<String, Integer> getKeyMap() {
         return amzaKeyClearingHouse.getKeyMap();
     }
 
@@ -46,7 +46,7 @@ public class AmzaBotRandomOpService {
         amzaKeyClearingHouse.clearKeyMap();
     }
 
-    public ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
+    public ConcurrentMap<String, Entry<Integer, Integer>> getQuarantinedKeyMap() {
         return amzaKeyClearingHouse.getQuarantinedKeyMap();
     }
 
@@ -59,7 +59,7 @@ public class AmzaBotRandomOpService {
 
         if (op == 0) {
             // read
-            Entry<String, String> entry = amzaKeyClearingHouse.getRandomEntry();
+            Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
             if (entry == null) {
                 // need at least one write
                 return op;
@@ -71,20 +71,20 @@ public class AmzaBotRandomOpService {
                 LOG.error("Did not find key {}", entry.getKey());
 
                 amzaKeyClearingHouse.quarantineEntry(entry, null);
-            } else if (!entry.getValue().equals(value)) {
+            } else if (entry.getValue() != value.hashCode()) {
                 LOG.error("Found key {}, but value differs. {} != {}",
                     entry.getKey(),
-                    AmzaBotUtil.truncVal(entry.getValue()),
-                    AmzaBotUtil.truncVal(value));
+                    entry.getValue(),
+                    value.hashCode());
 
-                amzaKeyClearingHouse.quarantineEntry(entry, value);
+                amzaKeyClearingHouse.quarantineEntry(entry, value.hashCode());
                 service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
             } else {
                 LOG.debug("Found key {}", entry.getKey());
             }
         } else if (op == 1) {
             // delete
-            Entry<String, String> entry = amzaKeyClearingHouse.getRandomEntry();
+            Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
             if (entry == null) {
                 // need at least one write
                 return op;
@@ -97,7 +97,7 @@ public class AmzaBotRandomOpService {
         } else if (op == 2 || op == 3) {
             // cas
             // odds are double that of read or delete
-            Entry<String, String> entry = amzaKeyClearingHouse.getRandomEntry();
+            Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
             if (entry == null) {
                 // need at least one write
                 return op;
@@ -109,28 +109,28 @@ public class AmzaBotRandomOpService {
                 LOG.error("Did not find key {}", entry.getKey());
 
                 amzaKeyClearingHouse.quarantineEntry(entry, null);
-            } else if (!entry.getValue().equals(oldPartitionValue)) {
+            } else if (oldPartitionValue.hashCode() != entry.getValue()) {
                 LOG.error("Found key {}, but value differs. {} != {}",
                     entry.getKey(),
-                    AmzaBotUtil.truncVal(entry.getValue()),
+                    entry.getValue(),
                     AmzaBotUtil.truncVal(oldPartitionValue));
 
-                amzaKeyClearingHouse.quarantineEntry(entry, oldPartitionValue);
+                amzaKeyClearingHouse.quarantineEntry(entry, oldPartitionValue.hashCode());
                 service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
             } else {
                 String newValue = amzaKeyClearingHouse.genRandomValue(config.getValueSizeThreshold());
 
                 LOG.debug("Found key {}:{}. Set new value {}",
-                    entry.getKey(), AmzaBotUtil.truncVal(entry.getValue()), AmzaBotUtil.truncVal(newValue));
+                    entry.getKey(), entry.getValue(), newValue.hashCode());
 
                 service.setWithInfiniteRetry(entry.getKey(), newValue, config.getRetryWaitMs());
 
-                String oldValue = amzaKeyClearingHouse.set(entry.getKey(), newValue);
+                Integer oldValue = amzaKeyClearingHouse.set(entry.getKey(), newValue);
                 if (oldValue == null) {
                     LOG.error("Did not find key {}", entry.getKey());
 
                     amzaKeyClearingHouse.quarantineEntry(
-                        new AbstractMap.SimpleEntry<>(entry.getKey(), newValue), null);
+                        new AbstractMap.SimpleEntry<>(entry.getKey(), newValue.hashCode()), null);
                     service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
                 }
 
@@ -148,12 +148,12 @@ public class AmzaBotRandomOpService {
                 } else {
                     service.setWithInfiniteRetry(entry.getKey(), entry.getValue(), config.getRetryWaitMs());
 
-                    String oldValue = amzaKeyClearingHouse.set(entry.getKey(), entry.getValue());
+                    Integer oldValue = amzaKeyClearingHouse.set(entry.getKey(), entry.getValue());
                     if (oldValue != null) {
                         LOG.error("Found existing kv pair: {}:{}", entry.getKey(), oldValue);
 
                         amzaKeyClearingHouse.quarantineEntry(
-                            new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()), oldValue);
+                            new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue().hashCode()), oldValue);
                         service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
                     }
 

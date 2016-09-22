@@ -28,8 +28,8 @@ public class AmzaKeyClearingHousePool {
         amzaKeyClearingHouseSet.remove(amzaKeyClearingHouse);
     }
 
-    public ConcurrentMap<String, Entry<String, String>> getAllQuarantinedEntries() {
-        ConcurrentMap<String, Entry<String, String>> res = Maps.newConcurrentMap();
+    public ConcurrentMap<String, Entry<Integer, Integer>> getAllQuarantinedEntries() {
+        ConcurrentMap<String, Entry<Integer, Integer>> res = Maps.newConcurrentMap();
 
         for (AmzaKeyClearingHouse amzaKeyClearingHouse : amzaKeyClearingHouseSet) {
             res.putAll(amzaKeyClearingHouse.getQuarantinedKeyMap());

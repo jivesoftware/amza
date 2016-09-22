@@ -29,7 +29,7 @@ public class AmzaBotRandomOpEndpoints {
         service.getKeyMap().forEach((key, value) -> {
             sb.append(key);
             sb.append(":");
-            sb.append(AmzaBotUtil.truncVal(value));
+            sb.append(value);
             sb.append("\n");
         });
 
@@ -51,9 +51,9 @@ public class AmzaBotRandomOpEndpoints {
         service.getQuarantinedKeyMap().forEach((key, entry) -> {
             sb.append(key);
             sb.append(":");
-            sb.append(AmzaBotUtil.truncVal(entry.getKey()));
+            sb.append(entry.getKey());
             sb.append(":");
-            sb.append(AmzaBotUtil.truncVal(entry.getValue()));
+            sb.append(entry.getValue());
             sb.append("\n");
         });
 

@@ -7,8 +7,7 @@ import com.jivesoftware.os.amzabot.deployable.AmzaKeyClearingHousePool;
 import com.jivesoftware.os.mlogger.core.AtomicCounter;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Map.Entry;
 import java.util.Random;
 
@@ -67,18 +66,18 @@ public class AmzaBotCoalminer implements Runnable {
 
             LOG.info("Drain clearing house and corresponding partition entries");
             {
-                Entry<String, String> canary = amzaKeyClearingHouse.popRandomEntry();
+                Entry<String, Integer> canary = amzaKeyClearingHouse.popRandomEntry();
                 while (canary != null) {
                     String value = service.delete(canary.getKey());
 
                     if (value == null) {
                         amzaKeyClearingHouse.quarantineEntry(canary, null);
                         LOG.error("Canary not found {}", canary.getKey());
-                    } else if (!value.equals(canary.getValue())) {
-                        amzaKeyClearingHouse.quarantineEntry(canary, value);
+                    } else if (value.hashCode() != canary.getValue()) {
+                        amzaKeyClearingHouse.quarantineEntry(canary, value.hashCode());
                         LOG.error("Canary value differs {}:{}:{}",
                             canary.getKey(),
-                            AmzaBotUtil.truncVal(canary.getValue()),
+                            canary.getValue(),
                             AmzaBotUtil.truncVal(value));
                     }
 
@@ -93,7 +92,8 @@ public class AmzaBotCoalminer implements Runnable {
             LOG.info("Verify the partition is empty");
             {
                 for (Entry<String, String> canary : service.getAll().entrySet()) {
-                    amzaKeyClearingHouse.quarantineEntry(canary, "extra");
+                    amzaKeyClearingHouse.quarantineEntry(
+                        new SimpleEntry<>(canary.getKey(), canary.getValue().hashCode()), -1);
                     LOG.error("Extra canary found {}:{}",
                         canary.getKey(),
                         AmzaBotUtil.truncVal(canary.getValue()));

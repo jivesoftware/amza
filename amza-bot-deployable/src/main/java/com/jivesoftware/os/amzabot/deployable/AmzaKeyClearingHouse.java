@@ -4,7 +4,7 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.mlogger.core.AtomicCounter;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +25,7 @@ public class AmzaKeyClearingHouse {
     private final AtomicCounter currentCapacity = new AtomicCounter();
 
     // key, value
-    private ConcurrentMap<String, String> keyMap = Maps.newConcurrentMap();
+    private ConcurrentMap<String, Integer> keyMap = Maps.newConcurrentMap();
 
     AmzaKeyClearingHouse() {
     }
@@ -35,7 +35,7 @@ public class AmzaKeyClearingHouse {
         currentCapacity.set(capacity);
     }
 
-    public ConcurrentMap<String, String> getKeyMap() {
+    public ConcurrentMap<String, Integer> getKeyMap() {
         return keyMap;
     }
 
@@ -44,9 +44,9 @@ public class AmzaKeyClearingHouse {
     }
 
     // key, <expected value, actual value>
-    private ConcurrentMap<String, Entry<String, String>> quarantinedKeyMap = Maps.newConcurrentMap();
+    private ConcurrentMap<String, Entry<Integer, Integer>> quarantinedKeyMap = Maps.newConcurrentMap();
 
-    public ConcurrentMap<String, Entry<String, String>> getQuarantinedKeyMap() {
+    public ConcurrentMap<String, Entry<Integer, Integer>> getQuarantinedKeyMap() {
         return quarantinedKeyMap;
     }
 
@@ -54,11 +54,11 @@ public class AmzaKeyClearingHouse {
         quarantinedKeyMap.clear();
     }
 
-    public String set(String key, String value) {
-        return keyMap.put(key, value);
+    public Integer set(String key, String value) {
+        return keyMap.put(key, value.hashCode());
     }
 
-    public String get(String key) {
+    public Integer get(String key) {
         return keyMap.get(key);
     }
 
@@ -76,35 +76,35 @@ public class AmzaKeyClearingHouse {
         }
         currentCapacity.dec();
 
-        return new AbstractMap.SimpleEntry<>(
+        return new SimpleEntry<>(
             key,
             genRandomValue(valueSizeThreshold));
     }
 
-    public Entry<String, String> popRandomEntry() {
+    public Entry<String, Integer> popRandomEntry() {
         if (keyMap.isEmpty()) {
             return null;
         }
 
-        List<Entry<String, String>> array = new ArrayList<>(keyMap.entrySet());
-        Entry<String, String> entry = array.get(RANDOM.nextInt(keyMap.size()));
+        List<Entry<String, Integer>> array = new ArrayList<>(keyMap.entrySet());
+        Entry<String, Integer> entry = array.get(RANDOM.nextInt(keyMap.size()));
         keyMap.remove(entry.getKey());
 
         return entry;
     }
 
-    public Entry<String, String> getRandomEntry() {
+    public Entry<String, Integer> getRandomEntry() {
         if (keyMap.isEmpty()) {
             return null;
         }
 
-        List<Entry<String, String>> array = new ArrayList<>(keyMap.entrySet());
+        List<Entry<String, Integer>> array = new ArrayList<>(keyMap.entrySet());
         return array.get(RANDOM.nextInt(keyMap.size()));
     }
 
-    public void quarantineEntry(Entry<String, String> entry, String value) {
+    public void quarantineEntry(Entry<String, Integer> entry, Integer value) {
         quarantinedKeyMap.put(entry.getKey(),
-            new AbstractMap.SimpleEntry<>(entry.getValue(), value));
+            new SimpleEntry<>(entry.getValue().hashCode(), value));
         keyMap.remove(entry.getKey());
     }
 
@@ -113,35 +113,35 @@ public class AmzaKeyClearingHouse {
 
         LOG.info("Verify key map with partition snapshot of size {}.", partitionMap.size());
 
-        Map<String, String> keyMapCopy = new HashMap<>(keyMap);
+        Map<String, Integer> keyMapCopy = new HashMap<>(keyMap);
 
         for (Entry<String, String> entry : partitionMap.entrySet()) {
-            String value = keyMapCopy.remove(entry.getKey());
+            Integer value = keyMapCopy.remove(entry.getKey());
 
             if (value == null) {
-                quarantineEntry(entry, null);
+                quarantineEntry(new SimpleEntry<>(entry.getKey(), entry.getValue().hashCode()), null);
                 LOG.error("Key's value not found {}:{}:{}",
                     entry.getKey(),
                     AmzaBotUtil.truncVal(entry.getValue()),
                     null);
 
                 res = false;
-            } else if (!value.equals(entry.getValue())) {
-                quarantineEntry(entry, value);
+            } else if (entry.getValue().hashCode() != value) {
+                quarantineEntry(new SimpleEntry<>(entry.getKey(), entry.getValue().hashCode()), value);
                 LOG.error("Key's value differs {}:{}:{}",
                     entry.getKey(),
-                    AmzaBotUtil.truncVal(entry.getValue()),
-                    AmzaBotUtil.truncVal(value));
+                    entry.getValue().hashCode(),
+                    value);
 
                 res = false;
             }
         }
 
-        for (Entry<String, String> entry : keyMapCopy.entrySet()) {
-            quarantineEntry(entry, "extra");
+        for (Entry<String, Integer> entry : keyMapCopy.entrySet()) {
+            quarantineEntry(entry, -1);
             LOG.error("Extra key found in clearing house {}:{}",
                 entry.getKey(),
-                AmzaBotUtil.truncVal(entry.getValue()));
+                entry.getValue());
 
             res = false;
         }

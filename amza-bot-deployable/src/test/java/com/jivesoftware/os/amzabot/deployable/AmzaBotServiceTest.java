@@ -50,7 +50,7 @@ public class AmzaBotServiceTest {
         };
 
         AmzaBotConfig config = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
-        config.setPartitionSize(1);
+        config.setRingSize(1);
 
         service = new AmzaBotService(
             config,
@@ -58,7 +58,7 @@ public class AmzaBotServiceTest {
             Durability.fsync_async,
             Consistency.leader_quorum,
             "amzabot-servicetest-",
-            config.getPartitionSize());
+            config.getRingSize());
     }
 
     @Test

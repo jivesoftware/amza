@@ -173,7 +173,7 @@ public class AmzaBotRandomOpService {
         LOG.info("Value size threshold {}", config.getValueSizeThreshold());
         LOG.info("Durability {}", config.getDurability());
         LOG.info("Consistency {}", config.getConsistency());
-        LOG.info("Partition size {}", config.getPartitionSize());
+        LOG.info("Ring size {}", config.getRingSize());
         LOG.info("Retry wait {}ms", config.getRetryWaitMs());
         LOG.info("Snapshot frequency {}", config.getSnapshotFrequency());
 

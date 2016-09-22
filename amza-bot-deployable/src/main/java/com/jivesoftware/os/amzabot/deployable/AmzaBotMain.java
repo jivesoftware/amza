@@ -127,7 +127,7 @@ public class AmzaBotMain {
                 Durability.fsync_async,
                 Consistency.leader_quorum,
                 "amzabot-rest",
-                3);
+                amzaBotConfig.getRingSize());
 
             AmzaBotRandomOpService amzaBotRandomOpService = new AmzaBotRandomOpService(
                 amzaBotRandomOpConfig,
@@ -137,7 +137,7 @@ public class AmzaBotMain {
                     Durability.valueOf(amzaBotRandomOpConfig.getDurability()),
                     Consistency.valueOf(amzaBotRandomOpConfig.getConsistency()),
                     "amzabot-randomops-" + UUID.randomUUID().toString(),
-                    amzaBotRandomOpConfig.getPartitionSize()),
+                    amzaBotRandomOpConfig.getRingSize()),
                 amzaKeyClearingHousePool.genAmzaKeyClearingHouse());
             amzaBotRandomOpService.start();
 

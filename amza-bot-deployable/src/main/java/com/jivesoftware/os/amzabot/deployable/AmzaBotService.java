@@ -78,7 +78,7 @@ public class AmzaBotService {
             partitionName,
             ringSize,
             partitionProperties);
-        LOG.info("Created partition for amzabot {}", partitionName);
+        LOG.info("Created partition for amzabot {} of size {}", partitionName, ringSize);
     }
 
     public void set(String k, String v) throws Exception {

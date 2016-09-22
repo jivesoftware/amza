@@ -33,8 +33,8 @@ public interface AmzaBotRandomOpConfig extends Config {
     void setConsistency(String value);
 
     @IntDefault(3)
-    int getPartitionSize();
-    void setPartitionSize(int value);
+    int getRingSize();
+    void setRingSize(int value);
 
     @IntDefault(5_000)
     int getRetryWaitMs();

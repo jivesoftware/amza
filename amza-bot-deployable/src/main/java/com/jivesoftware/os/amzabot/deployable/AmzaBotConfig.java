@@ -26,7 +26,7 @@ public interface AmzaBotConfig extends Config {
     boolean getDropEverythingOnTheFloor();
 
     @IntDefault(3)
-    int getPartitionSize();
-    void setPartitionSize(int value);
+    int getRingSize();
+    void setRingSize(int value);
 
 }

@@ -38,7 +38,7 @@ class AmzaBotHealthCheck implements HealthCheck {
     }
 
     public HealthCheckResponse checkHealth() throws Exception {
-        Map<String, Entry<String, String>> quarantinedKeys = amzaKeyClearingHousePool.getAllQuarantinedEntries();
+        Map<String, Entry<Integer, Integer>> quarantinedKeys = amzaKeyClearingHousePool.getAllQuarantinedEntries();
 
         if (quarantinedKeys.isEmpty()) {
             return new HealthCheckResponseImpl(config.getName(), 1.0, "Healthy", config.getDescription(), "", System.currentTimeMillis());
@@ -69,9 +69,9 @@ class AmzaBotHealthCheck implements HealthCheck {
                         }
                         sb.append(key);
                         sb.append(":");
-                        sb.append(AmzaBotUtil.truncVal(entry.getKey()));
+                        sb.append(entry.getKey());
                         sb.append(":");
-                        sb.append(AmzaBotUtil.truncVal(entry.getValue()));
+                        sb.append(entry.getValue());
                     });
 
                     return sb.toString();

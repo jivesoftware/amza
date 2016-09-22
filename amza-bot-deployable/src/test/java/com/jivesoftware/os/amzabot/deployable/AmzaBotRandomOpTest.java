@@ -61,7 +61,7 @@ public class AmzaBotRandomOpTest {
         config.setValueSizeThreshold(20);
         config.setDurability("fsync_async");
         config.setConsistency("leader_quorum");
-        config.setPartitionSize(1);
+        config.setRingSize(1);
         config.setRetryWaitMs(100);
         config.setSnapshotFrequency(10);
 
@@ -73,7 +73,7 @@ public class AmzaBotRandomOpTest {
                 Durability.valueOf(config.getDurability()),
                 Consistency.valueOf(config.getConsistency()),
                 "amzabot-randomop-test-",
-                config.getPartitionSize()),
+                config.getRingSize()),
             amzaKeyClearingHouse);
         service.start();
     }

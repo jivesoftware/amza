@@ -7,8 +7,6 @@ import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
@@ -34,7 +32,7 @@ public class AmzaPartitionClientTest {
     public void testScan() throws Exception {
         byte[] partitionNameBytes = "abc".getBytes();
         PartitionName partitionName = new PartitionName(false, partitionNameBytes, partitionNameBytes);
-        AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(),
+        AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(3),
             new TestRingHostClientProvider());
         AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(new BAInterner(), partitionName, router, new TestRemotePartitionCaller(),
             10_000L, -1, -1);
@@ -56,7 +54,7 @@ public class AmzaPartitionClientTest {
     public void testScanKeys() throws Exception {
         byte[] partitionNameBytes = "abc".getBytes();
         PartitionName partitionName = new PartitionName(false, partitionNameBytes, partitionNameBytes);
-        AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(),
+        AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(3),
             new TestRingHostClientProvider());
         AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(new BAInterner(), partitionName, router, new TestRemotePartitionCaller(),
             10_000L, -1, -1);
@@ -76,24 +74,6 @@ public class AmzaPartitionClientTest {
 
     private class TestClient {
 
-    }
-
-    private class TestPartitionHostsProvider implements PartitionHostsProvider {
-
-        @Override
-        public void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
-            // do nothing
-        }
-
-        @Override
-        public Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws Exception {
-            return new Ring(0,
-                new RingMemberAndHost[]{
-                    new RingMemberAndHost(new RingMember("test1"), new RingHost("", "", "host1", 1234)),
-                    new RingMemberAndHost(new RingMember("test2"), new RingHost("", "", "host2", 1234)),
-                    new RingMemberAndHost(new RingMember("test3"), new RingHost("", "", "host3", 1234))
-                });
-        }
     }
 
     private class TestRingHostClientProvider implements RingHostClientProvider<TestClient, Exception> {

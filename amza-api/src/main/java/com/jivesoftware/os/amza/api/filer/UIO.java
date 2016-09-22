@@ -399,6 +399,20 @@ public class UIO {
         return bytesShort(_bytes, 0);
     }
 
+    public static byte[] unsignedShortBytes(int v, byte[] bytes, int offset) {
+        bytes[offset + 0] = (byte) (v >>> 8);
+        bytes[offset + 1] = (byte) v;
+        return bytes;
+    }
+
+    public static int bytesUnsignedShort(byte[] bytes, int offset) {
+        int v = 0;
+        v |= (bytes[offset + 0] & 0xFF);
+        v <<= 8;
+        v |= (bytes[offset + 1] & 0xFF);
+        return v;
+    }
+
     /**
      *
      * @param _bytes

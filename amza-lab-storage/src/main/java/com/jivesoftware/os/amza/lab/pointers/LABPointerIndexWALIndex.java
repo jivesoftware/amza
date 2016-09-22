@@ -82,7 +82,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
             NoOpFormatTransformerProvider.NAME,
             LABRawhide.NAME,
-            MemoryRawEntryFormat.NAME));
+            MemoryRawEntryFormat.NAME,
+            -1));
         this.prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
             config.getEntriesBetweenLeaps(),
             config.getMaxHeapPressureInBytes(),
@@ -91,7 +92,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
             config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
             NoOpFormatTransformerProvider.NAME,
             LABRawhide.NAME,
-            MemoryRawEntryFormat.NAME));
+            MemoryRawEntryFormat.NAME,
+            -1));
     }
 
     @Override
@@ -569,7 +571,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
                                 NoOpFormatTransformerProvider.NAME,
                                 LABRawhide.NAME,
-                                MemoryRawEntryFormat.NAME));
+                                MemoryRawEntryFormat.NAME,
+                                -1));
 
                             prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
@@ -579,7 +582,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
                                 NoOpFormatTransformerProvider.NAME,
                                 LABRawhide.NAME,
-                                MemoryRawEntryFormat.NAME));
+                                MemoryRawEntryFormat.NAME,
+                                -1));
 
                             currentStripe = compactionStripe;
                             LOG.debug("Committing after swap: {}", name.getPrimaryName());

@@ -52,7 +52,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             config.getGlobalMaxHeapPressureInBytes(),
             config.getGlobalBlockOnHeapPressureInBytes(),
             new AtomicLong(),
-            LabHeapPressure.FreeHeapStrategy.largestFirst);
+            LabHeapPressure.FreeHeapStrategy.mostBytesFirst);
 
         this.leapCache = LABEnvironment.buildLeapsCache((int) config.getLeapCacheMaxCapacity(), config.getConcurrency());
 

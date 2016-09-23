@@ -78,7 +78,8 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 config.getMaxMergeDebt(),
                 leapCache,
                 new StripingBolBufferLocks(1024),
-                false);
+                false,
+                true);
 
             File[] files = active.listFiles();
             if (files != null) {

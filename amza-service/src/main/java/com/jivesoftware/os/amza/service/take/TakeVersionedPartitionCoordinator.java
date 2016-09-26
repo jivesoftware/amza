@@ -15,6 +15,10 @@ import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
 import com.jivesoftware.os.amza.service.take.TakeRingCoordinator.VersionedRing;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -309,6 +313,14 @@ public class TakeVersionedPartitionCoordinator {
         keySet.removeAll(Sets.difference(keySet, retain));
     }
 
+    public static void main(String[] args) {
+        SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+        long[] u1 = idPacker.unpack(525067001861775360L);
+        long[] u2 = idPacker.unpack(525067128420704266L);
+        System.out.println("-> " + (u1[0] + JiveEpochTimestampProvider.JIVE_EPOCH));
+        System.out.println("-> " + (u2[0] + JiveEpochTimestampProvider.JIVE_EPOCH));
+    }
+
     private void updateCategory(VersionedRing versionedRing, boolean replicated, long latestTxId) throws Exception {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (replicated) {
@@ -324,7 +336,7 @@ public class TakeVersionedPartitionCoordinator {
                             if (session.tookTxId == latestTxId) {
                                 fastEnough[0]++;
                             } else {
-                                long latency = currentTimeTxId - session.offeredTxId;
+                                long latency = currentTimeTxId - session.tookTxId;
                                 if (latency < slowTakeId * candidate.getValue()) {
                                     fastEnough[0]++;
                                 }

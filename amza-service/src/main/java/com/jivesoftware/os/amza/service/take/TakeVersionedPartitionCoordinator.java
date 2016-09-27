@@ -95,9 +95,8 @@ public class TakeVersionedPartitionCoordinator {
                 if (stable.isDormant()) {
                     return Long.MAX_VALUE;
                 } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                    long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
                     return streamHighestTxId(versionedAquarium,
-                        highestTxId,
+                        txPartitionStripe,
                         takeSessionId,
                         versionedRing,
                         ringMember,
@@ -184,7 +183,7 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     private long streamHighestTxId(VersionedAquarium versionedAquarium,
-        long highestTxId,
+        TxPartitionStripe txPartitionStripe,
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
@@ -212,7 +211,9 @@ public class TakeVersionedPartitionCoordinator {
             long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
 
             Session session = sessions.computeIfAbsent(ringMember, key -> new Session());
+            long highestTxId;
             synchronized (session) {
+                highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
                 if (session.sessionId != takeSessionId) {
                     available = true;
                     session.sessionId = takeSessionId;
@@ -236,7 +237,7 @@ public class TakeVersionedPartitionCoordinator {
                     session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
                     session.steadyState = false;
                 } else {
-                    session.steadyState = true;
+                    session.steadyState = !isSufficientCategory || (session.tookTxId >= highestTxId);
                 }
             }
             if (available) {
@@ -288,11 +289,11 @@ public class TakeVersionedPartitionCoordinator {
             return;
         }
 
-        long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
         Session session = sessions.get(remoteRingMember);
         if (session != null) {
             synchronized (session) {
                 if (session.sessionId == takeSessionId) {
+                    long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
                     long tookTxId = Math.max(localTxId, session.tookTxId);
                     session.tookTxId = tookTxId;
                     session.tookFully = (tookTxId >= session.offeredTxId);
@@ -300,7 +301,13 @@ public class TakeVersionedPartitionCoordinator {
                 }
             }
         }
-        updateCategory(versionedRing, replicated, localTxId);
+        if (updateCategory(versionedRing, replicated, localTxId)) {
+            for (Session wipe : sessions.values()) {
+                synchronized (wipe) {
+                    wipe.steadyState = false;
+                }
+            }
+        }
     }
 
     //TODO call this?
@@ -313,15 +320,7 @@ public class TakeVersionedPartitionCoordinator {
         keySet.removeAll(Sets.difference(keySet, retain));
     }
 
-    public static void main(String[] args) {
-        SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
-        long[] u1 = idPacker.unpack(525067001861775360L);
-        long[] u2 = idPacker.unpack(525067128420704266L);
-        System.out.println("-> " + (u1[0] + JiveEpochTimestampProvider.JIVE_EPOCH));
-        System.out.println("-> " + (u2[0] + JiveEpochTimestampProvider.JIVE_EPOCH));
-    }
-
-    private void updateCategory(VersionedRing versionedRing, boolean replicated, long latestTxId) throws Exception {
+    private boolean updateCategory(VersionedRing versionedRing, boolean replicated, long latestTxId) throws Exception {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (replicated) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
@@ -345,9 +344,13 @@ public class TakeVersionedPartitionCoordinator {
                     }
                 }
             }
-            currentCategory.set(worstCategory);
+            int category = currentCategory.get();
+            if (category != worstCategory) {
+                currentCategory.set(worstCategory);
+                return true;
+            }
         }
-
+        return false;
     }
 
     public void expunged() {
@@ -405,20 +408,5 @@ public class TakeVersionedPartitionCoordinator {
         boolean steadyState = false;
         boolean online = false;
 
-        /*public Session(long sessionId,
-            long offeredTxId,
-            long reofferAtTimeInMillis,
-            long tookTxId,
-            boolean tookFully,
-            boolean steadyState,
-            boolean online) {
-            this.sessionId = sessionId;
-            this.offeredTxId = offeredTxId;
-            this.reofferAtTimeInMillis = reofferAtTimeInMillis;
-            this.tookTxId = tookTxId;
-            this.tookFully = tookFully;
-            this.steadyState = steadyState;
-            this.online = online;
-        }*/
     }
 }

@@ -265,15 +265,17 @@ public class AmzaBotService {
 
         String res = get(k);
 
-        partitionClient.commit(consistency,
-            null,
-            (commitKeyValueStream) -> {
-                commitKeyValueStream.commit(k.getBytes(StandardCharsets.UTF_8), null, -1, true);
-                return true;
-            },
-            config.getAdditionalSolverAfterNMillis(),
-            config.getAbandonSolutionAfterNMillis(),
-            Optional.empty());
+        if (res != null) {
+            partitionClient.commit(consistency,
+                null,
+                (commitKeyValueStream) -> {
+                    commitKeyValueStream.commit(k.getBytes(StandardCharsets.UTF_8), null, -1, true);
+                    return true;
+                },
+                config.getAdditionalSolverAfterNMillis(),
+                config.getAbandonSolutionAfterNMillis(),
+                Optional.empty());
+        }
 
         return res;
     }

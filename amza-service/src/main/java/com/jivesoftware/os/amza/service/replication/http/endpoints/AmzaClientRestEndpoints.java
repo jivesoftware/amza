@@ -361,8 +361,8 @@ public class AmzaClientRestEndpoints {
         try {
             StreamingOutput stream = os -> {
                 os.flush();
-                SnappyOutputStream sos = new SnappyOutputStream(new BufferedOutputStream(os, 8192));
-                FilerOutputStream fos = new FilerOutputStream(sos);
+                SnappyOutputStream sos = new SnappyOutputStream(os);
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(sos, 8192));
                 try {
                     client.scan(partitionName, ranges, fos, hydrateValues);
                 } catch (Exception x) {

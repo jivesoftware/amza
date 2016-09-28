@@ -211,33 +211,40 @@ public class TakeVersionedPartitionCoordinator {
             long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
 
             Session session = sessions.computeIfAbsent(ringMember, key -> new Session());
-            long highestTxId;
-            synchronized (session) {
-                highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
-                if (session.sessionId != takeSessionId) {
-                    available = true;
-                    session.sessionId = takeSessionId;
-                    session.offeredTxId = highestTxId;
-                    session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
-                    session.tookTxId = -1;
-                    session.tookFully = false;
-                    session.steadyState = false;
-                    session.online = false;
-                } else if (isSystemPartition && !session.tookFully) {
-                    available = true;
-                    session.sessionId = takeSessionId;
-                    session.offeredTxId = highestTxId;
-                    session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
-                    session.tookFully = false;
-                    session.steadyState = false;
-                } else if (takerIsNominated || isSufficientCategory && (!takerIsOnline || shouldOffer(session, highestTxId))) {
-                    available = true;
-                    session.sessionId = takeSessionId;
-                    session.offeredTxId = highestTxId;
-                    session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
-                    session.steadyState = false;
+            long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
+            while (true) {
+                synchronized (session) {
+                    if (session.sessionId != takeSessionId) {
+                        available = true;
+                        session.sessionId = takeSessionId;
+                        session.offeredTxId = highestTxId;
+                        session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                        session.tookTxId = -1;
+                        session.tookFully = false;
+                        session.steadyState = false;
+                        session.online = false;
+                    } else if (isSystemPartition && !session.tookFully) {
+                        available = true;
+                        session.sessionId = takeSessionId;
+                        session.offeredTxId = highestTxId;
+                        session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                        session.tookFully = false;
+                        session.steadyState = false;
+                    } else if (takerIsNominated || isSufficientCategory && (!takerIsOnline || shouldOffer(session, highestTxId))) {
+                        available = true;
+                        session.sessionId = takeSessionId;
+                        session.offeredTxId = highestTxId;
+                        session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                        session.steadyState = false;
+                    } else {
+                        session.steadyState = !isSufficientCategory || (session.tookTxId >= highestTxId);
+                    }
+                }
+                long checkTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
+                if (checkTxId == highestTxId) {
+                    break;
                 } else {
-                    session.steadyState = !isSufficientCategory || (session.tookTxId >= highestTxId);
+                    highestTxId = checkTxId;
                 }
             }
             if (available) {
@@ -291,13 +298,21 @@ public class TakeVersionedPartitionCoordinator {
 
         Session session = sessions.get(remoteRingMember);
         if (session != null) {
-            synchronized (session) {
-                if (session.sessionId == takeSessionId) {
-                    long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
-                    long tookTxId = Math.max(localTxId, session.tookTxId);
-                    session.tookTxId = tookTxId;
-                    session.tookFully = (tookTxId >= session.offeredTxId);
-                    session.steadyState = (localTxId >= highestTxId);
+            long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
+            while (true) {
+                synchronized (session) {
+                    if (session.sessionId == takeSessionId) {
+                        long tookTxId = Math.max(localTxId, session.tookTxId);
+                        session.tookTxId = tookTxId;
+                        session.tookFully = (tookTxId >= session.offeredTxId);
+                        session.steadyState = (localTxId >= highestTxId);
+                    }
+                }
+                long checkTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
+                if (checkTxId == highestTxId) {
+                    break;
+                } else {
+                    highestTxId = checkTxId;
                 }
             }
         }

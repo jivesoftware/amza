@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -227,7 +228,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                         CloseableStreamResponse streamResponse = input.getAnswer();
                         debugStreamResponse(streamResponse);
                         InputStream answerInputStream = streamResponse.getInputStream();
-                        InputStream inputStream = compressed ? new SnappyInputStream(answerInputStream) : answerInputStream;
+                        InputStream inputStream = compressed ? new SnappyInputStream(new BufferedInputStream(answerInputStream, 8192)) : answerInputStream;
                         return new FilerInputStream(inputStream);
                     } catch (IOException e) {
                         throw new RuntimeException(e);

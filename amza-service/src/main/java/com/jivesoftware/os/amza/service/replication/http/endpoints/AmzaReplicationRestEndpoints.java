@@ -75,8 +75,8 @@ public class AmzaReplicationRestEndpoints {
 
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
-                BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
-                final DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(bos));
+                BufferedOutputStream bos = new BufferedOutputStream(new SnappyOutputStream(os), 8192); // TODO expose to config
+                final DataOutputStream dos = new DataOutputStream(bos);
                 try {
                     amzaInstance.rowsStream(dos,
                         new RingMember(ringMemberString),

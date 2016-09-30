@@ -60,6 +60,7 @@ public class AmzaClientAquariumProviderTest {
                 orderIdProvider,
                 new Member(("member" + i).getBytes(StandardCharsets.UTF_8)),
                 count -> count > ringSize / 2,
+                member -> true,
                 128, //TODO config
                 128, //TODO config
                 1_000L, //TODO config

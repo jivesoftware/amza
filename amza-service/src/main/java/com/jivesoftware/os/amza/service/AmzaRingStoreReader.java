@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.jive.utils.collections.bah.BAHasher;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -135,6 +136,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         if (ring == null || ring.ringCacheId != currentRingCacheId || ring.nodeCacheId != currentNodeCacheId) {
             try {
                 List<RingMemberAndHost> orderedRing = Lists.newArrayList();
+                Set<Member> aquariumMembers = Sets.newHashSet();
                 int[] rootMemberIndex = { -1 };
                 byte[] from = key(ringName, null);
                 nodeIndex.streamValues(null,
@@ -165,11 +167,12 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             } else {
                                 orderedRing.add(new RingMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
                             }
+                            aquariumMembers.add(ringMember.asAquariumMember());
                         }
                         return true;
                     });
 
-                ring = new RingTopology(currentRingCacheId, currentNodeCacheId, orderedRing, rootMemberIndex[0]);
+                ring = new RingTopology(currentRingCacheId, currentNodeCacheId, orderedRing, aquariumMembers, rootMemberIndex[0]);
                 cacheIdRingTopology.entry = ring;
             } catch (Exception e) {
                 throw new RuntimeException(e);

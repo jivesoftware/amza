@@ -99,7 +99,7 @@ public class HttpRowsTaker implements RowsTaker {
             return new StreamingRowsResult(e, null, -1, -1, null);
         }
         try {
-            BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
+            BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8192); // TODO config??
             DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
             StreamingTakeConsumed consumed = streamingTakesConsumer.consume(dis, rowStream);
             amzaStats.netStats.read.addAndGet(consumed.bytes);

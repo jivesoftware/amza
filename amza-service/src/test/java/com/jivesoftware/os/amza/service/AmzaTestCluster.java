@@ -61,6 +61,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -461,7 +463,7 @@ public class AmzaTestCluster {
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
                 Future<Object> submit = asIfOverTheWire.submit(() -> {
-                    DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(bytesOut));
+                    DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new SnappyOutputStream(bytesOut), 8192));
                     amzaService.rowsStream(dos,
                         remoteRingMember,
                         localVersionedPartitionName,
@@ -473,7 +475,11 @@ public class AmzaTestCluster {
                 submit.get();
 
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner);
-                return streamingTakesConsumer.consume(new DataInputStream(new SnappyInputStream(new ByteArrayInputStream(bytesOut.toByteArray()))), rowStream);
+                // this is some sick joke
+                DataInputStream in = new DataInputStream(
+                    new SnappyInputStream(new BufferedInputStream(new ByteArrayInputStream(bytesOut.toByteArray()), 8192)));
+                return streamingTakesConsumer.consume(
+                    in, rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

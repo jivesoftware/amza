@@ -52,6 +52,7 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
@@ -487,7 +488,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId, false);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(out));
+        DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new SnappyOutputStream(out), 8192));
 
         takeCoordinator.availableRowsStream(system,
             ringStoreReader,

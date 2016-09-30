@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -122,7 +123,7 @@ public class AmzaPartitionClientTest {
             boolean hydrateValues) throws Exception {
 
             ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-            FilerOutputStream out = new FilerOutputStream(compressed ? new SnappyOutputStream(bytesOut) : bytesOut);
+            FilerOutputStream out = new FilerOutputStream(compressed ? new BufferedOutputStream(new SnappyOutputStream(bytesOut), 8192) : bytesOut);
             try {
                 scanOut(out, 10, hydrateValues);
                 out.close();

@@ -1,7 +1,9 @@
 package com.jivesoftware.os.amza.service.ring;
 
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.aquarium.Member;
 import java.util.List;
+import java.util.Set;
 
 /**
  *
@@ -11,12 +13,14 @@ public class RingTopology {
     public final long ringCacheId;
     public final long nodeCacheId;
     public final List<RingMemberAndHost> entries;
+    public final Set<Member> aquariumMembers;
     public final int rootMemberIndex;
 
-    public RingTopology(long ringCacheId, long nodeCacheId, List<RingMemberAndHost> entries, int rootMemberIndex) {
+    public RingTopology(long ringCacheId, long nodeCacheId, List<RingMemberAndHost> entries, Set<Member> aquariumMembers, int rootMemberIndex) {
         this.ringCacheId = ringCacheId;
         this.nodeCacheId = nodeCacheId;
         this.entries = entries;
+        this.aquariumMembers = aquariumMembers;
         this.rootMemberIndex = rootMemberIndex;
     }
 

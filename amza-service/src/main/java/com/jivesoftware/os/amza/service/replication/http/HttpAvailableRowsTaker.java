@@ -74,7 +74,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
                 return new ClientResponse<>(response, true);
             });
         try {
-            BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
+            BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8192); // TODO config??
             DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
             streamingTakesConsumer.consume(dis, availableStream);
         } finally {

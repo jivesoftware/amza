@@ -340,7 +340,7 @@ public class RowChangeTaker implements RowChanges {
                             amzaStats.longPollAvailables(remoteRingMember);
 
                             if (disposed.get()) {
-                                throw new InterruptedException("MemberLatestTransactionsTaker for " + remoteRingMember + " has been disposed.");
+                                throw new IllegalStateException("Receiver for " + remoteRingMember + " has been disposed.");
                             }
 
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();

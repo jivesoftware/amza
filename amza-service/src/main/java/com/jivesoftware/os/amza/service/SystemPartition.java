@@ -24,7 +24,6 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
-import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
@@ -35,6 +34,7 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
+import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -54,6 +54,7 @@ public class SystemPartition implements Partition {
     private final HighwaterStorage systemHighwaterStorage;
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
+    private final TakeCoordinator takeCoordinator;
 
     public SystemPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
@@ -63,7 +64,8 @@ public class SystemPartition implements Partition {
         SystemWALStorage systemWALStorage,
         HighwaterStorage systemHighwaterStorage,
         AckWaters ackWaters,
-        AmzaRingStoreReader ringReader) {
+        AmzaRingStoreReader ringReader,
+        TakeCoordinator takeCoordinator) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -74,6 +76,7 @@ public class SystemPartition implements Partition {
         this.systemHighwaterStorage = systemHighwaterStorage;
         this.ackWaters = ackWaters;
         this.ringReader = ringReader;
+        this.takeCoordinator = takeCoordinator;
     }
 
     public PartitionName getPartitionName() {
@@ -105,7 +108,13 @@ public class SystemPartition implements Partition {
 
         if (takeQuorum > 0) {
             LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-            int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), neighbors, takeQuorum, timeoutInMillis, -1);
+            int takenBy = ackWaters.await(versionedPartitionName,
+                commit.getLargestCommittedTxId(),
+                neighbors,
+                takeQuorum,
+                timeoutInMillis,
+                -1,
+                takeCoordinator);
             if (takenBy < takeQuorum) {
                 throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
             }

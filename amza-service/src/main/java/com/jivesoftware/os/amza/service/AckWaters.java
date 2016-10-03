@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
@@ -76,7 +77,8 @@ public class AckWaters {
         Collection<RingMember> takeRingMembers,
         int desiredTakeQuorum,
         long toMillis,
-        long leadershipToken) throws Exception {
+        long leadershipToken,
+        TakeCoordinator takeCoordinator) throws Exception {
 
         RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
         int[] passed = new int[1];
@@ -110,8 +112,19 @@ public class AckWaters {
             return quorum;
         } catch (TimeoutException e) {
             if (verboseLogTimeouts) {
-                LOG.warn("Failed to achieve quorum for partition:{} desiredTxId:{} desiredTakeQuorum:{} passed:{} leadershipToken:{} tookToTxId:{}",
-                    versionedPartitionName, desiredTxId, desiredTakeQuorum, passed[0], leadershipToken, Arrays.toString(tookToTxId));
+                StringBuilder buf = new StringBuilder();
+                takeCoordinator.streamTookLatencies(versionedPartitionName,
+                    (ringMember, lastOfferedTxId, category, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis, lastTakenMillis,
+                        lastCategoryCheckMillis) -> {
+                        buf.append('\n').append(String.format(
+                            "- member:%s lastOfferedTxId:%s category:%s tooSlowTxId:%s takeSessionId:%s online:%s " +
+                                "steadyState:%s lastOfferedMillis:%s lastTakenMillis:%s, lastCategoryCheckMillis:%s",
+                            ringMember, lastOfferedTxId, category, tooSlowTxId, takeSessionId, online,
+                            steadyState, lastOfferedMillis, lastTakenMillis, lastCategoryCheckMillis));
+                        return true;
+                    });
+                LOG.warn("Failed to achieve quorum for partition:{} desiredTxId:{} desiredTakeQuorum:{} passed:{} leadershipToken:{} tookToTxId:{} details:{}",
+                    versionedPartitionName, desiredTxId, desiredTakeQuorum, passed[0], leadershipToken, Arrays.toString(tookToTxId), buf);
             }
             amzaStats.quorumTimeouts(versionedPartitionName.getPartitionName(), 1);
             throw e;

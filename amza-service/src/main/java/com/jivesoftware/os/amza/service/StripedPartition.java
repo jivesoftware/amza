@@ -35,6 +35,7 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -56,6 +57,7 @@ public class StripedPartition implements Partition {
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
     private final AmzaSystemReady systemReady;
+    private final TakeCoordinator takeCoordinator;
 
     public StripedPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
@@ -66,7 +68,8 @@ public class StripedPartition implements Partition {
         PartitionStripeProvider partitionStripeProvider,
         AckWaters ackWaters,
         AmzaRingStoreReader ringReader,
-        AmzaSystemReady systemReady) {
+        AmzaSystemReady systemReady,
+        TakeCoordinator takeCoordinator) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -78,6 +81,7 @@ public class StripedPartition implements Partition {
         this.ackWaters = ackWaters;
         this.ringReader = ringReader;
         this.systemReady = systemReady;
+        this.takeCoordinator = takeCoordinator;
     }
 
     public PartitionName getPartitionName() {
@@ -139,7 +143,8 @@ public class StripedPartition implements Partition {
                     neighbors,
                     takeQuorum,
                     remainingTimeInMillis,
-                    leadershipToken);
+                    leadershipToken,
+                    takeCoordinator);
                 if (takenBy < takeQuorum) {
                     throw new FailedToAchieveQuorumException(
                         "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);

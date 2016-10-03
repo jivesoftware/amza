@@ -394,7 +394,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 systemWALStorage,
                 highwaterStorage,
                 ackWaters,
-                ringStoreReader);
+                ringStoreReader,
+                takeCoordinator);
         } else {
             return new StripedPartition(amzaStats,
                 orderIdProvider,
@@ -405,7 +406,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 partitionStripeProvider,
                 ackWaters,
                 ringStoreReader,
-                systemReady);
+                systemReady,
+                takeCoordinator);
         }
     }
 

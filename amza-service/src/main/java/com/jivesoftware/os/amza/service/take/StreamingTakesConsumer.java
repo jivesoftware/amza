@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.PingStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataInputStream;
@@ -25,11 +26,11 @@ public class StreamingTakesConsumer {
         this.interner = interner;
     }
 
-    public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream) throws Exception {
+    public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream, PingStream pingStream) throws Exception {
         while (dis.read() == 1) {
             int partitionNameLength = dis.readInt();
             if (partitionNameLength == 0) {
-                // this is a ping
+                pingStream.ping();
                 continue;
             }
             byte[] versionedPartitionNameBytes = new byte[partitionNameLength];

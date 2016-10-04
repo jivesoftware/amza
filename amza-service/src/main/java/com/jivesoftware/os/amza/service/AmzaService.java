@@ -700,6 +700,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         });
     }
 
+    @Override
+    public void pong(RingMember remoteRingMember, long takeSessionId) throws Exception {
+        takeCoordinator.pong(remoteRingMember, takeSessionId);
+    }
+
     public void compactAllTombstones() throws Exception {
         LOG.info("Manual compact all tombstones requests.");
 

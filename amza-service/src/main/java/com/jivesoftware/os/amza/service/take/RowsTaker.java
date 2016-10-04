@@ -60,4 +60,6 @@ public interface RowsTaker {
         long txId,
         long localLeadershipToken);
 
+    boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId);
+
 }

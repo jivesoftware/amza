@@ -122,6 +122,7 @@ public class AmzaMain {
             amzaServiceConfig.rebalanceableEveryNMillis = amzaConfig.getRebalanceableEveryNMillis();
             amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis = amzaConfig.getInterruptBlockingReadsIfLingersForNMillis();
             amzaServiceConfig.rackDistributionEnabled = amzaConfig.getRackDistributionEnabled();
+            amzaServiceConfig.hangupAvailableRowsAfterUnresponsiveMillis = amzaConfig.getHangupAvailableRowsAfterUnresponsiveMillis();
 
             AmzaStats amzaStats = new AmzaStats();
             BAInterner interner = new BAInterner();

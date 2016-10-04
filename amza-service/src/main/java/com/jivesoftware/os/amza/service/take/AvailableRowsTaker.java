@@ -29,11 +29,17 @@ public interface AvailableRowsTaker {
         boolean system,
         long takeSessionId,
         long timeoutMillis,
-        AvailableStream availableStream) throws Exception;
+        AvailableStream availableStream,
+        PingStream pingStream) throws Exception;
 
     interface AvailableStream {
 
         void available(VersionedPartitionName versionedPartitionName, long txId) throws Exception;
+    }
+
+    interface PingStream {
+
+        void ping() throws Exception;
     }
 
 }

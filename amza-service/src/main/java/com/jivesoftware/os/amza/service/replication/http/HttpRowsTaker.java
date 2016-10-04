@@ -147,4 +147,30 @@ public class HttpRowsTaker implements RowsTaker {
         }
     }
 
+    @Override
+    public boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId) {
+        try {
+            String endpoint = "/amza/pong/" + localRingMember.getMember() + "/" + takeSessionId;
+            return ringClient.call("",
+                new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
+                "rowsTaken",
+                httpClient -> {
+                    HttpResponse response = httpClient.postJson(endpoint, "{}", null);
+                    if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
+                        throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
+                    }
+                    try {
+                        return new ClientResponse<>(mapper.readValue(response.getResponseBody(), Boolean.class), true);
+                    } catch (IOException e) {
+                        throw new RuntimeException("Failed to deserialize response");
+                    }
+                });
+        } catch (Exception x) {
+            LOG.warn("Failed to deliver pong for local:{} remote:{} session:{}",
+                new Object[] { localRingMember, remoteRingHost, takeSessionId }, x);
+            return false;
+        } finally {
+            amzaStats.pongsSent.incrementAndGet();
+        }
+    }
 }

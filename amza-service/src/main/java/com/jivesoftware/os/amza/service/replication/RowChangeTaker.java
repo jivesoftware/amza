@@ -302,9 +302,12 @@ public class RowChangeTaker implements RowChanges {
         private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
         private final RingMember remoteRingMember;
         private final boolean system;
+        private final long sessionId;
 
         private final ConcurrentHashMap<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = new ConcurrentHashMap<>();
+        private final AtomicLong pings = new AtomicLong();
+        private final AtomicLong pongs = new AtomicLong();
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
         public AvailableRowsReceiver(BinaryPrimaryRowMarshaller primaryRowMarshaller,
@@ -315,6 +318,7 @@ public class RowChangeTaker implements RowChanges {
             this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
             this.remoteRingMember = remoteRingMember;
             this.system = system;
+            this.sessionId = sessionIdProvider.nextId();
         }
 
         public void dispose() {
@@ -323,11 +327,9 @@ public class RowChangeTaker implements RowChanges {
 
         @Override
         public void run() {
-            long sessionId = sessionIdProvider.nextId();
             while (!disposed.get()) {
                 try {
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
-                    //LOG.info("SUBSCRIBE: local:{} -> remote:{} ", ringHost, remoteRingHost);
                     amzaStats.longPolled(remoteRingMember);
                     availableRowsTaker.availableRowsStream(amzaRingReader.getRingMember(),
                         amzaRingReader.getRingHost(),
@@ -338,6 +340,8 @@ public class RowChangeTaker implements RowChanges {
                         longPollTimeoutMillis,
                         (remoteVersionedPartitionName, txId) -> {
                             amzaStats.longPollAvailables(remoteRingMember);
+                            // yeah yeah I hear ya
+                            pings.incrementAndGet();
 
                             if (disposed.get()) {
                                 throw new IllegalStateException("Receiver for " + remoteRingMember + " has been disposed.");
@@ -350,7 +354,7 @@ public class RowChangeTaker implements RowChanges {
                                 return;
                             }
 
-                            /*LOG.info("Rows available for {} on {}", remoteRingMember, remoteVersionedPartitionName);*/
+                            // rows to take
                             availablePartitionTxIds.compute(remoteVersionedPartitionName, (key, existing) -> {
                                 if (existing == null || sessionId > existing.sessionId || sessionId == existing.sessionId && txId > existing.txId) {
                                     return new SessionedTxId(sessionId, txId);
@@ -365,6 +369,10 @@ public class RowChangeTaker implements RowChanges {
                                     consumerLock.notifyAll();
                                 }
                             }
+                        },
+                        () -> {
+                            amzaStats.pingsReceived.incrementAndGet();
+                            pings.incrementAndGet();
                         });
                 } catch (InterruptedException ie) {
                     return;
@@ -408,7 +416,25 @@ public class RowChangeTaker implements RowChanges {
                     }
                 }
             }
+            consumePings();
             return consumed;
+        }
+
+        private void consumePings() throws Exception {
+            RingMember localRingMember = amzaRingReader.getRingMember();
+            RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
+            RowsTaker rowsTaker = system ? systemRowsTaker : stripedRowsTaker;
+
+            long ping = pings.get();
+            while (pongs.get() < ping) {
+                if (rowsTaker.pong(localRingMember, remoteRingMember, remoteRingHost, sessionId)) {
+                    pongs.set(ping);
+                    ping = pings.get();
+                } else {
+                    LOG.warn("Failed sending pong to member:{} session:{}", remoteRingMember, sessionId);
+                    break;
+                }
+            }
         }
 
         private boolean consumePartitionTxId(VersionedPartitionName remoteVersionedPartitionName, SessionedTxId sessionedTxId) throws Exception {
@@ -437,40 +463,28 @@ public class RowChangeTaker implements RowChanges {
                         return partitionStripe == null || partitionStripe.exists(localVersionedPartitionName);
                     });
                     if (!exists) {
-                        //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} state:{}",
-                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                        // no stripe storage
                         return null;
                     }
                     if (livelyEndState.getCurrentState() == State.expunged) {
-                        //LOG.info("EXPUNGED: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
-                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionState, remoteState);
+                        // ignore expunged
                         return null;
                     }
                     if (partitionName.isSystemPartition()) {
                         if (highwater[0] >= sessionedTxId.txId) {
-                            //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
-                            //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                            // nothing to take
                             return null;
                         } else {
                             return localVersionedPartitionName;
                         }
                     } else if (highwater[0] >= sessionedTxId.txId && livelyEndState.isOnline()) {
-                        //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
-                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                        // nothing to take
                         return null;
                     } else {
                         return localVersionedPartitionName;
                     }
-
                 });
 
-            /*if (currentLocalVersionedPartitionName == null) {
-                if (!partitionName.isSystemPartition()) LOG.info("PUSHBACK: local:{} remote:{} partition:{}",
-                    amzaRingReader.getRingMember(), remoteRingMember, remoteVersionedPartitionName);
-            } else {
-                if (!partitionName.isSystemPartition()) LOG.info("AVAILABLE: local:{} remote:{} partition:{}",
-                    amzaRingReader.getRingMember(), remoteRingMember, remoteVersionedPartitionName);
-            }*/
             if (currentLocalVersionedPartitionName == null) {
                 partitionStripeProvider.txPartition(partitionName,
                     (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
@@ -490,8 +504,7 @@ public class RowChangeTaker implements RowChanges {
                 return false;
             }
 
-            //LOG.info("AVAILABLE: local:{} was told remote:{} partition:{} state:{} txId:{} is available.",
-            //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteState, txId);
+            // there are rows to take
             versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (key1, rowTaker) -> {
 
                 if (rowTaker == null
@@ -516,13 +529,11 @@ public class RowChangeTaker implements RowChanges {
                                     && sessionedTxId.sessionId == latestSessionId
                                     && initialVersion == latestVersion
                                     && (changed || startVersion < version.get())) {
-                                    //LOG.info("RE-SCHEDULED: local:{} take from remote:{} partition:{} state:{} txId:{}.",
-                                    //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteState, txId);
+                                    // reschedule
                                     rowTakerThreadPool.submit(initialRowTaker);
                                     return initialRowTaker;
                                 } else {
-                                    //LOG.info("ALL DONE: local:{} take from remote:{} partition:{} state:{} txId:{}.",
-                                    //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteState, txId);
+                                    // all done
                                     return null;
                                 }
                             });
@@ -531,8 +542,7 @@ public class RowChangeTaker implements RowChanges {
                             rowTakerThreadPool.submit(_rowTaker);
                         });
 
-                    //LOG.info("SCHEDULED: local:{} take from remote:{} partition:{} state:{} txId:{}.",
-                    //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteState, txId);
+                    // schedule the taker
                     rowTakerThreadPool.submit(rowTaker);
                     return rowTaker;
                 } else {
@@ -599,7 +609,7 @@ public class RowChangeTaker implements RowChanges {
         }
 
         private void moreRowsAvailable(long txId) {
-            //LOG.info("NUDGE: local:{}  remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
+            // nudge forward the txId
             takeToTxId.updateAndGet(existing -> Math.max(existing, txId));
             version.incrementAndGet();
         }
@@ -613,8 +623,6 @@ public class RowChangeTaker implements RowChanges {
             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
 
             try {
-                //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition())
-                //LOG.info("TAKE: local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                 CommitChanges commitChanges = partitionName.isSystemPartition() ? systemPartitionCommitChanges : stripedPartitionCommitChanges;
                 commitChanges.commit(localVersionedPartitionName, (highwaterStorage, versionedAquarium, commitTo) -> {
 
@@ -625,11 +633,6 @@ public class RowChangeTaker implements RowChanges {
                         LOG.inc("take>all");
                         try {
                             long highwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-//                            if (highwaterMark == null) {
-//                                // TODO it would be nice to ask this node to recommend an initial highwater based on
-//                                // TODO all of our highwaters vs. its highwater history and its start of ingress.
-//                                highwaterMark = -1L;
-//                            }
 
                             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
                             Waterline leader = versionedAquarium.getLeader();
@@ -747,8 +750,7 @@ public class RowChangeTaker implements RowChanges {
                                 }
                             }
                             try {
-                                //LOG.info("ACK: local:{} remote:{}  txId:{} partition:{} state:{}",
-                                //    ringHost, remoteRingHost, takeRowStream.largestFlushedTxId(), remoteVersionedPartitionName);
+                                // ack rows
                                 rowsTaker.rowsTaken(amzaRingReader.getRingMember(),
                                     remoteRingMember,
                                     remoteRingHost,

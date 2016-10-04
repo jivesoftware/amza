@@ -54,7 +54,8 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         boolean system,
         long takeSessionId,
         long timeoutMillis,
-        AvailableStream availableStream) throws Exception {
+        AvailableStream availableStream,
+        PingStream pingStream) throws Exception {
 
         String endpoint = "/amza/rows/available"
             + "/" + localRingMember.getMember()
@@ -76,7 +77,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8192); // TODO config??
             DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
-            streamingTakesConsumer.consume(dis, availableStream);
+            streamingTakesConsumer.consume(dis, availableStream, pingStream);
         } finally {
             httpStreamResponse.close();
         }

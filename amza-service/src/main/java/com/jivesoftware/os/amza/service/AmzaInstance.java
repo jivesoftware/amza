@@ -52,4 +52,5 @@ public interface AmzaInstance {
         long localTxId,
         long leadershipToken) throws Exception;
 
+    void pong(RingMember remoteRingMember, long takeSessionId) throws Exception;
 }

@@ -176,4 +176,21 @@ public class AmzaReplicationRestEndpoints {
         }
     }
 
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/pong/{memberName}/{takeSessionId}")
+    public Response rowsTaken(@PathParam("memberName") String ringMemberName,
+        @PathParam("takeSessionId") long takeSessionId) {
+        try {
+            amzaInstance.pong(new RingMember(ringMemberName), takeSessionId);
+            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
+        } catch (Exception x) {
+            LOG.warn("Failed pong for member:{} session:{}", new Object[] { ringMemberName, takeSessionId }, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed pong.", x);
+        } finally {
+            amzaStats.pongsReceived.incrementAndGet();
+        }
+    }
+
 }

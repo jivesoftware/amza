@@ -145,7 +145,8 @@ public class AmzaTestCluster {
             new JiveEpochTimestampProvider());
 
         AvailableRowsTaker availableRowsTaker =
-            (localRingMember1, localTimestampedRingHost, remoteRingMember, remoteRingHost, system, takeSessionId, timeoutMillis, updatedPartitionsStream) -> {
+            (localRingMember1, localTimestampedRingHost, remoteRingMember, remoteRingHost, system, takeSessionId, timeoutMillis, updatedPartitionsStream,
+                pingStream) -> {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
@@ -214,6 +215,21 @@ public class AmzaTestCluster {
                         return true;
                     } catch (Exception x) {
                         throw new RuntimeException("Issue while applying acks.", x);
+                    }
+                }
+            }
+
+            @Override
+            public boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId) {
+                AmzaNode amzaNode = cluster.get(remoteRingMember);
+                if (amzaNode == null) {
+                    throw new IllegalStateException("Service doesn't exists for " + localRingMember);
+                } else {
+                    try {
+                        amzaNode.remoteMemberPong(localRingMember, takeSessionId);
+                        return true;
+                    } catch (Exception x) {
+                        throw new RuntimeException("Issue while replying to pings.", x);
                     }
                 }
             }
@@ -448,7 +464,11 @@ public class AmzaTestCluster {
             amzaService.rowsTaken(remoteRingMember, takeSessionId, remoteVersionedPartitionName, localTxId, leadershipToken);
         }
 
-        public StreamingTakeConsumed rowsStream(RingMember remoteRingMember,
+        void remoteMemberPong(RingMember remoteRingMember, long takeSessionId) throws Exception {
+            amzaService.pong(remoteRingMember, takeSessionId);
+        }
+
+        StreamingTakeConsumed rowsStream(RingMember remoteRingMember,
             VersionedPartitionName localVersionedPartitionName,
             long localTxId,
             long leadershipToken,

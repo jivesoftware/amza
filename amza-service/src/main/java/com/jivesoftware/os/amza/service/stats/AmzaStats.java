@@ -54,6 +54,11 @@ public class AmzaStats {
     public final AtomicLong rowsTaken = new AtomicLong();
     public final AtomicLong completedRowsTake = new AtomicLong();
 
+    public final AtomicLong pingsSent = new AtomicLong();
+    public final AtomicLong pingsReceived = new AtomicLong();
+    public final AtomicLong pongsSent = new AtomicLong();
+    public final AtomicLong pongsReceived = new AtomicLong();
+
     public final AtomicLong backPressure = new AtomicLong();
     public final AtomicLong pushBacks = new AtomicLong();
 

@@ -124,6 +124,7 @@ public class AmzaServiceInitializer {
         public long takeLongPollTimeoutMillis = 10_000;
         public long takeSystemReofferDeltaMillis = 100;
         public long takeReofferDeltaMillis = 1_000;
+        public long hangupAvailableRowsAfterUnresponsiveMillis = 60_000;
 
         public long aquariumLeaderDeadAfterMillis = 60_000;
         public long aquariumLivelinessFeedEveryMillis = 500;
@@ -335,7 +336,8 @@ public class AmzaServiceInitializer {
             config.takeCyaIntervalInMillis,
             config.takeSlowThresholdInMillis,
             config.takeSystemReofferDeltaMillis,
-            config.takeReofferDeltaMillis);
+            config.takeReofferDeltaMillis,
+            config.hangupAvailableRowsAfterUnresponsiveMillis);
         walUpdateDelegates.add((versionedPartitionName, txId) -> {
             takeCoordinator.update(ringStoreReader, Preconditions.checkNotNull(versionedPartitionName), txId);
         });

@@ -365,9 +365,9 @@ public class TakeCoordinator {
                 long elapsed = System.currentTimeMillis() - start;
 
                 int offerPower = offered.longValue() == 0 ? -1 : UIO.chunkPower(offered.longValue(), 0);
-                LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">count", 1);
-                LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">elapsed", elapsed);
-                LOG.inc("takeCoordinator>" + (system ? "system" : "partition") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
+                LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">count", 1);
+                LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">elapsed", elapsed);
+                LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
 
                 if (offered.longValue() == 0) {
                     amzaStats.pingsSent.incrementAndGet();
@@ -386,9 +386,9 @@ public class TakeCoordinator {
                     long timeRemaining = suggestedWaitInMillis[0];
                     while (initialUpdates == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
                         long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
-                        //LOG.info("PARKED:remote:{} for {}millis on local:{}",
-                        //    remoteRingMember, wait, ringReader.getRingMember());
+                        // park the stream
                         if (offered.longValue() == 0) {
+                            amzaStats.pingsSent.incrementAndGet();
                             pingCallback.call(); // Ping aka keep the socket alive
                         } else {
                             offered.setValue(0);

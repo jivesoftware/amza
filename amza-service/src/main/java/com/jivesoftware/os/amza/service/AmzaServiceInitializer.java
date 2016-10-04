@@ -125,6 +125,7 @@ public class AmzaServiceInitializer {
         public long takeSystemReofferDeltaMillis = 100;
         public long takeReofferDeltaMillis = 1_000;
         public long hangupAvailableRowsAfterUnresponsiveMillis = 60_000;
+        public long pongIntervalMillis = 10_000;
 
         public long aquariumLeaderDeadAfterMillis = 60_000;
         public long aquariumLivelinessFeedEveryMillis = 500;
@@ -459,6 +460,7 @@ public class AmzaServiceInitializer {
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),
             takeFailureListener,
             config.takeLongPollTimeoutMillis,
+            config.pongIntervalMillis,
             primaryRowMarshaller,
             highwaterRowMarshaller);
 

@@ -76,6 +76,7 @@ public class RowChangeTaker implements RowChanges {
     private final OrderIdProvider sessionIdProvider;
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long longPollTimeoutMillis;
+    private final long pongIntervalMillis;
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
     private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
 
@@ -110,6 +111,7 @@ public class RowChangeTaker implements RowChanges {
         OrderIdProvider sessionIdProvider,
         Optional<TakeFailureListener> takeFailureListener,
         long longPollTimeoutMillis,
+        long pongIntervalMillis,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller) {
 
@@ -129,6 +131,7 @@ public class RowChangeTaker implements RowChanges {
         this.sessionIdProvider = sessionIdProvider;
         this.takeFailureListener = takeFailureListener;
         this.longPollTimeoutMillis = longPollTimeoutMillis;
+        this.pongIntervalMillis = pongIntervalMillis;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
 
@@ -306,8 +309,8 @@ public class RowChangeTaker implements RowChanges {
 
         private final ConcurrentHashMap<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = new ConcurrentHashMap<>();
-        private final AtomicLong pings = new AtomicLong();
-        private final AtomicLong pongs = new AtomicLong();
+        private final AtomicLong ping = new AtomicLong();
+        private final AtomicLong pong = new AtomicLong();
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
         public AvailableRowsReceiver(BinaryPrimaryRowMarshaller primaryRowMarshaller,
@@ -341,7 +344,7 @@ public class RowChangeTaker implements RowChanges {
                         (remoteVersionedPartitionName, txId) -> {
                             amzaStats.longPollAvailables(remoteRingMember);
                             // yeah yeah I hear ya
-                            pings.incrementAndGet();
+                            ping.set(System.currentTimeMillis());
 
                             if (disposed.get()) {
                                 throw new IllegalStateException("Receiver for " + remoteRingMember + " has been disposed.");
@@ -372,7 +375,7 @@ public class RowChangeTaker implements RowChanges {
                         },
                         () -> {
                             amzaStats.pingsReceived.incrementAndGet();
-                            pings.incrementAndGet();
+                            ping.set(System.currentTimeMillis());
                         });
                 } catch (InterruptedException ie) {
                     return;
@@ -425,14 +428,11 @@ public class RowChangeTaker implements RowChanges {
             RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
             RowsTaker rowsTaker = system ? systemRowsTaker : stripedRowsTaker;
 
-            long ping = pings.get();
-            while (pongs.get() < ping) {
+            if (pong.get() < ping.get() - pongIntervalMillis) {
                 if (rowsTaker.pong(localRingMember, remoteRingMember, remoteRingHost, sessionId)) {
-                    pongs.set(ping);
-                    ping = pings.get();
+                    pong.set(System.currentTimeMillis());
                 } else {
                     LOG.warn("Failed sending pong to member:{} session:{}", remoteRingMember, sessionId);
-                    break;
                 }
             }
         }

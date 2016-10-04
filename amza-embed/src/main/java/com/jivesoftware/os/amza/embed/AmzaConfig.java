@@ -17,6 +17,9 @@ public interface AmzaConfig extends Config {
     @LongDefault(60_000L)
     long getHangupAvailableRowsAfterUnresponsiveMillis();
 
+    @LongDefault(10_000L)
+    long getPongIntervalMillis();
+
     @IntDefault(8)
     int getNumberOfTakerThreads();
 

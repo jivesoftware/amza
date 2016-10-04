@@ -123,6 +123,7 @@ public class AmzaMain {
             amzaServiceConfig.interruptBlockingReadsIfLingersForNMillis = amzaConfig.getInterruptBlockingReadsIfLingersForNMillis();
             amzaServiceConfig.rackDistributionEnabled = amzaConfig.getRackDistributionEnabled();
             amzaServiceConfig.hangupAvailableRowsAfterUnresponsiveMillis = amzaConfig.getHangupAvailableRowsAfterUnresponsiveMillis();
+            amzaServiceConfig.pongIntervalMillis = amzaConfig.getPongIntervalMillis();
 
             AmzaStats amzaStats = new AmzaStats();
             BAInterner interner = new BAInterner();

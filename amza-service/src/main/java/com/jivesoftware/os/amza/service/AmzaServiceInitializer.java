@@ -99,6 +99,8 @@ public class AmzaServiceInitializer {
 
         public int numberOfTakerThreads = 8;
 
+        public int systemReadyInitConcurrencyLevel = 8;
+
         public int corruptionParanoiaFactor = 10;
         public int updatesBetweenLeaps = 4_096;
         public int maxLeaps = 64;
@@ -212,7 +214,11 @@ public class AmzaServiceInitializer {
 
         int numProc = Runtime.getRuntime().availableProcessors();
 
-        PartitionIndex partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, walStorageProvider, numProc);
+        PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
+            orderIdProvider,
+            walStorageProvider,
+            numProc,
+            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("partitionLoader-%d").build()));
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -414,35 +420,42 @@ public class AmzaServiceInitializer {
         amzaSystemPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
 
         AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionCreator, sickPartitions, sickThreads);
-        systemReady.onReady(() -> {
-            LOG.info("Loading highest txIds after system ready...");
-            int count = 0;
-            for (PartitionName partitionName : partitionCreator.getMemberPartitions(ringStoreReader)) {
-                count++;
-                try {
-                    partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
-                        return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                            VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                            PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
-                            if (partitionStore != null) {
-                                takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
-                            } else {
-                                LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}", versionedPartitionName);
-                            }
-                            return null;
-                        });
-                    });
-                } catch (PartitionIsDisposedException x) {
-                    LOG.info("Skipped a partition because its disposed: {}", partitionName);
-                } catch (PropertiesNotPresentException x) {
-                    LOG.warn("Skipped system ready init for a partition because its properties were missing: {}", partitionName);
-                } catch (Exception x) {
-                    LOG.error("Failed system ready init for a partition, please fix: {}", new Object[] { partitionName }, x);
+        int systemReadyInitConcurrencyLevel = config.systemReadyInitConcurrencyLevel;
+        for (int i = 0; i < systemReadyInitConcurrencyLevel; i++) {
+            int index = i;
+            systemReady.onReady(() -> {
+                LOG.info("Loading highest txIds for index:{} after system ready...", index);
+                int count = 0;
+                for (PartitionName partitionName : partitionCreator.getMemberPartitions(ringStoreReader)) {
+                    if (index == Math.abs(partitionName.hashCode() % systemReadyInitConcurrencyLevel)) {
+                        count++;
+                        try {
+                            partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
+                                return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                                    VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                                    PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+                                    if (partitionStore != null) {
+                                        takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
+                                    } else {
+                                        LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}",
+                                            versionedPartitionName);
+                                    }
+                                    return null;
+                                });
+                            });
+                        } catch (PartitionIsDisposedException x) {
+                            LOG.info("Skipped a partition because its disposed: {}", partitionName);
+                        } catch (PropertiesNotPresentException x) {
+                            LOG.warn("Skipped system ready init for a partition because its properties were missing: {}", partitionName);
+                        } catch (Exception x) {
+                            LOG.error("Failed system ready init for a partition, please fix: {}", new Object[] { partitionName }, x);
+                        }
+                    }
                 }
-            }
-            LOG.info("Finished loading {} highest txIds after system ready!", count);
-            return null;
-        });
+                LOG.info("Finished loading {} highest txIds for index:{} after system ready!", count, index);
+                return null;
+            });
+        }
 
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             numberOfStripes,

@@ -54,6 +54,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.testng.Assert;
@@ -141,7 +142,8 @@ public class DeltaStripeWALStorageNGTest {
         partitionIndex = new PartitionIndex(amzaStats,
             orderIdProvider,
             indexedWALStorageProvider,
-            4);
+            4,
+            Executors.newCachedThreadPool());
 
         currentVersionProvider = new CurrentVersionProvider() {
             @Override
@@ -349,7 +351,7 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.hackTruncation(4);
 
-        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, 4);
+        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, 4, Executors.newCachedThreadPool());
         partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, rowChanges, interner);
         partitionCreator.init((partitionName) -> 0);
         deltaStripeWALStorage = loadDeltaStripe();
@@ -539,7 +541,7 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.merge(partitionIndex, partitionCreator, currentVersionProvider, true);
 
-        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, 4);
+        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, 4, Executors.newCachedThreadPool());
         partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, rowChanges, interner);
         partitionCreator.init((partitionName) -> 0);
         deltaStripeWALStorage = loadDeltaStripe();

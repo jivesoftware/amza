@@ -113,6 +113,7 @@ public class AmzaMain {
             amzaServiceConfig.workingDirectories = workingDirs;
             amzaServiceConfig.asyncFsyncIntervalMillis = amzaConfig.getAsyncFsyncIntervalMillis();
             amzaServiceConfig.useMemMap = amzaConfig.getUseMemMap();
+            amzaServiceConfig.systemReadyInitConcurrencyLevel = amzaConfig.getSystemReadyInitConcurrencyLevel();
 
             amzaServiceConfig.ackWatersVerboseLogTimeouts = amzaConfig.getAckWatersVerboseLogTimeouts();
             amzaServiceConfig.takeSlowThresholdInMillis = amzaConfig.getTakeSlowThresholdInMillis();

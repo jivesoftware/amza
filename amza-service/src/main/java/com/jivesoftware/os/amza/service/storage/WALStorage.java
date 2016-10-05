@@ -455,11 +455,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                 deltaWALId, prevDeltaWALId, trailingDeltaWALId[0], versionedPartitionName);
 
                             // Since we added the ability to rebalance this IllegalStateException needs to be reworked so that it works.
-//                            throw new IllegalStateException("Delta mismatch, intervention is required. "
-//                                + "delta:" + deltaWALId
-//                                + " prev:" + prevDeltaWALId
-//                                + ", encountered tail:" + trailingDeltaWALId[0]
-//                                + " for " + versionedPartitionName);
+                            /*throw new IllegalStateException("Delta mismatch, intervention is required. "
+                                + "delta:" + deltaWALId
+                                + " prev:" + prevDeltaWALId
+                                + ", encountered tail:" + trailingDeltaWALId[0]
+                                + " for " + versionedPartitionName);*/
                         }
                     }
                     return true;

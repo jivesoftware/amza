@@ -23,6 +23,9 @@ public interface AmzaConfig extends Config {
     @IntDefault(8)
     int getNumberOfTakerThreads();
 
+    @IntDefault(8)
+    int getSystemReadyInitConcurrencyLevel();
+
     @LongDefault(1_000L)
     long getAsyncFsyncIntervalMillis();
 

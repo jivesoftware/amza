@@ -28,6 +28,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -80,7 +81,8 @@ public class AmzaStateStorageNGTest {
         PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
             orderIdProvider,
             indexedWALStorageProvider,
-            4);
+            4,
+            Executors.newCachedThreadPool());
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,

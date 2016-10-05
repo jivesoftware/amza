@@ -35,7 +35,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
     public LABPointerIndexWALIndexProvider(LABPointerIndexConfig config,
         String name,
         int numberOfStripes,
-        File[] baseDirs) throws IOException {
+        File[] baseDirs) throws Exception {
 
         this.config = config;
         this.name = name;
@@ -69,6 +69,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 compactorThreadPool,
                 destroyThreadPool,
                 "wal",
+                "meta",
                 config.getMaxEntrySizeInBytes(),
                 config.getMaxEntriesPerWAL(),
                 config.getMaxEntrySizeInBytes(),

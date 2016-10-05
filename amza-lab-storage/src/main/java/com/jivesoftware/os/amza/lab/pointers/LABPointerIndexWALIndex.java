@@ -397,7 +397,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     public boolean exists() throws Exception {
         lock.acquire();
         try {
-            return environments[currentStripe].exists(name.getPrimaryName()) && environments[currentStripe].exists(name.getPrefixName());
+            return environments[currentStripe].exists(name.getPrimaryName());
         } finally {
             lock.release();
         }

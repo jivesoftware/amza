@@ -32,6 +32,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class PartitionStore implements RangeScannable {
@@ -66,36 +68,43 @@ public class PartitionStore implements RangeScannable {
         return walStorage;
     }
 
-    public void load(File baseKey, long deltaWALId, long prevDeltaWALId, int stripe) throws Exception {
-        long loaded = loadedAtDeltaWALId.get();
-        if (deltaWALId > -1) {
-            if (loaded == -1) {
-                throw new IllegalStateException("Partition was loaded without a delta before validation. attempted:" + deltaWALId);
-            } else if (deltaWALId < loaded) {
-                throw new IllegalStateException("Partition was loaded out of order. attempted:" + deltaWALId + " loaded:" + loaded);
-            } else if (loaded != Integer.MIN_VALUE && deltaWALId >= loaded) {
-                return;
+    public void load(File baseKey, long deltaWALId, long prevDeltaWALId, int stripe, ExecutorService executorService) throws Exception {
+        // load as a future so that initialization cannot be interrupted
+        Future<Boolean> future = executorService.submit(() -> {
+            synchronized (loadedAtDeltaWALId) {
+                long loaded = loadedAtDeltaWALId.get();
+                if (deltaWALId > -1) {
+                    if (loaded == -1) {
+                        throw new IllegalStateException("Partition was loaded without a delta before validation. attempted:" + deltaWALId);
+                    } else if (deltaWALId < loaded) {
+                        throw new IllegalStateException("Partition was loaded out of order. attempted:" + deltaWALId + " loaded:" + loaded);
+                    } else if (loaded != Integer.MIN_VALUE && deltaWALId >= loaded) {
+                        return true;
+                    }
+                } else if (loaded != Integer.MIN_VALUE) {
+                    return true;
+                }
+                boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
+                boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
+                walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, properties.maxValueSizeInIndex, stripe);
+                if (properties.forceCompactionOnStartup) {
+                    compactTombstone(amzaStats,
+                        true,
+                        baseKey,
+                        baseKey,
+                        stripe,
+                        -1,
+                        (transitionToCompacted) -> {
+                            return transitionToCompacted.tx(() -> {
+                                return null;
+                            });
+                        });
+                }
+                loadedAtDeltaWALId.set(deltaWALId);
+                return true;
             }
-        } else if (loaded != Integer.MIN_VALUE) {
-            return;
-        }
-        boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
-        boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
-        walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, properties.maxValueSizeInIndex, stripe);
-        if (properties.forceCompactionOnStartup) {
-            compactTombstone(amzaStats,
-                true,
-                baseKey,
-                baseKey,
-                stripe,
-                -1,
-                (transitionToCompacted) -> {
-                    return transitionToCompacted.tx(() -> {
-                        return null;
-                    });
-                });
-        }
-        loadedAtDeltaWALId.set(deltaWALId);
+        });
+        future.get();
     }
 
     public boolean isSick() {

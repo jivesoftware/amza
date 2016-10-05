@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -129,18 +128,21 @@ public class TakeCoordinator {
                         LOG.error("Failed while ensuring alignment.", x);
                     }
                     try {
-                        long interruptOlderThanTimestamp = System.currentTimeMillis() - hangupAvailableRowsAfterUnresponsiveMillis;
                         for (Entry<SessionKey, Session> entry : takeSessions.entrySet()) {
                             SessionKey sessionKey = entry.getKey();
                             Session session = entry.getValue();
-                            long lastPongTime = session.lastPongTime.get();
-                            if (lastPongTime < interruptOlderThanTimestamp && session.startTime < interruptOlderThanTimestamp) {
-                                synchronized (session.sessionThread) {
-                                    Thread thread = session.sessionThread.get();
-                                    if (thread != null) {
-                                        LOG.warn("Interrupting available rows for member:{} session:{}, last response was at {}",
-                                            sessionKey.ringMember, sessionKey.sessionId, lastPongTime);
-                                        thread.interrupt();
+                            long lastPingTime = session.lastPingTime.get();
+                            if (lastPingTime > 0) {
+                                long interruptOlderThanTimestamp = lastPingTime - hangupAvailableRowsAfterUnresponsiveMillis;
+                                long lastPongTime = session.lastPongTime.get();
+                                if (lastPongTime < interruptOlderThanTimestamp && session.startTime < interruptOlderThanTimestamp) {
+                                    synchronized (session.sessionThread) {
+                                        Thread thread = session.sessionThread.get();
+                                        if (thread != null) {
+                                            LOG.warn("Interrupting available rows for member:{} session:{}, last response was at {}",
+                                                sessionKey.ringMember, sessionKey.sessionId, lastPongTime);
+                                            thread.interrupt();
+                                        }
                                     }
                                 }
                             }
@@ -311,9 +313,9 @@ public class TakeCoordinator {
             session.sessionThread.set(Thread.currentThread());
         }
         try {
-            MutableLong offered = new MutableLong();
+            AtomicLong offered = new AtomicLong();
             AvailableStream watchAvailableStream = (versionedPartitionName, txId) -> {
-                offered.add(1);
+                offered.incrementAndGet();
                 availableStream.available(versionedPartitionName, txId);
                 amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
             };
@@ -369,13 +371,18 @@ public class TakeCoordinator {
                 LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">elapsed", elapsed);
                 LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
 
-                if (offered.longValue() == 0) {
-                    amzaStats.pingsSent.incrementAndGet();
-                    pingCallback.call(); // Ping aka keep the socket alive
-                } else {
-                    offered.setValue(0);
-                    deliverCallback.call();
+                while (true) {
+                    long currentOffer = offered.get();
+                    if (currentOffer == 0) {
+                        amzaStats.pingsSent.incrementAndGet();
+                        pingCallback.call(); // Ping aka keep the socket alive
+                        break;
+                    } else if (offered.compareAndSet(currentOffer, 0)) {
+                        deliverCallback.call();
+                        break;
+                    }
                 }
+                session.lastPingTime.set(System.currentTimeMillis());
 
                 if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
                     suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
@@ -386,15 +393,20 @@ public class TakeCoordinator {
                     long timeRemaining = suggestedWaitInMillis[0];
                     while (initialUpdates == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
                         long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
-                        // park the stream
-                        if (offered.longValue() == 0) {
-                            amzaStats.pingsSent.incrementAndGet();
-                            pingCallback.call(); // Ping aka keep the socket alive
-                        } else {
-                            offered.setValue(0);
-                            deliverCallback.call();
+                        while (true) {
+                            long currentOffer = offered.get();
+                            if (currentOffer == 0) {
+                                amzaStats.pingsSent.incrementAndGet();
+                                pingCallback.call(); // Ping aka keep the socket alive
+                                break;
+                            } else if (offered.compareAndSet(currentOffer, 0)) {
+                                deliverCallback.call();
+                                break;
+                            }
                         }
+                        session.lastPingTime.set(System.currentTimeMillis());
                         if (timeToWait > 0) {
+                            // park the stream
                             lock.wait(timeToWait);
                             timeRemaining -= heartbeatIntervalMillis;
                         } else {
@@ -485,6 +497,7 @@ public class TakeCoordinator {
 
         private final long startTime;
 
+        private final AtomicLong lastPingTime = new AtomicLong(-1);
         private final AtomicLong lastPongTime = new AtomicLong(-1);
         private final AtomicReference<Thread> sessionThread = new AtomicReference<>();
 

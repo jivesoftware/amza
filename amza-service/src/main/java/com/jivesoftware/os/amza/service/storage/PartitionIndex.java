@@ -15,6 +15,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
 
 /**
  * @author jonathan.colt
@@ -31,16 +32,26 @@ public class PartitionIndex {
     private final TimestampedOrderIdProvider orderIdProvider;
     private final IndexedWALStorageProvider walStorageProvider;
     private final int concurrency;
+    private final ExecutorService partitionLoadExecutorService;
 
     public PartitionIndex(AmzaStats amzaStats,
         TimestampedOrderIdProvider orderIdProvider,
         IndexedWALStorageProvider walStorageProvider,
-        int concurrency) {
+        int concurrency,
+        ExecutorService partitionLoadExecutorService) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.walStorageProvider = walStorageProvider;
         this.concurrency = concurrency;
+        this.partitionLoadExecutorService = partitionLoadExecutorService;
+    }
+
+    public void start() {
+    }
+
+    public void stop() {
+        partitionLoadExecutorService.shutdownNow();
     }
 
     public PartitionStore getIfPresent(VersionedPartitionName versionedPartitionName) {
@@ -74,7 +85,7 @@ public class PartitionIndex {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
                 File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
-                partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe);
+                partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe, partitionLoadExecutorService);
                 return partitionStore;
             }
         }
@@ -127,7 +138,7 @@ public class PartitionIndex {
             File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
             WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties);
             partitionStore = new PartitionStore(amzaStats, orderIdProvider, versionedPartitionName, walStorage, properties);
-            partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe);
+            partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe, partitionLoadExecutorService);
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);

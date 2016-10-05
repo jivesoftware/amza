@@ -374,6 +374,10 @@ public class BinaryRowReader implements WALReader {
         }
     }
 
+    public long length() throws IOException {
+        return parent.length();
+    }
+
     void close() throws IOException {
         parent.close();
     }

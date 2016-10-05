@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -19,6 +20,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -54,7 +56,7 @@ public class AmzaSystemReady {
             }
         }
 
-        ExecutorService readyExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService readyExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("ready-%d").build());
         readyExecutor.submit(() -> {
             try {
                 while (!tookFully.get()) {
@@ -112,14 +114,21 @@ public class AmzaSystemReady {
                 }
                 systemTookFully.clear();
 
+                ExecutorService onReadyExecutor = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("onReadyCallback-%d").build());
                 try {
+                    List<Future<?>> futures = Lists.newArrayList();
                     for (Callable<Void> callback : onReadyCallbacks) {
-                        callback.call();
+                        futures.add(onReadyExecutor.submit(callback));
+                    }
+                    for (Future<?> future : futures) {
+                        future.get();
                     }
                     onReadyCallbacks.clear();
                 } catch (Exception e) {
                     LOG.error("Failed onReady callback", e);
                     ready.set(false);
+                } finally {
+                    onReadyExecutor.shutdownNow();
                 }
             }
         }

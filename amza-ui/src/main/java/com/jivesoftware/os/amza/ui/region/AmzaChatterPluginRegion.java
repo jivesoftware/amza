@@ -297,9 +297,10 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                         } else {
 
                             unhealthy.compareAndSet(false, true);
-                            cells[index] = new Element[]{
+                            //TODO what? index is null
+                            /*cells[index] = new Element[] {
                                 new Element("id", "id", null, ringMember.getMember(), "danger")
-                            };
+                            };*/
                         }
                         return true;
                     });

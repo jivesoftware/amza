@@ -6,6 +6,8 @@ import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.RowIO;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,6 +19,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author jonathan.colt
  */
 public class BinaryRowIO implements RowIO {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final File key;
     private final String name;
@@ -58,22 +62,27 @@ public class BinaryRowIO implements RowIO {
     public void initLeaps(long fpOfLastLeap, long updates) throws Exception {
         Preconditions.checkState(updatesBetweenLeaps > 0);
         if (fpOfLastLeap > -1) {
-            rowReader.read(
-                fpStream -> fpStream.stream(fpOfLastLeap),
-                (rowFP, rowTxId, rowType, row) -> {
-                    if (rowType == RowType.system) {
-                        ByteBuffer buf = ByteBuffer.wrap(row);
-                        byte[] keyBytes = new byte[8];
-                        buf.get(keyBytes);
-                        long key = UIO.bytesLong(keyBytes);
-                        if (key == RowType.LEAP_KEY) {
-                            buf.rewind();
-                            latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
-                            return false;
+            try {
+                rowReader.read(
+                    fpStream -> fpStream.stream(fpOfLastLeap),
+                    (rowFP, rowTxId, rowType, row) -> {
+                        if (rowType == RowType.system) {
+                            ByteBuffer buf = ByteBuffer.wrap(row);
+                            byte[] keyBytes = new byte[8];
+                            buf.get(keyBytes);
+                            long key = UIO.bytesLong(keyBytes);
+                            if (key == RowType.LEAP_KEY) {
+                                buf.rewind();
+                                latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
+                                return false;
+                            }
                         }
-                    }
-                    throw new IllegalStateException("Invalid leapFp:" + fpOfLastLeap);
-                });
+                        throw new IllegalStateException("Invalid leapFp:" + fpOfLastLeap);
+                    });
+            } catch (Throwable t) {
+                LOG.error("Failed to initialize leaps at fp:{} length:{}", fpOfLastLeap, rowReader.length());
+                throw t;
+            }
         }
 
         initializedLeaps.set(true);

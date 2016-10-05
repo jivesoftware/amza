@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +56,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     private ValueIndex primaryDb;
     private ValueIndex prefixDb;
 
+    private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Semaphore lock = new Semaphore(numPermits, true);
     private final AtomicLong count = new AtomicLong(-1);
     private final AtomicInteger commits = new AtomicInteger(0);
@@ -74,26 +76,37 @@ public class LABPointerIndexWALIndex implements WALIndex {
         this.config = config;
         this.environments = environments;
         this.currentStripe = currentStripe;
-        this.primaryDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrimaryName(),
-            config.getEntriesBetweenLeaps(),
-            config.getMaxHeapPressureInBytes(),
-            config.getSplitWhenKeysTotalExceedsNBytes(),
-            config.getSplitWhenValuesTotalExceedsNBytes(),
-            config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-            NoOpFormatTransformerProvider.NAME,
-            LABRawhide.NAME,
-            MemoryRawEntryFormat.NAME,
-            -1));
-        this.prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
-            config.getEntriesBetweenLeaps(),
-            config.getMaxHeapPressureInBytes(),
-            config.getSplitWhenKeysTotalExceedsNBytes(),
-            config.getSplitWhenValuesTotalExceedsNBytes(),
-            config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-            NoOpFormatTransformerProvider.NAME,
-            LABRawhide.NAME,
-            MemoryRawEntryFormat.NAME,
-            -1));
+    }
+
+    private void init() throws Exception {
+        if (primaryDb != null) {
+            return;
+        }
+        synchronized (closed) {
+            if (primaryDb != null || closed.get()) {
+                return;
+            }
+            primaryDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrimaryName(),
+                config.getEntriesBetweenLeaps(),
+                config.getMaxHeapPressureInBytes(),
+                config.getSplitWhenKeysTotalExceedsNBytes(),
+                config.getSplitWhenValuesTotalExceedsNBytes(),
+                config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+                NoOpFormatTransformerProvider.NAME,
+                LABRawhide.NAME,
+                MemoryRawEntryFormat.NAME,
+                -1));
+            prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
+                config.getEntriesBetweenLeaps(),
+                config.getMaxHeapPressureInBytes(),
+                config.getSplitWhenKeysTotalExceedsNBytes(),
+                config.getSplitWhenValuesTotalExceedsNBytes(),
+                config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+                NoOpFormatTransformerProvider.NAME,
+                LABRawhide.NAME,
+                MemoryRawEntryFormat.NAME,
+                -1));
+        }
     }
 
     @Override
@@ -131,6 +144,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
+        init();
         try {
             lock.acquire();
         } catch (InterruptedException ie) {
@@ -294,25 +308,31 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception {
+        init();
         try {
             lock.acquire();
         } catch (InterruptedException ie) {
             throw new RuntimeException(ie);
         }
         try {
-            byte[] pk = WALKey.compose(prefix, key);
-            return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
-                (index, rawKey, timestamp, tombstoned, version, payload) -> {
-                    return fromPayload(prefix, key, timestamp, tombstoned, version, payload == null ? null : payload.copy(), stream, true);
-                },
-                true);
+            return getPointerInternal(prefix, key, stream);
         } finally {
             lock.release();
         }
     }
 
+    private boolean getPointerInternal(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception {
+        byte[] pk = WALKey.compose(prefix, key);
+        return primaryDb.get((keyStream) -> keyStream.key(0, pk, 0, pk.length),
+            (index, rawKey, timestamp, tombstoned, version, payload) -> {
+                return fromPayload(prefix, key, timestamp, tombstoned, version, payload == null ? null : payload.copy(), stream, true);
+            },
+            true);
+    }
+
     @Override
     public boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception {
+        init();
         lock.acquire();
         try {
             return keys.consume((key) -> {
@@ -330,6 +350,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
+        init();
         lock.acquire();
         try {
             return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
@@ -358,9 +379,10 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
+        init();
         lock.acquire();
         try {
-            return keys.consume((key) -> getPointer(prefix, key,
+            return keys.consume((key) -> getPointerInternal(prefix, key,
                 (_prefix, _key, timestamp, tombstoned, version, fp, indexValue, value) -> {
                     boolean contained = fp != -1 && !tombstoned;
                     stream.stream(prefix, key, contained, timestamp, version);
@@ -372,10 +394,10 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean isEmpty() throws Exception {
+    public boolean exists() throws Exception {
         lock.acquire();
         try {
-            return primaryDb.isEmpty();
+            return environments[currentStripe].exists(name.getPrimaryName()) && environments[currentStripe].exists(name.getPrefixName());
         } finally {
             lock.release();
         }
@@ -388,7 +410,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             long[] delta = new long[1];
             boolean completed = keyPointers.consume(
                 (prefix, key, requestTimestamp, requestTombstoned, requestVersion, requestFp, requestIndexValue, requestValue)
-                -> getPointer(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
+                    -> getPointerInternal(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
                     // indexFp, indexTombstoned, requestTombstoned, delta
                     // -1       false            false              1
                     // -1       false            true               0
@@ -417,8 +439,12 @@ public class LABPointerIndexWALIndex implements WALIndex {
         lock.acquire();
         try {
             // TODO is this the right thing to do?
-            primaryDb.commit(fsync, true);
-            prefixDb.commit(fsync, true);
+            if (primaryDb != null) {
+                primaryDb.commit(fsync, true);
+            }
+            if (prefixDb != null) {
+                prefixDb.commit(fsync, true);
+            }
 
             synchronized (commits) {
                 count.set(-1);
@@ -433,10 +459,17 @@ public class LABPointerIndexWALIndex implements WALIndex {
     public void close() throws Exception {
         lock.acquire(numPermits);
         try {
-            primaryDb.close(true, true);
-            primaryDb = null;
-            prefixDb.close(true, true);
-            prefixDb = null;
+            synchronized (closed) {
+                if (primaryDb != null) {
+                    primaryDb.close(true, true);
+                    primaryDb = null;
+                }
+                if (prefixDb != null) {
+                    prefixDb.close(true, true);
+                    prefixDb = null;
+                }
+                closed.set(true);
+            }
         } finally {
             lock.release(numPermits);
         }
@@ -444,6 +477,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public boolean rowScan(final WALKeyPointerStream stream, boolean hydrateValues) throws Exception {
+        init();
         lock.acquire();
         try {
             return primaryDb.rowScan(
@@ -472,6 +506,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
         WALKeyPointerStream stream,
         boolean hydrateValues) throws Exception {
 
+        init();
         lock.acquire();
         try {
             byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
@@ -498,6 +533,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     @Override
     public CompactionWALIndex startCompaction(boolean hasActive, int compactionStripe) throws Exception {
 
+        init();
         synchronized (compactingTo) {
             WALIndex got = compactingTo.get();
             if (got != null) {
@@ -626,8 +662,12 @@ public class LABPointerIndexWALIndex implements WALIndex {
     public void flush(boolean fsync) throws Exception {
         lock.acquire();
         try {
-            primaryDb.commit(fsync, true);
-            prefixDb.commit(fsync, true);
+            if (primaryDb != null) {
+                primaryDb.commit(fsync, true);
+            }
+            if (prefixDb != null) {
+                prefixDb.commit(fsync, true);
+            }
         } finally {
             lock.release();
         }

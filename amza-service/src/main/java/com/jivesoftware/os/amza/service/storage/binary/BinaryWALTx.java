@@ -139,7 +139,7 @@ public class BinaryWALTx implements WALTx {
             initIO(baseKey);
 
             I walIndex = walIndexProvider.createIndex(versionedPartitionName, maxValueSizeInIndex, stripe);
-            if (walIndex.isEmpty()) {
+            if (!walIndex.exists()) {
                 rebuildIndex(versionedPartitionName, walIndex, true);
             }
 

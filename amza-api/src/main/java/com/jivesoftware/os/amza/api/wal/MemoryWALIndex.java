@@ -155,8 +155,8 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean isEmpty() {
-        return index.isEmpty();
+    public boolean exists() {
+        return !index.isEmpty();
     }
 
     @Override

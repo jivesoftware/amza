@@ -71,8 +71,8 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean isEmpty() throws Exception {
-        return false;
+    public boolean exists() throws Exception {
+        return true;
     }
 
     @Override

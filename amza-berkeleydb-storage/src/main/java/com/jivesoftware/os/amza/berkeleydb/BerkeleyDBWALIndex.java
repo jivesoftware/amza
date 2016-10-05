@@ -315,14 +315,14 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean isEmpty() throws Exception {
+    public boolean exists() throws Exception {
         lock.acquire();
         DiskOrderedCursor cursor = null;
         try {
             cursor = primaryDb.openCursor(new DiskOrderedCursorConfig().setKeysOnly(true).setQueueSize(1).setLSNBatchSize(1));
             DatabaseEntry value = new DatabaseEntry();
             value.setPartial(true);
-            return (cursor.getNext(new DatabaseEntry(), value, LockMode.READ_UNCOMMITTED) != OperationStatus.SUCCESS);
+            return (cursor.getNext(new DatabaseEntry(), value, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
         } finally {
             lock.release();
             if (cursor != null) {

@@ -37,13 +37,14 @@ public class LABPointerIndexWALIndexTest {
             return true;
         });
 
-        Assert.assertFalse(index.isEmpty());
+        Assert.assertFalse(index.exists());
         index.commit(true);
+        Assert.assertTrue(index.exists());
         index.close();
 
         // reopen
         index = getIndex(dir0, partitionName);
-        Assert.assertFalse(index.isEmpty());
+        Assert.assertTrue(index.exists());
 
         index.rowScan((prefix, key, timestamp, tombstoned, version, fp, hasValue, value) -> {
             System.out.println("1.---" + Arrays.toString(prefix) + " " + Arrays.toString(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
@@ -68,7 +69,7 @@ public class LABPointerIndexWALIndexTest {
 
         // reopen
         index = getIndex(dir0, partitionName);
-        Assert.assertFalse(index.isEmpty());
+        Assert.assertTrue(index.exists());
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 3; i < 100; i++) {

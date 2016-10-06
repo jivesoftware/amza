@@ -42,7 +42,7 @@ class PartitionDelta {
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
     private final int maxValueSizeInIndex;
-    final AtomicReference<PartitionDelta> merging;
+    private final AtomicReference<PartitionDelta> mergingDelta;
 
     private final ConcurrentBAHash<WALPointer> pointerIndex = new ConcurrentBAHash<>(3, true, 4);
     private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(KeyUtil::compare);
@@ -57,49 +57,79 @@ class PartitionDelta {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
         this.maxValueSizeInIndex = maxValueSizeInIndex;
-        this.merging = new AtomicReference<>(merging);
+        this.mergingDelta = new AtomicReference<>(merging);
     }
 
-    public long getDeltaWALId() {
+    void acquire() {
+        deltaWAL.acquire();
+    }
+
+    void release() {
+        deltaWAL.release();
+    }
+
+    private long getDeltaWALId() {
         return deltaWAL.getId();
     }
 
-    public long getPrevDeltaWALId() {
+    private long getPrevDeltaWALId() {
         return deltaWAL.getPrevId();
+    }
+
+    boolean isMerging() {
+        return mergingDelta.get() != null;
     }
 
     public long size() {
         return pointerIndex.size();
     }
 
-    public long mergedSize() {
-        PartitionDelta merge = merging.get();
+    /*public long mergedSize() {
+        PartitionDelta merge = mergingDelta.get();
         return pointerIndex.size() + (merge != null ? merge.size() : 0);
+    }*/
+
+    private PartitionDelta acquireMerging() {
+        synchronized (mergingDelta) {
+            PartitionDelta partitionDelta = mergingDelta.get();
+            if (partitionDelta != null) {
+                partitionDelta.acquire();
+            }
+            return partitionDelta;
+        }
+    }
+
+    private void releaseMerging(PartitionDelta partitionDelta) {
+        partitionDelta.release();
     }
 
     private boolean streamRawValues(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
         return deltaWAL.hydrate(fpStream -> {
-            PartitionDelta mergingPartitionDelta = merging.get();
+            PartitionDelta mergingPartitionDelta = acquireMerging();
             if (mergingPartitionDelta != null) {
-                return mergingPartitionDelta.streamRawValues(prefix,
-                    mergingKeyStream -> keys.consume((key) -> {
-                        WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
-                        if (got == null) {
-                            return mergingKeyStream.stream(key);
-                        } else if (got.getHasValue()) {
-                            return fpKeyValueStream.stream(got.getFp(),
-                                null,
-                                prefix,
-                                key,
-                                got.getValue(),
-                                got.getTimestampId(),
-                                got.getTombstoned(),
-                                got.getVersion());
-                        } else {
-                            return fpStream.stream(got.getFp());
-                        }
-                    }),
-                    fpKeyValueStream);
+                try {
+                    return mergingPartitionDelta.streamRawValues(prefix,
+                        mergingKeyStream -> keys.consume((key) -> {
+                            WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
+                            if (got == null) {
+                                return mergingKeyStream.stream(key);
+                            } else if (got.getHasValue()) {
+                                return fpKeyValueStream.stream(got.getFp(),
+                                    null,
+                                    prefix,
+                                    key,
+                                    got.getValue(),
+                                    got.getTimestampId(),
+                                    got.getTombstoned(),
+                                    got.getVersion());
+                            } else {
+                                return fpStream.stream(got.getFp());
+                            }
+                        }),
+                        fpKeyValueStream);
+                } finally {
+                    releaseMerging(mergingPartitionDelta);
+                }
             } else {
                 return keys.consume((key) -> {
                     WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
@@ -131,9 +161,13 @@ class PartitionDelta {
         if (got != null) {
             return got;
         }
-        PartitionDelta partitionDelta = merging.get();
+        PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
-            return partitionDelta.getPointer(prefix, key);
+            try {
+                return partitionDelta.getPointer(prefix, key);
+            } finally {
+                releaseMerging(partitionDelta);
+            }
         }
         return null;
     }
@@ -187,7 +221,7 @@ class PartitionDelta {
 
     private final AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
 
-    public boolean shouldWriteHighwater() {
+    boolean shouldWriteHighwater() {
         long got = updatesSinceLastHighwaterFlush.get();
         if (got > 1000) { // TODO expose to partition config
             updatesSinceLastHighwaterFlush.set(0);
@@ -226,8 +260,8 @@ class PartitionDelta {
         byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
         Iterator<Map.Entry<byte[], WALPointer>> iterator = subMap(orderedIndex, from, to).entrySet().iterator();
         Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
-        PartitionDelta mergingPartitionDelta = merging.get();
         DeltaWAL mergingDeltaWAL = null;
+        PartitionDelta mergingPartitionDelta = acquireMerging();
         if (mergingPartitionDelta != null) {
             mergingIterator = subMap(mergingPartitionDelta.orderedIndex, from, to).entrySet().iterator();
             mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
@@ -254,8 +288,8 @@ class PartitionDelta {
     DeltaPeekableElmoIterator rowScanIterator(boolean hydrateValues) {
         Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.entrySet().iterator();
         Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
-        PartitionDelta mergingPartitionDelta = merging.get();
         DeltaWAL mergingDeltaWAL = null;
+        PartitionDelta mergingPartitionDelta = acquireMerging();
         if (mergingPartitionDelta != null) {
             mergingIterator = mergingPartitionDelta.orderedIndex.entrySet().iterator();
             mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
@@ -265,27 +299,39 @@ class PartitionDelta {
 
     long highestTxId() {
         if (txIdWAL.isEmpty()) {
-            PartitionDelta partitionDelta = merging.get();
-            return (partitionDelta != null) ? partitionDelta.highestTxId() : -1;
+            PartitionDelta partitionDelta = acquireMerging();
+            if (partitionDelta != null) {
+                try {
+                    return partitionDelta.highestTxId();
+                } finally {
+                    releaseMerging(partitionDelta);
+                }
+            } else {
+                return -1;
+            }
         }
         return txIdWAL.last().txId;
     }
 
-    long highestTxId(byte[] prefix) {
+    /*long highestTxId(byte[] prefix) {
         AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.get(new WALPrefix(prefix));
         if (prefixTxFps == null || prefixTxFps.isEmpty()) {
             PartitionDelta partitionDelta = merging.get();
             return (partitionDelta != null) ? partitionDelta.highestTxId(prefix) : -1;
         }
         return prefixTxFps.last().txId;
-    }
+    }*/
 
-    public long lowestTxId() {
-        PartitionDelta partitionDelta = merging.get();
+    long lowestTxId() {
+        PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
-            long lowestTxId = partitionDelta.lowestTxId();
-            if (lowestTxId >= 0) {
-                return lowestTxId;
+            try {
+                long lowestTxId = partitionDelta.lowestTxId();
+                if (lowestTxId >= 0) {
+                    return lowestTxId;
+                }
+            } finally {
+                releaseMerging(partitionDelta);
             }
         }
 
@@ -295,12 +341,16 @@ class PartitionDelta {
         return txIdWAL.first().txId;
     }
 
-    public long lowestTxId(byte[] prefix) {
-        PartitionDelta partitionDelta = merging.get();
+    long lowestTxId(byte[] prefix) {
+        PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
-            long lowestTxId = partitionDelta.lowestTxId(prefix);
-            if (lowestTxId >= 0) {
-                return lowestTxId;
+            try {
+                long lowestTxId = partitionDelta.lowestTxId(prefix);
+                if (lowestTxId >= 0) {
+                    return lowestTxId;
+                }
+            } finally {
+                releaseMerging(partitionDelta);
             }
         }
 
@@ -341,10 +391,14 @@ class PartitionDelta {
     }
 
     public boolean takeRowsFromTransactionId(long transactionId, RowStream rowStream) throws Exception {
-        PartitionDelta partitionDelta = merging.get();
+        PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
-            if (!partitionDelta.takeRowsFromTransactionId(transactionId, rowStream)) {
-                return false;
+            try {
+                if (!partitionDelta.takeRowsFromTransactionId(transactionId, rowStream)) {
+                    return false;
+                }
+            } finally {
+                releaseMerging(partitionDelta);
             }
         }
 
@@ -356,10 +410,14 @@ class PartitionDelta {
     }
 
     public boolean takeRowsFromTransactionId(byte[] prefix, long transactionId, RowStream rowStream) throws Exception {
-        PartitionDelta partitionDelta = merging.get();
+        PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
-            if (!partitionDelta.takeRowsFromTransactionId(prefix, transactionId, rowStream)) {
-                return false;
+            try {
+                if (!partitionDelta.takeRowsFromTransactionId(prefix, transactionId, rowStream)) {
+                    return false;
+                }
+            } finally {
+                releaseMerging(partitionDelta);
             }
         }
 
@@ -394,83 +452,89 @@ class PartitionDelta {
     }
 
     MergeResult merge(PartitionIndex partitionIndex, PartitionProperties properties, int stripe, boolean validate) throws Exception {
-        final PartitionDelta merge = merging.get();
         long merged = 0;
         long lastTxId = 0;
         WALIndex walIndex = null;
         PartitionStore partitionStore = null;
+        PartitionDelta merge = acquireMerging();
         if (merge != null) {
-            if (!merge.txIdWAL.isEmpty()) {
-                merged = merge.size();
-                lastTxId = merge.highestTxId();
+            try {
+                if (!merge.txIdWAL.isEmpty()) {
+                    merged = merge.size();
+                    lastTxId = merge.highestTxId();
 
-                if (validate) {
-                    partitionStore = partitionIndex.getAndValidate(merge.getDeltaWALId(),
-                        merge.getPrevDeltaWALId(),
-                        merge.versionedPartitionName,
-                        properties,
-                        stripe);
-                } else {
-                    partitionStore = partitionIndex.get(merge.versionedPartitionName, properties, stripe);
+                    if (validate) {
+                        partitionStore = partitionIndex.getAndValidate(merge.getDeltaWALId(),
+                            merge.getPrevDeltaWALId(),
+                            merge.versionedPartitionName,
+                            properties,
+                            stripe);
+                    } else {
+                        partitionStore = partitionIndex.get(merge.versionedPartitionName, properties, stripe);
+                    }
+                    long highestTxId = partitionStore.highestTxId();
+                    LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);
+                    LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());
+                    MutableBoolean eos = new MutableBoolean(false);
+
+                    PartitionStore mergeToStore = partitionStore;
+                    merge.txIdWAL.streamFromTxId(highestTxId, true, txFps -> {
+                        long txId = txFps.txId;
+
+                        mergeToStore.merge(false,
+                            properties,
+                            txId,
+                            txFps.prefix,
+                            (highwaters, scan) -> WALKey.decompose(
+                                txFpRawKeyValueStream -> merge.deltaWAL.hydrateKeyValueHighwaters(
+                                    fpStream -> {
+                                        for (long fp : txFps.fps) {
+                                            if (!fpStream.stream(fp)) {
+                                                return false;
+                                            }
+                                        }
+                                        return true;
+                                    },
+                                    (fp, rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion, highwater) -> {
+                                        // prefix is the partitionName and is discarded
+                                        WALPointer pointer = merge.orderedIndex.get(key);
+                                        if (pointer == null) {
+                                            throw new RuntimeException("Delta WAL missing"
+                                                + " prefix: " + Arrays.toString(prefix)
+                                                + " key: " + Arrays.toString(key)
+                                                + " for: " + versionedPartitionName);
+                                        }
+                                        if (pointer.getFp() == fp) {
+                                            if (!txFpRawKeyValueStream.stream(txId, fp, rowType, key, true, value, valueTimestamp, valueTombstone, valueVersion,
+                                                null)) {
+                                                return false;
+                                            }
+                                            if (highwater != null) {
+                                                highwaters.highwater(highwater);
+                                            }
+                                        }
+                                        return true;
+                                    }),
+                                (_txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                                    if (!scan.row(txId, key, value, valueTimestamp, valueTombstoned, valueVersion)) {
+                                        eos.setValue(true);
+                                        return false;
+                                    }
+                                    return true;
+                                }));
+                        return !eos.booleanValue();
+                    });
+                    partitionStore.getWalStorage().endOfMergeMarker(merge.getDeltaWALId(), lastTxId);
+                    walIndex = partitionStore.getWalStorage().commitIndex(true, lastTxId);
+                    LOG.info("Merged deltas for {}", merge.versionedPartitionName);
                 }
-                long highestTxId = partitionStore.highestTxId();
-                LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);
-                LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());
-                MutableBoolean eos = new MutableBoolean(false);
-
-                PartitionStore mergeToStore = partitionStore;
-                merge.txIdWAL.streamFromTxId(highestTxId, true, txFps -> {
-                    long txId = txFps.txId;
-
-                    mergeToStore.merge(false,
-                        properties,
-                        txId,
-                        txFps.prefix,
-                        (highwaters, scan) -> WALKey.decompose(
-                            txFpRawKeyValueStream -> merge.deltaWAL.hydrateKeyValueHighwaters(
-                                fpStream -> {
-                                    for (long fp : txFps.fps) {
-                                        if (!fpStream.stream(fp)) {
-                                            return false;
-                                        }
-                                    }
-                                    return true;
-                                },
-                                (fp, rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion, highwater) -> {
-                                    // prefix is the partitionName and is discarded
-                                    WALPointer pointer = merge.orderedIndex.get(key);
-                                    if (pointer == null) {
-                                        throw new RuntimeException("Delta WAL missing"
-                                            + " prefix: " + Arrays.toString(prefix)
-                                            + " key: " + Arrays.toString(key)
-                                            + " for: " + versionedPartitionName);
-                                    }
-                                    if (pointer.getFp() == fp) {
-                                        if (!txFpRawKeyValueStream.stream(txId, fp, rowType, key, true, value, valueTimestamp, valueTombstone, valueVersion,
-                                            null)) {
-                                            return false;
-                                        }
-                                        if (highwater != null) {
-                                            highwaters.highwater(highwater);
-                                        }
-                                    }
-                                    return true;
-                                }),
-                            (_txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                                if (!scan.row(txId, key, value, valueTimestamp, valueTombstoned, valueVersion)) {
-                                    eos.setValue(true);
-                                    return false;
-                                }
-                                return true;
-                            }));
-                    return !eos.booleanValue();
-                });
-                partitionStore.getWalStorage().endOfMergeMarker(merge.getDeltaWALId(), lastTxId);
-                walIndex = partitionStore.getWalStorage().commitIndex(true, lastTxId);
-                LOG.info("Merged deltas for {}", merge.versionedPartitionName);
+            } finally {
+                releaseMerging(merge);
             }
         }
-        merging.set(null);
+        synchronized (mergingDelta) {
+            mergingDelta.set(null);
+        }
         return new MergeResult(partitionStore, versionedPartitionName, walIndex, merged, lastTxId);
     }
 

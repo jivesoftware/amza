@@ -76,6 +76,10 @@ public class DeltaPeekableElmoIteratorNGTest {
                     WALRow row = fpRows.get(fp);
                     return new WALValue(row.rowType, row.value, row.timestamp, row.tombstoned, row.version);
                 }
+
+                @Override
+                public void closeHydrator() {
+                }
             };
             DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
                 wal.entrySet().iterator(),

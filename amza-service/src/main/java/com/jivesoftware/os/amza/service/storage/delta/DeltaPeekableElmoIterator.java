@@ -112,4 +112,9 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
         throw new UnsupportedOperationException("Not supported ever!");
     }
 
+    public void close() {
+        if (compactingHydrator != null) {
+            compactingHydrator.closeHydrator();
+        }
+    }
 }

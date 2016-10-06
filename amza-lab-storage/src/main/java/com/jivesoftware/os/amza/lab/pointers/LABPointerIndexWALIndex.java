@@ -644,7 +644,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     private boolean rename(int stripe, Type fromType, Type toType, boolean required) throws Exception {
-        boolean primaryRenamed = environments[stripe].rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName(), false);
+        boolean primaryRenamed = environments[stripe].rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName(), true);
         boolean prefixRenamed = environments[stripe].rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName(), true);
         if (!primaryRenamed && (required || prefixRenamed)) {
             throw new IOException("Failed to rename"
@@ -657,7 +657,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     private void removeDatabase(int stripe, Type type) throws Exception {
-        environments[stripe].remove(name.typeName(type).getPrimaryName(), false);
+        environments[stripe].remove(name.typeName(type).getPrimaryName(), true);
         environments[stripe].remove(name.typeName(type).getPrefixName(), true);
     }
 

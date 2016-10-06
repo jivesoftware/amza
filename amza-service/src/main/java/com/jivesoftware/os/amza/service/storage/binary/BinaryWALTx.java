@@ -152,6 +152,22 @@ public class BinaryWALTx implements WALTx {
     private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName,
         I compactableWALIndex,
         boolean fsync) throws Exception {
+
+        boolean[] isEmpty = { true };
+        rowIO.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
+            if (rowType.isPrimary()) {
+                isEmpty[0] = false;
+                return false;
+            }
+            return true;
+        });
+
+        if (isEmpty[0]) {
+            LOG.info("Skipping {} rebuild for {} because the WAL is empty, length={}",
+                compactableWALIndex.getClass().getSimpleName(), versionedPartitionName, rowIO.sizeInBytes());
+            return;
+        }
+
         LOG.info("Rebuilding {} for {}", compactableWALIndex.getClass().getSimpleName(), versionedPartitionName);
 
         MutableLong rebuilt = new MutableLong();

@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.StripeTx.TxPartitionStripe;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader.RingNameStream;
+import com.jivesoftware.os.amza.service.ring.RingSet;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -404,11 +405,19 @@ public class TakeCoordinator {
                         }
 
                         dirtyRings.stream((ringName, versionedPartitionNames) -> {
-                            int ringHash = system ? systemRingHash : BAHasher.SINGLETON.hashCode(ringName, 0, ringName.length);
-                            TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName));
-                            if (ring != null) {
+                            TakeRingCoordinator ringCoordinator = null;
+                            if (system) {
+                                ringCoordinator = ensureRingCoordinator(ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName));
+                            } else {
+                                RingSet ringSet = ringReader.getRingSet(remoteRingMember);
+                                Integer ringHash = ringSet.ringNames.get(ringName, 0, ringName.length);
+                                if (ringHash != null) {
+                                    ringCoordinator = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName));
+                                }
+                            }
+                            if (ringCoordinator != null) {
                                 suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                                    ring.dirtyAvailableRowsStream(partitionStripeProvider,
+                                    ringCoordinator.dirtyAvailableRowsStream(partitionStripeProvider,
                                         remoteRingMember,
                                         takeSessionId,
                                         versionedPartitionNames,

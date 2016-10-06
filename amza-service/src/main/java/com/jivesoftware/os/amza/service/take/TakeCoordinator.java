@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
@@ -26,8 +28,10 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -199,6 +203,16 @@ public class TakeCoordinator {
         RingTopology ring = ringReader.getRing(ringName);
         ensureRingCoordinator(ringName, null, -1, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
+        for (Session session : takeSessions.values()) {
+            synchronized (session.dirtySet) {
+                Set<VersionedPartitionName> dirtySet = session.dirtySet.get();
+                if (dirtySet == null) {
+                    dirtySet = Sets.newHashSet();
+                    session.dirtySet.set(dirtySet);
+                }
+                dirtySet.add(versionedPartitionName);
+            }
+        }
         awakeRemoteTakers(ring, system);
     }
 
@@ -259,23 +273,29 @@ public class TakeCoordinator {
 
     interface RingSupplier {
 
-        RingTopology get();
+        RingTopology get() throws Exception;
     }
 
     private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, BAHash<TakeRingCoordinator> stackCache, int ringHash, RingSupplier ringSupplier) {
         TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringHash, ringName, 0, ringName.length);
         if (ringCoordinator == null) {
             ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
-                key -> new TakeRingCoordinator(systemWALStorage,
-                    rootMember,
-                    key,
-                    timestampedOrderIdProvider,
-                    idPacker,
-                    versionedPartitionProvider,
-                    systemReofferDeltaMillis,
-                    slowTakeInMillis,
-                    reofferDeltaMillis,
-                    ringSupplier.get()));
+                key -> {
+                    try {
+                        return new TakeRingCoordinator(systemWALStorage,
+                            rootMember,
+                            key,
+                            timestampedOrderIdProvider,
+                            idPacker,
+                            versionedPartitionProvider,
+                            systemReofferDeltaMillis,
+                            slowTakeInMillis,
+                            reofferDeltaMillis,
+                            ringSupplier.get());
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
             if (stackCache != null) {
                 stackCache.put(ringHash, ringName, ringCoordinator);
             }
@@ -308,7 +328,7 @@ public class TakeCoordinator {
         Callable<Void> pingCallback) throws Exception {
 
         SessionKey sessionKey = new SessionKey(remoteRingMember, takeSessionId);
-        Session session = takeSessions.computeIfAbsent(sessionKey, sessionKey1 -> new Session(System.currentTimeMillis()));
+        Session session = takeSessions.computeIfAbsent(sessionKey, sessionKey1 -> new Session(System.currentTimeMillis(), system));
         synchronized (session.sessionThread) {
             session.sessionThread.set(Thread.currentThread());
         }
@@ -333,16 +353,10 @@ public class TakeCoordinator {
                     return true;
                 }
 
-                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> {
-                    try {
-                        return ringReader.getRing(ringName);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(partitionStripeProvider,
+                        ring.allAvailableRowsStream(partitionStripeProvider,
                             remoteRingMember,
                             takeSessionId,
                             watchAvailableStream));
@@ -354,15 +368,55 @@ public class TakeCoordinator {
             ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
 
+            long lastScan = 0;
             while (true) {
                 long initialUpdates = updates.get();
                 suggestedWaitInMillis[0] = Long.MAX_VALUE;
 
+                long timeSinceLastFullScan = System.currentTimeMillis() - lastScan;
                 long start = System.currentTimeMillis();
-                if (system) {
-                    ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
+                if (timeSinceLastFullScan >= heartbeatIntervalMillis) {
+                    if (system) {
+                        ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
+                    } else {
+                        ringReader.streamRingNames(remoteRingMember, ringNameStream);
+                    }
+                    lastScan = System.currentTimeMillis();
                 } else {
-                    ringReader.getRingNames(remoteRingMember, ringNameStream);
+                    Set<VersionedPartitionName> dirtySet;
+                    synchronized (session.dirtySet) {
+                        dirtySet = session.dirtySet.getAndSet(null);
+                    }
+                    if (dirtySet != null && !dirtySet.isEmpty()) {
+                        BAHash<List<VersionedPartitionName>> dirtyRings = new BAHash<>(
+                            new BAHMapState<>(10, true, BAHMapState.NIL),
+                            BAHasher.SINGLETON,
+                            BAHEqualer.SINGLETON);
+
+                        for (VersionedPartitionName versionedPartitionName : dirtySet) {
+                            byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
+                            List<VersionedPartitionName> dirty = dirtyRings.get(ringName, 0, ringName.length);
+                            if (dirty == null) {
+                                dirty = Lists.newArrayList();
+                                dirtyRings.put(ringName, dirty);
+                            }
+                            dirty.add(versionedPartitionName);
+                        }
+
+                        dirtyRings.stream((ringName, versionedPartitionNames) -> {
+                            int ringHash = system ? systemRingHash : BAHasher.SINGLETON.hashCode(ringName, 0, ringName.length);
+                            TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName));
+                            if (ring != null) {
+                                suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
+                                    ring.dirtyAvailableRowsStream(partitionStripeProvider,
+                                        remoteRingMember,
+                                        takeSessionId,
+                                        versionedPartitionNames,
+                                        watchAvailableStream));
+                            }
+                            return true;
+                        });
+                    }
                 }
                 long elapsed = System.currentTimeMillis() - start;
 
@@ -496,13 +550,16 @@ public class TakeCoordinator {
     private static class Session {
 
         private final long startTime;
+        private final boolean system;
 
         private final AtomicLong lastPingTime = new AtomicLong(-1);
         private final AtomicLong lastPongTime = new AtomicLong(-1);
         private final AtomicReference<Thread> sessionThread = new AtomicReference<>();
+        private final AtomicReference<Set<VersionedPartitionName>> dirtySet = new AtomicReference<>();
 
-        public Session(long startTime) {
+        public Session(long startTime, boolean system) {
             this.startTime = startTime;
+            this.system = system;
         }
     }
 }

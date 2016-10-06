@@ -28,7 +28,7 @@ public interface AmzaRingReader {
         boolean stream(byte[] ringName, RingMember ringMember, RingHost ringHost) throws Exception;
     }
 
-    void getRingNames(RingMember ringMember, RingNameStream ringNameStream) throws Exception;
+    void streamRingNames(RingMember ringMember, RingNameStream ringNameStream) throws Exception;
 
     interface RingNameStream {
 

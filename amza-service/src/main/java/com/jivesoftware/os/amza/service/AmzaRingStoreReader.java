@@ -237,7 +237,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     @Override
-    public void getRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
+    public void streamRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }

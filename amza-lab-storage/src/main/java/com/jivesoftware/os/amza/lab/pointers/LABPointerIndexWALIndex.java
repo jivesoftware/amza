@@ -580,46 +580,48 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
                             boolean compactedNonEmpty = rename(compactionStripe, Type.compacting, Type.compacted, false);
 
-                            primaryDb.close(true, true);
-                            primaryDb = null;
-                            prefixDb.close(true, true);
-                            prefixDb = null;
-                            if (hasActive) {
-                                rename(currentStripe, Type.active, Type.backup, compactedNonEmpty);
-                            } else {
-                                removeDatabase(currentStripe, Type.active);
+                            synchronized (closed) {
+                                primaryDb.close(true, true);
+                                primaryDb = null;
+                                prefixDb.close(true, true);
+                                prefixDb = null;
+                                if (hasActive) {
+                                    rename(currentStripe, Type.active, Type.backup, compactedNonEmpty);
+                                } else {
+                                    removeDatabase(currentStripe, Type.active);
+                                }
+
+                                if (commit != null) {
+                                    commit.call();
+                                }
+
+                                if (compactedNonEmpty) {
+                                    rename(compactionStripe, Type.compacted, Type.active, true);
+                                }
+                                removeDatabase(currentStripe, Type.backup);
+
+                                primaryDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrimaryName(),
+                                    config.getEntriesBetweenLeaps(),
+                                    config.getMaxHeapPressureInBytes(),
+                                    config.getSplitWhenKeysTotalExceedsNBytes(),
+                                    config.getSplitWhenValuesTotalExceedsNBytes(),
+                                    config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+                                    NoOpFormatTransformerProvider.NAME,
+                                    LABRawhide.NAME,
+                                    MemoryRawEntryFormat.NAME,
+                                    -1));
+
+                                prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
+                                    config.getEntriesBetweenLeaps(),
+                                    config.getMaxHeapPressureInBytes(),
+                                    config.getSplitWhenKeysTotalExceedsNBytes(),
+                                    config.getSplitWhenValuesTotalExceedsNBytes(),
+                                    config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
+                                    NoOpFormatTransformerProvider.NAME,
+                                    LABRawhide.NAME,
+                                    MemoryRawEntryFormat.NAME,
+                                    -1));
                             }
-
-                            if (commit != null) {
-                                commit.call();
-                            }
-
-                            if (compactedNonEmpty) {
-                                rename(compactionStripe, Type.compacted, Type.active, true);
-                            }
-                            removeDatabase(currentStripe, Type.backup);
-
-                            primaryDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrimaryName(),
-                                config.getEntriesBetweenLeaps(),
-                                config.getMaxHeapPressureInBytes(),
-                                config.getSplitWhenKeysTotalExceedsNBytes(),
-                                config.getSplitWhenValuesTotalExceedsNBytes(),
-                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-                                NoOpFormatTransformerProvider.NAME,
-                                LABRawhide.NAME,
-                                MemoryRawEntryFormat.NAME,
-                                -1));
-
-                            prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
-                                config.getEntriesBetweenLeaps(),
-                                config.getMaxHeapPressureInBytes(),
-                                config.getSplitWhenKeysTotalExceedsNBytes(),
-                                config.getSplitWhenValuesTotalExceedsNBytes(),
-                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes(),
-                                NoOpFormatTransformerProvider.NAME,
-                                LABRawhide.NAME,
-                                MemoryRawEntryFormat.NAME,
-                                -1));
 
                             currentStripe = compactionStripe;
                             LOG.debug("Committing after swap: {}", name.getPrimaryName());

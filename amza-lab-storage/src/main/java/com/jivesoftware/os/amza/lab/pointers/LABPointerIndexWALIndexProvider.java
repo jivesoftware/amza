@@ -69,7 +69,6 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 compactorThreadPool,
                 destroyThreadPool,
                 null,
-                config.getMaxWALOnOpenHeapPressureOverride(),
                 active,
                 labHeapPressure,
                 config.getMinMergeDebt(),

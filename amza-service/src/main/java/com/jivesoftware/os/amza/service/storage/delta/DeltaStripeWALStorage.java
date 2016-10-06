@@ -398,59 +398,16 @@ public class DeltaStripeWALStorage {
                     entry.setValue(currentDelta);
                     mergeable.incrementAndGet();
                     futures.add(mergeDeltaThreads.submit(() -> {
-                        MergeResult result = null;
-                        try {
-                            PartitionName partitionName = versionedPartitionName.getPartitionName();
-                            walCompactionStats.add("partitions", 1);
-                            walCompactionStats.start(partitionName.toBase64());
-                            try {
-                                while (true) {
-                                    try {
-                                        result = currentVersionProvider.tx(partitionName,
-                                            null,
-                                            (deltaIndex, stripeIndex, storageVersion) -> {
-                                                MergeResult r;
-                                                if (stripeIndex == -1) {
-                                                    LOG.warn("Ignored merge for partition {} with nonexistent storage", versionedPartitionName);
-                                                    r = null;
-                                                } else {
-                                                    PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
-                                                    if (properties == null) {
-                                                        LOG.warn("Ignored merge for partition {} with missing properties", versionedPartitionName);
-                                                        r = null;
-                                                    } else {
-                                                        r = currentDelta.merge(partitionIndex, properties, stripeIndex, validate);
-                                                    }
-                                                }
-                                                sickThreads.recovered();
-                                                return r;
-                                            });
-
-                                        break;
-                                    } catch (Throwable x) {
-                                        sickThreads.sick(x);
-                                        if (validate) {
-                                            LOG.error("Validation merge failed for partition:{} WAL storage must be purged and re-taken!",
-                                                new Object[]{versionedPartitionName}, x);
-                                            currentVersionProvider.abandonVersion(versionedPartitionName);
-                                            break;
-                                        } else {
-                                            LOG.error("Background merge failed for partition:{} We will retry in case the issue can be resolved.",
-                                                new Object[]{versionedPartitionName}, x);
-                                            Thread.sleep(30_000L);
-                                        }
-                                    }
-                                }
-                            } finally {
-                                walCompactionStats.stop(partitionName.toBase64());
-                            }
-                            return result;
-                        } finally {
-                            amzaStats.deltaStripeMerge(index,
-                                mergeable.decrementAndGet(),
-                                (unmerged.get() - merged.addAndGet(mergeableCount)) / (double) unmerged.get());
-                            sickThreads.recovered();
-                        }
+                        return getMergeResult(walCompactionStats,
+                            partitionIndex,
+                            versionedPartitionProvider,
+                            currentVersionProvider,
+                            validate,
+                            mergeable,
+                            merged, unmerged,
+                            versionedPartitionName,
+                            mergeableCount,
+                            currentDelta);
                     }));
                 } else {
                     LOG.warn("Ignored merge for obsolete partition {}", versionedPartitionName);
@@ -537,6 +494,72 @@ public class DeltaStripeWALStorage {
             LockSupport.park();
         }
         return true;
+    }
+
+    private MergeResult getMergeResult(WALCompactionStats walCompactionStats,
+        PartitionIndex partitionIndex,
+        VersionedPartitionProvider versionedPartitionProvider,
+        CurrentVersionProvider currentVersionProvider,
+        boolean validate,
+        AtomicLong mergeable,
+        AtomicLong merged,
+        AtomicLong unmerged,
+        VersionedPartitionName versionedPartitionName,
+        long mergeableCount,
+        PartitionDelta currentDelta) throws Exception {
+        MergeResult result = null;
+        try {
+            PartitionName partitionName = versionedPartitionName.getPartitionName();
+            walCompactionStats.add("partitions", 1);
+            walCompactionStats.start(partitionName.toBase64());
+            try {
+                while (true) {
+                    try {
+                        result = currentVersionProvider.tx(partitionName,
+                            null,
+                            (deltaIndex, stripeIndex, storageVersion) -> {
+                                MergeResult r;
+                                if (stripeIndex == -1) {
+                                    LOG.warn("Ignored merge for partition {} with nonexistent storage", versionedPartitionName);
+                                    r = null;
+                                } else {
+                                    PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
+                                    if (properties == null) {
+                                        LOG.warn("Ignored merge for partition {} with missing properties", versionedPartitionName);
+                                        r = null;
+                                    } else {
+                                        r = currentDelta.merge(partitionIndex, properties, stripeIndex, validate);
+                                    }
+                                }
+                                sickThreads.recovered();
+                                return r;
+                            });
+
+                        break;
+                    } catch (Throwable x) {
+                        sickThreads.sick(x);
+                        if (validate) {
+                            LOG.error("Validation merge failed for partition:{} WAL storage must be purged and re-taken!",
+                                new Object[]{versionedPartitionName}, x);
+                            currentVersionProvider.abandonVersion(versionedPartitionName);
+                            break;
+                        } else {
+                            LOG.error("Background merge failed for partition:{} We will retry in case the issue can be resolved.",
+                                new Object[]{versionedPartitionName}, x);
+                            Thread.sleep(30_000L);
+                        }
+                    }
+                }
+            } finally {
+                walCompactionStats.stop(partitionName.toBase64());
+            }
+            return result;
+        } finally {
+            amzaStats.deltaStripeMerge(index,
+                mergeable.decrementAndGet(),
+                (unmerged.get() - merged.addAndGet(mergeableCount)) / (double) unmerged.get());
+            sickThreads.recovered();
+        }
     }
 
     public RowsChanged update(boolean directApply,

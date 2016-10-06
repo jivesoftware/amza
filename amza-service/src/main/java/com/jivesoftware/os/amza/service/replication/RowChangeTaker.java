@@ -386,7 +386,7 @@ public class RowChangeTaker implements RowChanges {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     } else {
-                        LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember });
+                        LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     }
                     try {
                         Thread.sleep(1_000);

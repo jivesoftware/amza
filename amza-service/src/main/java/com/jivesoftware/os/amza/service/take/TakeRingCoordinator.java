@@ -21,6 +21,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -106,7 +107,7 @@ public class TakeRingCoordinator {
                 reofferDeltaMillis));
     }
 
-    long availableRowsStream(PartitionStripeProvider partitionStripeProvider,
+    long allAvailableRowsStream(PartitionStripeProvider partitionStripeProvider,
         RingMember ringMember,
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
@@ -119,30 +120,71 @@ public class TakeRingCoordinator {
             Entry<VersionedPartitionName, TakeVersionedPartitionCoordinator> entry = iter.next();
             VersionedPartitionName versionedPartitionName = entry.getKey();
             TakeVersionedPartitionCoordinator coordinator = entry.getValue();
-            coordinator.versionedPartitionProperties = versionedPartitionProvider.getVersionedProperties(versionedPartitionName.getPartitionName(),
-                coordinator.versionedPartitionProperties);
-            PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
-            if (properties.replicated) {
-                try {
-                    long timeout = coordinator.availableRowsStream(partitionStripeProvider,
-                        takeSessionId,
-                        ring,
-                        ringMember,
-                        availableStream);
-                    suggestedWaitInMillis = Math.min(suggestedWaitInMillis, timeout);
-                } catch (PartitionIsDisposedException e) {
-                    LOG.warn("Partition {} was disposed when streaming available rows", versionedPartitionName);
-                    iter.remove();
-                } catch (PropertiesNotPresentException e) {
-                    LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
-                    // do not discard
-                } catch (NotARingMemberException e) {
-                    LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
-                    iter.remove();
-                }
-            }
+            long timeout = streamPartitionCoordinator(partitionStripeProvider,
+                ringMember,
+                takeSessionId,
+                availableStream,
+                ring,
+                versionedPartitionName,
+                coordinator);
+            suggestedWaitInMillis = Math.min(timeout, suggestedWaitInMillis);
         }
         return suggestedWaitInMillis;
+    }
+
+    long dirtyAvailableRowsStream(PartitionStripeProvider partitionStripeProvider,
+        RingMember ringMember,
+        long takeSessionId,
+        List<VersionedPartitionName> versionedPartitionNames,
+        AvailableStream availableStream) throws Exception {
+
+        callCount++;
+        long suggestedWaitInMillis = Long.MAX_VALUE;
+        VersionedRing ring = versionedRing;
+        for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
+            TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(versionedPartitionName);
+            long timeout = streamPartitionCoordinator(partitionStripeProvider,
+                ringMember,
+                takeSessionId,
+                availableStream,
+                ring,
+                versionedPartitionName,
+                coordinator);
+            suggestedWaitInMillis = Math.min(timeout, suggestedWaitInMillis);
+        }
+        return suggestedWaitInMillis;
+    }
+
+    private long streamPartitionCoordinator(PartitionStripeProvider partitionStripeProvider,
+        RingMember ringMember,
+        long takeSessionId,
+        AvailableStream availableStream,
+        VersionedRing ring,
+        VersionedPartitionName versionedPartitionName,
+        TakeVersionedPartitionCoordinator coordinator) throws Exception {
+
+        coordinator.versionedPartitionProperties = versionedPartitionProvider.getVersionedProperties(versionedPartitionName.getPartitionName(),
+            coordinator.versionedPartitionProperties);
+        PartitionProperties properties = coordinator.versionedPartitionProperties.properties;
+        if (properties.replicated) {
+            try {
+                return coordinator.availableRowsStream(partitionStripeProvider,
+                    takeSessionId,
+                    ring,
+                    ringMember,
+                    availableStream);
+            } catch (PartitionIsDisposedException e) {
+                LOG.warn("Partition {} was disposed when streaming available rows", versionedPartitionName);
+                partitionCoordinators.remove(versionedPartitionName);
+            } catch (PropertiesNotPresentException e) {
+                LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
+                // do not discard
+            } catch (NotARingMemberException e) {
+                LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
+                partitionCoordinators.remove(versionedPartitionName);
+            }
+        }
+        return Long.MAX_VALUE;
     }
 
     void rowsTaken(RingMember remoteRingMember,

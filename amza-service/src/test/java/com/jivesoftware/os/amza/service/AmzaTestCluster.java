@@ -605,7 +605,7 @@ public class AmzaTestCluster {
             long timeoutMillis,
             AvailableRowsTaker.AvailableStream updatedPartitionsStream,
             Callable<Void> deliverCallback,
-            Callable<Void> pingCallback) {
+            Callable<Void> pingCallback) throws Exception {
 
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -614,18 +614,14 @@ public class AmzaTestCluster {
                 throw new RuntimeException("Random take failure:" + ringMember);
             }
 
-            try {
-                amzaService.availableRowsStream(system,
-                    ringMember,
-                    timestampedRingHost,
-                    sessionId,
-                    timeoutMillis,
-                    updatedPartitionsStream,
-                    deliverCallback,
-                    pingCallback);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            amzaService.availableRowsStream(system,
+                ringMember,
+                timestampedRingHost,
+                sessionId,
+                timeoutMillis,
+                updatedPartitionsStream,
+                deliverCallback,
+                pingCallback);
         }
 
         //  Use for testing

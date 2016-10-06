@@ -17,6 +17,8 @@ public interface AmzaRingReader {
 
     RingTopology getRing(byte[] ringName) throws Exception;
 
+    RingSet getRingSet(RingMember ringMember);
+
     int getRingSize(byte[] ringName) throws Exception;
 
     int getTakeFromFactor(byte[] ringName) throws Exception;

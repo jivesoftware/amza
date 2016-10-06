@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.RingMembership;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -238,6 +239,12 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public void streamRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
+        RingSet ringSet = getRingSet(desiredRingMember);
+        ringSet.ringNames.stream(ringNameStream::stream);
+    }
+
+    @Override
+    public RingSet getRingSet(RingMember desiredRingMember) {
         if (ringIndex == null || nodeIndex == null) {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
@@ -279,7 +286,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                 throw new RuntimeException(e);
             }
         }
-        ringSet.ringNames.stream(ringNameStream::stream);
+        return ringSet;
     }
 
     @Override

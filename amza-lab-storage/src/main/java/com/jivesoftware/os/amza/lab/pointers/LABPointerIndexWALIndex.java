@@ -410,7 +410,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             long[] delta = new long[1];
             boolean completed = keyPointers.consume(
                 (prefix, key, requestTimestamp, requestTombstoned, requestVersion, requestFp, requestIndexValue, requestValue)
-                    -> getPointerInternal(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
+                -> getPointerInternal(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
                     // indexFp, indexTombstoned, requestTombstoned, delta
                     // -1       false            false              1
                     // -1       false            true               0
@@ -644,8 +644,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     private boolean rename(int stripe, Type fromType, Type toType, boolean required) throws Exception {
-        boolean primaryRenamed = environments[stripe].rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
-        boolean prefixRenamed = environments[stripe].rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
+        boolean primaryRenamed = environments[stripe].rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName(), false);
+        boolean prefixRenamed = environments[stripe].rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName(), true);
         if (!primaryRenamed && (required || prefixRenamed)) {
             throw new IOException("Failed to rename"
                 + " from:" + name.typeName(fromType).getPrimaryName()
@@ -657,8 +657,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     private void removeDatabase(int stripe, Type type) throws Exception {
-        environments[stripe].remove(name.typeName(type).getPrimaryName());
-        environments[stripe].remove(name.typeName(type).getPrefixName());
+        environments[stripe].remove(name.typeName(type).getPrimaryName(), false);
+        environments[stripe].remove(name.typeName(type).getPrefixName(), true);
     }
 
     public void flush(boolean fsync) throws Exception {

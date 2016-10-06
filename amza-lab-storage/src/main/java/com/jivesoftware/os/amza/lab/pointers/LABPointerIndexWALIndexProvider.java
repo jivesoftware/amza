@@ -169,9 +169,9 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             String.valueOf(versionedPartitionName.getPartitionVersion()));
         LABEnvironment env = environments[stripe];
         for (LABPointerIndexWALIndexName n : name.all()) {
-            env.remove(n.getPrimaryName());
+            env.remove(n.getPrimaryName(), false);
             LOG.info("Removed database: {}", n.getPrimaryName());
-            env.remove(n.getPrefixName());
+            env.remove(n.getPrefixName(), true);
             LOG.info("Removed database: {}", n.getPrefixName());
         }
     }

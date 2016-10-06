@@ -34,6 +34,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     private final WALTx wal;
     private final AtomicLong updateCount = new AtomicLong();
     private final Object oneTxAtATimeLock = new Object();
+    private final AtomicLong referenceCount = new AtomicLong();
 
     public DeltaWAL(long id,
         long prevId,
@@ -49,11 +50,41 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         this.wal = wal;
     }
 
-    public long getId() {
+    void acquire() {
+        long count = referenceCount.incrementAndGet();
+        //System.out.println("acquired: " + count);
+    }
+
+    void release() {
+        long count = referenceCount.decrementAndGet();
+        //System.out.println("released: " + count);
+        synchronized (referenceCount) {
+            referenceCount.notifyAll();
+        }
+    }
+
+    @Override
+    public void closeHydrator() {
+        release();
+    }
+
+    void awaitDerefenced() throws InterruptedException {
+        synchronized (referenceCount) {
+            long count = referenceCount.get();
+            //System.out.println("await: " + count);
+            while (count > 0) {
+                referenceCount.wait();
+                count = referenceCount.get();
+                //System.out.println("await: " + count);
+            }
+        }
+    }
+
+    long getId() {
         return id;
     }
 
-    public long getPrevId() {
+    long getPrevId() {
         return prevId;
     }
 

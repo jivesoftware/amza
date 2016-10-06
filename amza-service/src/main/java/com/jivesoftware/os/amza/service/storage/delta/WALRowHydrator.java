@@ -12,4 +12,6 @@ public interface WALRowHydrator {
     boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception;
 
     WALValue hydrate(long fp) throws Exception;
+
+    void closeHydrator();
 }

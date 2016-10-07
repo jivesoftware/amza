@@ -277,12 +277,12 @@ amza.stats = {
     initChart: function (which) {
         var $canvas = $(which);
         var ctx = which.getContext("2d");
-        var id = $canvas.data('amzaWaveId');
+        var id = $canvas.data('statsWaveId');
         if (!amza.stats.waves[id]) {
             var data = amza.stats.data[id];
 
             amza.stats.waves[id] = new Chart(ctx, {
-                type: $canvas.data('amzaWaveType'),
+                type: $canvas.data('statsWaveType'),
                 data: data,
                 options: {
                     maintainAspectRatio: false,
@@ -318,7 +318,7 @@ amza.stats = {
     },
     init: function () {
 
-        $('.amza-wave').each(function (i) {
+        $('.stats-wave').each(function (i) {
             amza.stats.initChart(this);
         });
     }
@@ -326,7 +326,7 @@ amza.stats = {
 
 $(document).ready(function () {
 
-    if ($('.amza-wave').length) {
+    if ($('.stats-wave').length) {
         amza.stats.init();
     }
 

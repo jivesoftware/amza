@@ -331,7 +331,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                     map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
 
-
                     long[] stripeVersion = new long[1];
                     txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                         if (includeCount) {
@@ -490,10 +489,14 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         StringBuilder sb = new StringBuilder();
         sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.longValue(), false)).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.longValue(), false)).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.longValue(), false)).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.longValue(), false)).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.longValue(), false)).append(
+            "</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.longValue(), false)).append(
+            "</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.longValue(), false)).append(
+            "</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.longValue(), false)).append(
+            "</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.get()).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.get()).append("</span>");
 
@@ -506,7 +509,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -527,7 +530,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) grandTotal.scansLatency.longValue() / 1000d) * 100),
             getDurationBreakdown(grandTotal.scansLatency.longValue()) + " lag"));
 
-         sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.get()) + ")",
+        sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.get()) + ")",
             (int) (((double) grandTotal.scanKeysLatency.longValue() / 1000d) * 100),
             getDurationBreakdown(grandTotal.scanKeysLatency.longValue()) + " lag"));
 
@@ -579,12 +582,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         double[] load = amzaStats.deltaStripeLoad;
         long[] mergeCount = amzaStats.deltaStripeMergePending;
         double[] mergeLoad = amzaStats.deltaStripeMerge;
-        for (int i = 0; i < load.length; i++) {
-            sb.append(progress(" Delta Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + numberFormat.format(count[i])));
-            if (mergeLoad.length > i && mergeCount.length > i) {
-                sb.append(progress("Merge Stripe " + i + " (" + numberFormat.format(mergeLoad[i]) + ")", (int) (mergeLoad[i] * 100),
-                    numberFormat.format(mergeCount[i]) + " partitions"));
+        if (count.length == load.length) {
+            for (int i = 0; i < load.length; i++) {
+                sb.append(progress(" Delta Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + numberFormat.format(count[i])));
+                if (mergeLoad.length > i && mergeCount.length > i) {
+                    sb.append(progress("Merge Stripe " + i + " (" + numberFormat.format(mergeLoad[i]) + ")", (int) (mergeLoad[i] * 100),
+                        numberFormat.format(mergeCount[i]) + " partitions"));
+                }
             }
+        } else {
+            LOG.warn("BUG count.length={} should equal load.length={}", count.length, load.length);
         }
 
         int tombostoneCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.tombstone);
@@ -627,7 +634,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

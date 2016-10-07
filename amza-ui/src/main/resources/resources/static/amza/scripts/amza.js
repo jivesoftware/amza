@@ -271,17 +271,17 @@ amza.overview = {
 };
 
 
-miru.amza = {
+amza.stats = {
     waves: {},
     data: {},
     initChart: function (which) {
         var $canvas = $(which);
         var ctx = which.getContext("2d");
         var id = $canvas.data('amzaWaveId');
-        if (!miru.amza.waves[id]) {
-            var data = miru.amza.data[id];
+        if (!amza.stats.waves[id]) {
+            var data = amza.stats.data[id];
 
-            miru.amza.waves[id] = new Chart(ctx, {
+            amza.stats.waves[id] = new Chart(ctx, {
                 type: $canvas.data('amzaWaveType'),
                 data: data,
                 options: {
@@ -313,13 +313,13 @@ miru.amza = {
                 }
             });
         }
-        miru.amza.waves[id].update();
+        amza.stats.waves[id].update();
 
     },
     init: function () {
 
         $('.amza-wave').each(function (i) {
-            miru.amza.initChart(this);
+            amza.stats.initChart(this);
         });
     }
 };
@@ -327,7 +327,7 @@ miru.amza = {
 $(document).ready(function () {
 
     if ($('.amza-wave').length) {
-        miru.amza.init();
+        amza.stats.init();
     }
 
     $('.float-table-head').each(function (j, table) {

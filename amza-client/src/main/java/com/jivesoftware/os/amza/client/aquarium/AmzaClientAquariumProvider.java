@@ -5,6 +5,7 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.aquarium.Aquarium;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
@@ -57,6 +58,7 @@ public class AmzaClientAquariumProvider {
         deadAfterMillis,
         firstLivelinessTimestamp);
      */
+    private final AquariumStats aquariumStats;
     private final String serviceName;
     private final PartitionClientProvider partitionClientProvider;
     private final OrderIdProvider orderIdProvider;
@@ -91,7 +93,8 @@ public class AmzaClientAquariumProvider {
         }
     };
 
-    public AmzaClientAquariumProvider(String serviceName,
+    public AmzaClientAquariumProvider(AquariumStats aquariumStats,
+        String serviceName,
         PartitionClientProvider partitionClientProvider,
         OrderIdProvider orderIdProvider,
         Member member,
@@ -108,6 +111,7 @@ public class AmzaClientAquariumProvider {
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis) throws Exception {
 
+        this.aquariumStats = aquariumStats;
         this.serviceName = serviceName;
         this.partitionClientProvider = partitionClientProvider;
         this.orderIdProvider = orderIdProvider;
@@ -132,7 +136,8 @@ public class AmzaClientAquariumProvider {
             additionalSolverAfterNMillis,
             abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis);
-        this.liveliness = new Liveliness(System::currentTimeMillis,
+        this.liveliness = new Liveliness(aquariumStats,
+            System::currentTimeMillis,
             livelinessStorage,
             member,
             atQuorum,
@@ -229,7 +234,8 @@ public class AmzaClientAquariumProvider {
                 TransitionQuorum desiredTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
                     return writeDesired.put(existing.getMember(), nextState, nextTimestamp);
                 };
-                return new Aquarium(orderIdProvider,
+                return new Aquarium(aquariumStats,
+                    orderIdProvider,
                     currentStateStorage(name),
                     desiredStateStorage(name),
                     currentTransitionQuorum,

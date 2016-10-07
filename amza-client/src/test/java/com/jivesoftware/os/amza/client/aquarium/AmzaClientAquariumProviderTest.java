@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
@@ -52,10 +53,12 @@ public class AmzaClientAquariumProviderTest {
                 return getPartition(partitionName);
             }
         };
+        AquariumStats aquariumStats = new AquariumStats();
 
         AmzaClientAquariumProvider[] providers = new AmzaClientAquariumProvider[ringSize];
         for (int i = 0; i < ringSize; i++) {
-            providers[i] = new AmzaClientAquariumProvider(serviceName,
+            providers[i] = new AmzaClientAquariumProvider(aquariumStats,
+                serviceName,
                 partitionClientProvider,
                 orderIdProvider,
                 new Member(("member" + i).getBytes(StandardCharsets.UTF_8)),

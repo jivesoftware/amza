@@ -37,6 +37,7 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.Aquarium.Tx;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
@@ -75,6 +76,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
 
+    private final AquariumStats aquariumStats;
     private final BAInterner interner;
     private final RingMember rootRingMember;
     private final Member rootAquariumMember;
@@ -103,7 +105,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = Maps.newConcurrentMap();
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileBootstrap = Maps.newConcurrentMap();
 
-    public AmzaAquariumProvider(BAInterner interner,
+    public AmzaAquariumProvider(AquariumStats aquariumStats,
+        BAInterner interner,
         RingMember rootRingMember,
         OrderIdProvider orderIdProvider,
         AmzaRingStoreReader ringStoreReader,
@@ -117,6 +120,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         AwaitNotify<PartitionName> awaitLivelyEndState,
         SickThreads sickThreads) {
 
+        this.aquariumStats = aquariumStats;
         this.interner = interner;
         this.rootRingMember = rootRingMember;
         this.rootAquariumMember = rootRingMember.asAquariumMember();
@@ -312,7 +316,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         IsCurrentMember isCurrentMember = member -> {
             return ringStoreReader.getRing(partitionName.getRingName()).aquariumMembers.contains(member);
         };
-        return new ReadWaterline<>(amzaStateStorage, amzaMemberLifecycle, atQuorum, isCurrentMember, Long.class).get(remoteRingMember.asAquariumMember());
+        return new ReadWaterline<>(aquariumStats.getMyCurrentWaterline, aquariumStats.getOthersCurrentWaterline, aquariumStats.acknowledgeCurrentOther,
+            amzaStateStorage, amzaMemberLifecycle, atQuorum, isCurrentMember, Long.class).get(remoteRingMember.asAquariumMember());
     }
 
     private Aquarium buildAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -440,7 +445,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             return ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName()).aquariumMembers.contains(member);
         };
 
-        return new Aquarium(orderIdProvider,
+        return new Aquarium(aquariumStats,
+            orderIdProvider,
             currentStateStorage(versionedPartitionName.getPartitionName()),
             desiredStateStorage(versionedPartitionName.getPartitionName()),
             currentTransitionQuorum,
@@ -452,21 +458,21 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             isCurrentMember,
             rootRingMember.asAquariumMember(),
             new AwaitLivelyEndState() {
-                @Override
-                public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
-                    return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
-                        () -> {
-                            LivelyEndState state = awaiter.call();
-                            return state != null ? Optional.of(state) : null;
-                        },
-                        timeoutMillis);
-                }
+            @Override
+            public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
+                return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
+                    () -> {
+                        LivelyEndState state = awaiter.call();
+                        return state != null ? Optional.of(state) : null;
+                    },
+                    timeoutMillis);
+            }
 
-                @Override
-                public void notifyChange(Callable<Boolean> change) throws Exception {
-                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
-                }
-            });
+            @Override
+            public void notifyChange(Callable<Boolean> change) throws Exception {
+                awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
+            }
+        });
     }
 
     @Override
@@ -521,6 +527,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             if (ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName())) {
                 Waterline leader = livelyEndState.getLeaderWaterline();
                 if (leader == null || !leader.getMember().equals(rootAquariumMember)) {
+
                     aquarium.suggestState(State.follower);
                 }
                 aquarium.tapTheGlass();
@@ -604,24 +611,24 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8 + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
             UIO.writeLong(filer, partitionVersion, "partitionVersion");
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
+            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[]{(byte) 1} : new byte[]{(byte) 0}, "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
             return filer.getBytes();
         } else if (rootRingMember != null) {
             int rootSizeInBytes = 4 + rootRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
             UIO.writeLong(filer, partitionVersion, "partitionVersion");
             return filer.getBytes();
         } else {
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             return filer.getBytes();
         }
     }
@@ -674,7 +681,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(rootSizeInBytes + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
+            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[]{(byte) 1} : new byte[]{(byte) 0}, "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
             return filer.getBytes();
         } else {

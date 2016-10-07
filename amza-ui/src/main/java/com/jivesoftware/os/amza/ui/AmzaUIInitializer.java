@@ -36,6 +36,7 @@ import com.jivesoftware.os.amza.ui.region.OverviewRegion;
 import com.jivesoftware.os.amza.ui.soy.SoyDataUtils;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
 import java.util.List;
@@ -56,6 +57,7 @@ public class AmzaUIInitializer {
         RingHost host,
         AmzaService amzaService,
         PartitionClientProvider clientProvider,
+        AquariumStats aquariumStats,
         AmzaStats amzaStats,
         TimestampProvider timestampProvider,
         IdPacker idPacker,
@@ -115,7 +117,7 @@ public class AmzaUIInitializer {
         ManagePlugin aquariumPlugin = new ManagePlugin("piggy-bank", "Aquarium", "/amza/ui/aquarium",
             AquariumPluginEndpoints.class,
             new AquariumPluginRegion("soy.page.aquariumPluginRegion", renderer, amzaService.getRingReader(),
-                amzaService.getAquariumProvider(), amzaService.getLiveliness()));
+                amzaService.getAquariumProvider(), amzaService.getLiveliness(), aquariumStats));
 
         ManagePlugin clusterPlugin = new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
             AmzaClusterPluginEndpoints.class,
@@ -152,6 +154,7 @@ public class AmzaUIInitializer {
         injectionCallback.addInjectable(AmzaClusterName.class, new AmzaClusterName((clusterName == null) ? "manual" : clusterName));
         injectionCallback.addInjectable(AmzaRingWriter.class, amzaService.getRingWriter());
         injectionCallback.addInjectable(AmzaStats.class, amzaStats);
+        injectionCallback.addInjectable(AquariumStats.class, aquariumStats);
         injectionCallback.addInjectable(RingHost.class, host);
     }
 }

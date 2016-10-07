@@ -63,7 +63,7 @@ public class BinaryRowWriter implements WALWriter {
 
         long l = memoryFiler.length();
         long startFp;
-        ioStats.wrote.addAndGet(l);
+        ioStats.wrote.add(l);
         synchronized (appendOnly.lock()) {
             startFp = appendOnly.length();
             appendOnly.write(memoryFiler.leakBytes(), 0, (int) l);

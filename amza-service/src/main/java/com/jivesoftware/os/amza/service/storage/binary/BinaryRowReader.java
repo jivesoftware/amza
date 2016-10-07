@@ -193,7 +193,7 @@ public class BinaryRowReader implements WALReader {
             }
             return true;
         } finally {
-            ioStats.read.addAndGet(read);
+            ioStats.read.add(read);
         }
     }
 
@@ -294,7 +294,7 @@ public class BinaryRowReader implements WALReader {
             }
             return true;
         } finally {
-            ioStats.read.addAndGet(read);
+            ioStats.read.add(read);
         }
     }
 

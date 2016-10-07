@@ -102,7 +102,7 @@ public class HttpRowsTaker implements RowsTaker {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8192); // TODO config??
             DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
             StreamingTakeConsumed consumed = streamingTakesConsumer.consume(dis, rowStream);
-            amzaStats.netStats.read.addAndGet(consumed.bytes);
+            amzaStats.netStats.read.add(consumed.bytes);
             Map<RingMember, Long> otherHighwaterMarks = consumed.isOnline ? consumed.neighborsHighwaterMarks : null;
             return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.partitionVersion, otherHighwaterMarks);
         } catch (Exception e) {

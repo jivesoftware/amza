@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -110,6 +111,7 @@ public class TakeRingCoordinator {
     long allAvailableRowsStream(PartitionStripeProvider partitionStripeProvider,
         RingMember ringMember,
         long takeSessionId,
+        AtomicLong electionCounter,
         AvailableStream availableStream) throws Exception {
 
         callCount++;
@@ -123,6 +125,7 @@ public class TakeRingCoordinator {
             long timeout = streamPartitionCoordinator(partitionStripeProvider,
                 ringMember,
                 takeSessionId,
+                electionCounter,
                 availableStream,
                 ring,
                 versionedPartitionName,
@@ -136,6 +139,7 @@ public class TakeRingCoordinator {
         RingMember ringMember,
         long takeSessionId,
         List<VersionedPartitionName> versionedPartitionNames,
+        AtomicLong electionCounter,
         AvailableStream availableStream) throws Exception {
 
         callCount++;
@@ -146,6 +150,7 @@ public class TakeRingCoordinator {
             long timeout = streamPartitionCoordinator(partitionStripeProvider,
                 ringMember,
                 takeSessionId,
+                electionCounter,
                 availableStream,
                 ring,
                 versionedPartitionName,
@@ -158,6 +163,7 @@ public class TakeRingCoordinator {
     private long streamPartitionCoordinator(PartitionStripeProvider partitionStripeProvider,
         RingMember ringMember,
         long takeSessionId,
+        AtomicLong electionCounter,
         AvailableStream availableStream,
         VersionedRing ring,
         VersionedPartitionName versionedPartitionName,
@@ -172,6 +178,7 @@ public class TakeRingCoordinator {
                     takeSessionId,
                     ring,
                     ringMember,
+                    electionCounter,
                     availableStream);
             } catch (PartitionIsDisposedException e) {
                 LOG.warn("Partition {} was disposed when streaming available rows", versionedPartitionName);

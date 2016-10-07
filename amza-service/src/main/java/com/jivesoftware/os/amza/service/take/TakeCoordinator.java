@@ -66,6 +66,7 @@ public class TakeCoordinator {
     private final long slowTakeInMillis;
     private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
+    private final long reofferMaxElectionsPerHeartbeat;
     private final long hangupAvailableRowsAfterUnresponsiveMillis;
 
     private final Map<SessionKey, Session> takeSessions = Maps.newConcurrentMap();
@@ -81,7 +82,9 @@ public class TakeCoordinator {
         long cyaIntervalMillis,
         long slowTakeInMillis,
         long systemReofferDeltaMillis,
-        long reofferDeltaMillis, long hangupAvailableRowsAfterUnresponsiveMillis) {
+        long reofferDeltaMillis,
+        long reofferMaxElectionsPerHeartbeat,
+        long hangupAvailableRowsAfterUnresponsiveMillis) {
         this.systemWALStorage = systemWALStorage;
         this.rootMember = rootMember;
         this.amzaStats = amzaStats;
@@ -92,6 +95,7 @@ public class TakeCoordinator {
         this.slowTakeInMillis = slowTakeInMillis;
         this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
+        this.reofferMaxElectionsPerHeartbeat = reofferMaxElectionsPerHeartbeat;
         this.hangupAvailableRowsAfterUnresponsiveMillis = hangupAvailableRowsAfterUnresponsiveMillis;
     }
 
@@ -349,6 +353,7 @@ public class TakeCoordinator {
 
             long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
 
+            AtomicLong electionCounter = new AtomicLong(-1);
             RingNameStream ringNameStream = (ringName, ringHash) -> {
                 if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
                     return true;
@@ -360,6 +365,7 @@ public class TakeCoordinator {
                         ring.allAvailableRowsStream(partitionStripeProvider,
                             remoteRingMember,
                             takeSessionId,
+                            electionCounter,
                             watchAvailableStream));
                 }
                 return true;
@@ -377,6 +383,7 @@ public class TakeCoordinator {
                 long timeSinceLastFullScan = System.currentTimeMillis() - lastScan;
                 long start = System.currentTimeMillis();
                 if (timeSinceLastFullScan >= heartbeatIntervalMillis) {
+                    electionCounter.set(reofferMaxElectionsPerHeartbeat);
                     if (system) {
                         ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
                     } else {
@@ -421,6 +428,7 @@ public class TakeCoordinator {
                                         remoteRingMember,
                                         takeSessionId,
                                         versionedPartitionNames,
+                                        electionCounter,
                                         watchAvailableStream));
                             }
                             return true;

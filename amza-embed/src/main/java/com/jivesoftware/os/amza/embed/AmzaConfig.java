@@ -14,6 +14,9 @@ public interface AmzaConfig extends Config {
     @LongDefault(60_000L)
     long getTakeSlowThresholdInMillis();
 
+    @LongDefault(1_000)
+    long getTakeReofferMaxElectionsPerHeartbeat();
+
     @LongDefault(60_000L)
     long getHangupAvailableRowsAfterUnresponsiveMillis();
 

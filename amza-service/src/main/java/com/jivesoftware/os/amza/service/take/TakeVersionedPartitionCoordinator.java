@@ -15,10 +15,6 @@ import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
 import com.jivesoftware.os.amza.service.take.TakeRingCoordinator.VersionedRing;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
-import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -27,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -79,6 +76,7 @@ public class TakeVersionedPartitionCoordinator {
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
+        AtomicLong electionCounter,
         AvailableStream availableStream) throws Exception {
 
         if (expunged || stableTaker(ringMember, takeSessionId, null).isDormant()) {
@@ -102,6 +100,7 @@ public class TakeVersionedPartitionCoordinator {
                         ringMember,
                         stable.isOnline(),
                         stable.isNominated(),
+                        electionCounter,
                         availableStream);
                 } else {
                     LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
@@ -189,6 +188,7 @@ public class TakeVersionedPartitionCoordinator {
         RingMember ringMember,
         boolean takerIsOnline,
         boolean takerIsNominated,
+        AtomicLong electionCounter,
         AvailableStream availableStream) throws Exception {
 
         if (isInBootstrap.get()) {
@@ -212,6 +212,7 @@ public class TakeVersionedPartitionCoordinator {
 
             Session session = sessions.computeIfAbsent(ringMember, key -> new Session());
             long highestTxId = highestPartitionTx(txPartitionStripe, versionedAquarium);
+            boolean electable = false;
             while (true) {
                 synchronized (session) {
                     if (session.sessionId != takeSessionId) {
@@ -231,11 +232,16 @@ public class TakeVersionedPartitionCoordinator {
                         session.tookFully = false;
                         session.steadyState = false;
                     } else if (takerIsNominated || isSufficientCategory && (!takerIsOnline || shouldOffer(session, highestTxId))) {
-                        available = true;
-                        session.sessionId = takeSessionId;
-                        session.offeredTxId = highestTxId;
-                        session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
-                        session.steadyState = false;
+                        electable |= electionCounter.decrementAndGet() >= 0; // note: magical short circuit OR
+                        if (electable) {
+                            available = true;
+                            session.sessionId = takeSessionId;
+                            session.offeredTxId = highestTxId;
+                            session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                            session.steadyState = false;
+                        } else {
+                            break;
+                        }
                     } else {
                         session.steadyState = !isSufficientCategory || (session.tookTxId >= highestTxId);
                     }

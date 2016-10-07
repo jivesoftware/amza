@@ -67,8 +67,8 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
         this.aquariumStats = aquariumStats;
 
         for (State state : State.values()) {
-            currentStateMetricBuffer.put(state, new LABSparseCircularMetricBuffer(180, 0, 10_000));
-            desiredStateMetricBuffer.put(state, new LABSparseCircularMetricBuffer(180, 0, 10_000));
+            currentStateMetricBuffer.put(state, new LABSparseCircularMetricBuffer(120, 0, 1_000));
+            desiredStateMetricBuffer.put(state, new LABSparseCircularMetricBuffer(120, 0, 1_000));
         }
 
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
@@ -77,7 +77,7 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
             } catch (Exception x) {
                 LOG.warn("Refresh aquarium stats failed", x);
             }
-        }, 0, 1, TimeUnit.SECONDS);
+        }, 0, 500, TimeUnit.MILLISECONDS);
     }
 
     public void refresh() {

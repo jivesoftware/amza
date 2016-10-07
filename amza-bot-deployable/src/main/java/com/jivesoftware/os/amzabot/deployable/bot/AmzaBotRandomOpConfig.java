@@ -44,4 +44,12 @@ public interface AmzaBotRandomOpConfig extends Config {
     int getSnapshotFrequency();
     void setSnapshotFrequency(int value);
 
+    @BooleanDefault(true)
+    boolean getClientOrdering();
+    void setClientOrdering(boolean value);
+
+    @IntDefault(1_000)
+    int getBatchFactor();
+    void setBatchFactor(int value);
+
 }

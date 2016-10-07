@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amzabot.deployable.bot;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotService;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotUtil;
@@ -12,6 +13,7 @@ import com.jivesoftware.os.mlogger.core.ValueType;
 import java.util.AbstractMap;
 import java.util.Map.Entry;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -57,11 +59,19 @@ public class AmzaBotRandomOpService {
     public int randomOp(String keySeed) throws Exception {
         int op = RANDOM.nextInt(7);
 
+        // 0 - read
+        // 1 - delete
+        // 2 - batch write
+        // 3 - batch delete
+        // 4 - cas
+        // 5,6 - write
+
         if (op == 0) {
-            // read
+            LOG.debug("random operation: read");
+
             Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
             if (entry == null) {
-                // need at least one write
+                LOG.debug("Need at least one entry to read");
                 return op;
             }
 
@@ -83,23 +93,80 @@ public class AmzaBotRandomOpService {
                 LOG.debug("Found key {}", entry.getKey());
             }
         } else if (op == 1) {
-            // delete
+            LOG.debug("random operation: delete");
+
             Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
             if (entry == null) {
-                // need at least one write
+                LOG.debug("Need at least one entry to delete");
                 return op;
             }
 
             service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
-            amzaKeyClearingHouse.delete(entry.getKey());
+            Integer oldValue = amzaKeyClearingHouse.delete(entry.getKey());
+            if (oldValue == null) {
+                LOG.error("Did not find existing kv pair: {}", entry.getKey());
+
+                amzaKeyClearingHouse.quarantineEntry(
+                    new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue().hashCode()), null);
+                service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
+            }
 
             LOG.debug("Deleted {}", entry.getKey());
-        } else if (op == 2 || op == 3) {
-            // cas
-            // odds are double that of read or delete
+        } else if (op == 2) {
+            LOG.debug("random operation: write batch; disregard write threshold");
+
+            Set<Entry<String, String>> entries = Sets.newHashSet();
+            for (int i = 0; i < RANDOM.nextInt(config.getBatchFactor()); i++) {
+                entries.add(amzaKeyClearingHouse.genRandomEntry(keySeed + ":" + i, config.getValueSizeThreshold()));
+            }
+
+            service.multiSetWithInfiniteRetry(entries, config.getRetryWaitMs());
+
+            for (Entry<String, String> entry : entries) {
+                Integer oldValue = amzaKeyClearingHouse.set(entry.getKey(), entry.getValue());
+                if (oldValue != null) {
+                    LOG.error("Found existing kv pair: {}:{}", entry.getKey(), oldValue);
+
+                    amzaKeyClearingHouse.quarantineEntry(
+                        new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue().hashCode()), oldValue);
+                    service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
+                }
+            }
+
+            LOG.debug("Wrote {} entries", entries.size());
+        } else if (op == 3) {
+            LOG.debug("random operation: delete batch; disregard write threshold");
+
+            Set<Entry<String, Integer>> entries = Sets.newHashSet();
+            for (int i = 0; i < RANDOM.nextInt(config.getBatchFactor()); i++) {
+                Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
+                if (entry == null) {
+                    break;
+                }
+
+                entries.add(amzaKeyClearingHouse.getRandomEntry());
+            }
+
+            service.multiDeleteWithInfiniteRetry(entries, config.getRetryWaitMs());
+
+            for (Entry<String, Integer> entry : entries) {
+                Integer oldValue = amzaKeyClearingHouse.delete(entry.getKey());
+                if (oldValue == null) {
+                    LOG.error("Did not find existing kv pair: {}", entry.getKey());
+
+                    amzaKeyClearingHouse.quarantineEntry(
+                        new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue().hashCode()), null);
+                    service.deleteWithInfiniteRetry(entry.getKey(), config.getRetryWaitMs());
+                }
+            }
+
+            LOG.debug("Deleted {} entries", entries.size());
+        } else if (op == 4) {
+            LOG.debug("random operation: cas");
+
             Entry<String, Integer> entry = amzaKeyClearingHouse.getRandomEntry();
             if (entry == null) {
-                // need at least one write
+                LOG.debug("Need at least one entry for cas");
                 return op;
             }
 
@@ -137,8 +204,8 @@ public class AmzaBotRandomOpService {
                 LOG.debug("CAS {}:{}", entry.getKey(), AmzaBotUtil.truncVal(newValue));
             }
         } else {
-            // write
-            // odds are thrice that of read or delete
+            LOG.debug("random operation: write; odds are twice");
+
             if (amzaKeyClearingHouse.getKeyMap().size() < config.getWriteThreshold()) {
                 Entry<String, String> entry =
                     amzaKeyClearingHouse.genRandomEntry(keySeed, config.getValueSizeThreshold());
@@ -168,14 +235,16 @@ public class AmzaBotRandomOpService {
     }
 
     public void start() {
-        LOG.info("Hesitation factor {}", config.getHesitationFactorMs());
-        LOG.info("Write threshold {}", config.getWriteThreshold());
-        LOG.info("Value size threshold {}", config.getValueSizeThreshold());
-        LOG.info("Durability {}", config.getDurability());
-        LOG.info("Consistency {}", config.getConsistency());
-        LOG.info("Ring size {}", config.getRingSize());
-        LOG.info("Retry wait {}ms", config.getRetryWaitMs());
-        LOG.info("Snapshot frequency {}", config.getSnapshotFrequency());
+        LOG.info("Hesitation factor: {}", config.getHesitationFactorMs());
+        LOG.info("Write threshold: {}", config.getWriteThreshold());
+        LOG.info("Value size threshold: {}", config.getValueSizeThreshold());
+        LOG.info("Durability: {}", config.getDurability());
+        LOG.info("Consistency: {}", config.getConsistency());
+        LOG.info("Ring size: {}", config.getRingSize());
+        LOG.info("Retry wait: {}ms", config.getRetryWaitMs());
+        LOG.info("Snapshot frequency: {}", config.getSnapshotFrequency());
+        LOG.info("Client ordering: {}", config.getClientOrdering());
+        LOG.info("Batch factor: {}", config.getBatchFactor());
 
         if (!config.getEnabled()) {
             LOG.warn("Not starting random operations; not enabled.");
@@ -205,12 +274,14 @@ public class AmzaBotRandomOpService {
                     }
 
                     if (seq.getValue() % config.getSnapshotFrequency() == 0) {
-                        LOG.info("Executed {} random operations. {} reads, {} deletes, {} cas, {} writes",
+                        LOG.info("Executed {} random operations. {} reads, {} deletes, {} batch writes, {} batch deletes, {} cas, {} writes",
                             seq.getCount(),
                             opsCounter.get(0).getValue(),
                             opsCounter.get(1).getValue(),
-                            opsCounter.get(2).getValue() + opsCounter.get(3).getValue(),
-                            opsCounter.get(4).getValue() + opsCounter.get(5).getValue() + opsCounter.get(6).getValue());
+                            opsCounter.get(2).getValue(),
+                            opsCounter.get(3).getValue(),
+                            opsCounter.get(4).getValue(),
+                            opsCounter.get(5).getValue() + opsCounter.get(6).getValue());
 
                         amzaKeyClearingHouse.verifyKeyMap(service.getAllWithInfiniteRetry(config.getRetryWaitMs()));
                     }

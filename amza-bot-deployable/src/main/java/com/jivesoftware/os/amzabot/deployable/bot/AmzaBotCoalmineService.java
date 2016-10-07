@@ -7,8 +7,12 @@ import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotConfig;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotService;
 import com.jivesoftware.os.amzabot.deployable.AmzaKeyClearingHousePool;
+import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,6 +24,7 @@ public class AmzaBotCoalmineService {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final InstanceConfig instanceConfig;
     private final AmzaBotConfig amzaBotConfig;
     private final AmzaBotCoalmineConfig amzaBotCoalmineConfig;
     private final PartitionClientProvider partitionClientProvider;
@@ -30,10 +35,12 @@ public class AmzaBotCoalmineService {
         Executors.newSingleThreadScheduledExecutor(
             new ThreadFactoryBuilder().setNameFormat("amzabot-coalmine-%d").build());
 
-    public AmzaBotCoalmineService(AmzaBotConfig amzaBotConfig,
+    public AmzaBotCoalmineService(InstanceConfig instanceConfig,
+        AmzaBotConfig amzaBotConfig,
         AmzaBotCoalmineConfig amzaBotCoalmineConfig,
         PartitionClientProvider partitionClientProvider,
         AmzaKeyClearingHousePool amzaKeyClearingHousePool) {
+        this.instanceConfig = instanceConfig;
         this.amzaBotConfig = amzaBotConfig;
         this.amzaBotCoalmineConfig = amzaBotCoalmineConfig;
         this.partitionClientProvider = partitionClientProvider;
@@ -41,17 +48,25 @@ public class AmzaBotCoalmineService {
     }
 
     public AmzaBotCoalminer newMinerWithConfig(AmzaBotCoalmineConfig config) throws Exception {
-        LOG.info("Coalmine capacity {}", config.getCoalmineCapacity());
-        LOG.info("Canary size threshold {}", config.getCanarySizeThreshold());
-        LOG.info("Hesitation {}ms", config.getHesitationMs());
-        LOG.info("Durability {}", config.getDurability());
-        LOG.info("Consistency {}", config.getConsistency());
-        LOG.info("Ring size {}", config.getRingSize());
+        LOG.info("Coalmine capacity: {}", config.getCoalmineCapacity());
+        LOG.info("Canary size threshold: {}", config.getCanarySizeThreshold());
+        LOG.info("Hesitation: {}ms", config.getHesitationMs());
+        LOG.info("Durability: {}", config.getDurability());
+        LOG.info("Consistency: {}", config.getConsistency());
+        LOG.info("Ring size: {}", config.getRingSize());
+        LOG.info("Client timestamp: {}", config.getClientOrdering());
+
+        OrderIdProvider orderIdProvider = () -> -1L;
+        if (config.getClientOrdering()) {
+            orderIdProvider = new OrderIdProviderImpl(
+                new ConstantWriterIdProvider(instanceConfig.getInstanceName()));
+        }
 
         return new AmzaBotCoalminer(
             config,
             new AmzaBotService(amzaBotConfig,
                 partitionClientProvider,
+                orderIdProvider,
                 Durability.valueOf(config.getDurability()),
                 Consistency.valueOf(config.getConsistency()),
                 "amzabot-coalmine-" + UUID.randomUUID().toString(),

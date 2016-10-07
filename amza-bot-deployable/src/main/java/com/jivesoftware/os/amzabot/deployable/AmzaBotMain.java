@@ -25,6 +25,9 @@ import com.jivesoftware.os.amzabot.deployable.ui.health.UiEndpoints;
 import com.jivesoftware.os.amzabot.deployable.ui.health.UiService;
 import com.jivesoftware.os.amzabot.deployable.ui.health.UiServiceInitializer;
 import com.jivesoftware.os.amzabot.deployable.ui.health.UiServiceInitializer.UiServiceConfig;
+import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
@@ -124,16 +127,24 @@ public class AmzaBotMain {
             AmzaBotService amzaBotService = new AmzaBotService(
                 amzaBotConfig,
                 amzaClientProvider,
+                () -> -1L,
                 Durability.fsync_async,
                 Consistency.leader_quorum,
                 "amzabot-rest",
                 amzaBotConfig.getRingSize());
+
+            OrderIdProvider orderIdProviderRandomOp = () -> -1L;
+            if (amzaBotRandomOpConfig.getClientOrdering()) {
+                orderIdProviderRandomOp = new OrderIdProviderImpl(
+                    new ConstantWriterIdProvider(instanceConfig.getInstanceName()));
+            }
 
             AmzaBotRandomOpService amzaBotRandomOpService = new AmzaBotRandomOpService(
                 amzaBotRandomOpConfig,
                 new AmzaBotService(
                     amzaBotConfig,
                     amzaClientProvider,
+                    orderIdProviderRandomOp,
                     Durability.valueOf(amzaBotRandomOpConfig.getDurability()),
                     Consistency.valueOf(amzaBotRandomOpConfig.getConsistency()),
                     "amzabot-randomops-" + UUID.randomUUID().toString(),
@@ -142,6 +153,7 @@ public class AmzaBotMain {
             amzaBotRandomOpService.start();
 
             AmzaBotCoalmineService amzaBotCoalmineService = new AmzaBotCoalmineService(
+                instanceConfig,
                 amzaBotConfig,
                 amzaBotCoalmineConfig,
                 amzaClientProvider,

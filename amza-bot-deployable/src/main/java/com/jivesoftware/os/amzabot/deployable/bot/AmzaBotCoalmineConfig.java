@@ -40,4 +40,8 @@ public interface AmzaBotCoalmineConfig extends Config {
     int getRingSize();
     void setRingSize(int value);
 
+    @BooleanDefault(true)
+    boolean getClientOrdering();
+    void setClientOrdering(boolean value);
+
 }

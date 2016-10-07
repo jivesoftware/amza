@@ -12,9 +12,9 @@ import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineConfig;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineService;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalminer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
+import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -26,14 +26,11 @@ import org.testng.annotations.Test;
 public class AmzaBotCoalmineTest {
 
     private AmzaBotCoalmineService service;
-    private AmzaBotConfig amzaBotConfig;
-    private AmzaBotCoalmineConfig amzaBotCoalmineConfig;
 
     @BeforeMethod
     public void setUp() throws Exception {
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
-            new SnowflakeIdPacker(),
-            new JiveEpochTimestampProvider());
+        OrderIdProvider orderIdProvider = new OrderIdProviderImpl(
+            new ConstantWriterIdProvider(1));
 
         Map<PartitionName, PartitionClient> indexes = new ConcurrentHashMap<>();
         PartitionClientProvider partitionClientProvider = new PartitionClientProvider() {
@@ -49,9 +46,12 @@ public class AmzaBotCoalmineTest {
             }
         };
 
-        amzaBotConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
+        InstanceConfig instanceConfig = BindInterfaceToConfiguration.bindDefault(InstanceConfig.class);
+        instanceConfig.setInstanceName(1);
 
-        amzaBotCoalmineConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotCoalmineConfig.class);
+        AmzaBotConfig amzaBotConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotConfig.class);
+
+        AmzaBotCoalmineConfig amzaBotCoalmineConfig = BindInterfaceToConfiguration.bindDefault(AmzaBotCoalmineConfig.class);
         amzaBotCoalmineConfig.setEnabled(false);
         amzaBotCoalmineConfig.setFrequencyMs(60_000L);
         amzaBotCoalmineConfig.setCoalmineCapacity(10L);
@@ -60,8 +60,10 @@ public class AmzaBotCoalmineTest {
         amzaBotCoalmineConfig.setDurability(String.valueOf(Durability.fsync_async));
         amzaBotCoalmineConfig.setConsistency(String.valueOf(Consistency.leader_quorum));
         amzaBotCoalmineConfig.setRingSize(1);
+        amzaBotCoalmineConfig.setClientOrdering(true);
 
         service = new AmzaBotCoalmineService(
+            instanceConfig,
             amzaBotConfig,
             amzaBotCoalmineConfig,
             partitionClientProvider,

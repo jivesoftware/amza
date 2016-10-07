@@ -10,9 +10,8 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Map;
@@ -31,9 +30,8 @@ public class AmzaBotServiceTest {
 
     @BeforeMethod
     public void setUp() throws Exception {
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
-            new SnowflakeIdPacker(),
-            new JiveEpochTimestampProvider());
+        OrderIdProvider orderIdProvider = new OrderIdProviderImpl(
+            new ConstantWriterIdProvider(1));
 
         Map<PartitionName, PartitionClient> indexes = new ConcurrentHashMap<>();
         PartitionClientProvider partitionClientProvider = new PartitionClientProvider() {
@@ -55,9 +53,10 @@ public class AmzaBotServiceTest {
         service = new AmzaBotService(
             config,
             partitionClientProvider,
+            () -> -1,
             Durability.fsync_async,
             Consistency.leader_quorum,
-            "amzabot-servicetest-",
+            "amzabot-service-test",
             config.getRingSize());
     }
 

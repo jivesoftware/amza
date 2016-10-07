@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +27,7 @@ public class AmzaBotService {
 
     private final AmzaBotConfig config;
     private final PartitionClientProvider partitionClientProvider;
+    private final OrderIdProvider orderIdProvider;
     private final Durability durability;
     private final Consistency consistency;
     private final String partitionNameName;
@@ -35,12 +37,14 @@ public class AmzaBotService {
 
     public AmzaBotService(AmzaBotConfig config,
         PartitionClientProvider partitionClientProvider,
+        OrderIdProvider orderIdProvider,
         Durability durability,
         Consistency consistency,
         String partitionNameName,
         int ringSize) {
         this.config = config;
         this.partitionClientProvider = partitionClientProvider;
+        this.orderIdProvider = orderIdProvider;
         this.durability = durability;
         this.consistency = consistency;
         this.partitionNameName = partitionNameName;
@@ -78,7 +82,46 @@ public class AmzaBotService {
             partitionName,
             ringSize,
             partitionProperties);
+
         LOG.info("Created partition for amzabot {} of size {}", partitionName, ringSize);
+    }
+
+    public void setWithInfiniteRetry(String k, String v, int retryIntervalMs) throws Exception {
+        setWithRetry(k, v, Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    void setWithRetry(String k, String v,
+        int retryCount, int retryIntervalMs) throws Exception {
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
+        }
+
+        int currentTryCount = 1;
+
+        while (retriesLeft > 0) {
+            try {
+                set(k, v);
+                retriesLeft = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred setting key {}:{} - {}",
+                    k,
+                    AmzaBotUtil.truncVal(v),
+                    e.getLocalizedMessage());
+
+                if (retriesLeft > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry setting in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry setting value. Tried {} times.", currentTryCount);
+                    }
+                }
+            } finally {
+                retriesLeft--;
+                currentTryCount++;
+            }
+        }
     }
 
     public void set(String k, String v) throws Exception {
@@ -100,119 +143,14 @@ public class AmzaBotService {
                 commitKeyValueStream.commit(
                     k.getBytes(StandardCharsets.UTF_8),
                     v.getBytes(StandardCharsets.UTF_8),
-                    -1,
+                    orderIdProvider.nextId(),
                     false);
+
                 return true;
             },
             config.getAdditionalSolverAfterNMillis(),
             config.getAbandonSolutionAfterNMillis(),
             Optional.empty());
-    }
-
-    public void multiSet(Set<Entry<String, String>> entries) throws Exception {
-        if (entries == null) {
-            LOG.warn("Empty set of entries.");
-            return;
-        }
-
-        if (partitionClient == null) {
-            initialize();
-        }
-
-        for (Entry<String, String> entry : entries) {
-            LOG.debug("set {}:{}", entry.getKey(), AmzaBotUtil.truncVal(entry.getValue()));
-        }
-
-        if (config.getDropEverythingOnTheFloor()) {
-            LOG.warn("Dropping sets on the floor.");
-            return;
-        }
-
-        partitionClient.commit(
-            consistency,
-            null,
-            (commitKeyValueStream) -> {
-                for (Entry<String, String> entry : entries) {
-                    commitKeyValueStream.commit(
-                        entry.getKey().getBytes(StandardCharsets.UTF_8),
-                        entry.getValue().getBytes(StandardCharsets.UTF_8),
-                        -1,
-                        false);
-                }
-                return true;
-            },
-            config.getAdditionalSolverAfterNMillis(),
-            config.getAbandonSolutionAfterNMillis(),
-            Optional.empty());
-    }
-
-    public void setWithInfiniteRetry(String k, String v, int retryIntervalMs) throws Exception {
-        setWithRetry(k, v, Integer.MAX_VALUE - 1, retryIntervalMs);
-    }
-
-    void setWithRetry(String k, String v,
-        int retryCount, int retryIntervalMs) throws Exception {
-        int retriesLeft = retryCount;
-        if (retriesLeft < Integer.MAX_VALUE) {
-            retriesLeft++;
-        }
-
-        int currentTryCount = 1;
-
-        while (retriesLeft > 0) {
-            try {
-                set(k, v);
-                retriesLeft = 0;
-            } catch (Exception e) {
-                LOG.error("Error occurred writing key {}:{} - {}",
-                    k,
-                    AmzaBotUtil.truncVal(v),
-                    e.getLocalizedMessage());
-
-                if (retriesLeft > 0) {
-                    if (retryIntervalMs > 0) {
-                        LOG.info("Retry writing in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
-                        Thread.sleep(retryIntervalMs);
-                    } else {
-                        LOG.info("Retry writing value. Tried {} times.", currentTryCount);
-                    }
-                }
-            } finally {
-                retriesLeft--;
-                currentTryCount++;
-            }
-        }
-    }
-
-    public String get(String k) throws Exception {
-        LOG.debug("get {}", k);
-
-        if (partitionClient == null) {
-            initialize();
-        }
-
-        List<String> values = Lists.newArrayList();
-        partitionClient.get(consistency,
-            null,
-            (keyStream) -> keyStream.stream(k.getBytes(StandardCharsets.UTF_8)),
-            (prefix, key, value, timestamp, version) -> {
-                if (value != null) {
-                    values.add(new String(value, StandardCharsets.UTF_8));
-                }
-
-                return true;
-            },
-            config.getAbandonSolutionAfterNMillis(),
-            config.getAdditionalSolverAfterNMillis(),
-            config.getAbandonSolutionAfterNMillis(),
-            Optional.empty());
-
-        if (values.isEmpty()) {
-            LOG.warn("key {} not found.", k);
-            return null;
-        }
-
-        return Joiner.on(',').join(values);
     }
 
     public String getWithInfiniteRetry(String k, int retryIntervalMs) throws Exception {
@@ -256,28 +194,35 @@ public class AmzaBotService {
         return res;
     }
 
-    public String delete(String k) throws Exception {
-        LOG.debug("delete {}", k);
+    public String get(String k) throws Exception {
+        LOG.debug("get {}", k);
 
         if (partitionClient == null) {
             initialize();
         }
 
-        String res = get(k);
+        List<String> values = Lists.newArrayList();
+        partitionClient.get(consistency,
+            null,
+            (keyStream) -> keyStream.stream(k.getBytes(StandardCharsets.UTF_8)),
+            (prefix, key, value, timestamp, version) -> {
+                if (value != null) {
+                    values.add(new String(value, StandardCharsets.UTF_8));
+                }
 
-        if (res != null) {
-            partitionClient.commit(consistency,
-                null,
-                (commitKeyValueStream) -> {
-                    commitKeyValueStream.commit(k.getBytes(StandardCharsets.UTF_8), null, -1, true);
-                    return true;
-                },
-                config.getAdditionalSolverAfterNMillis(),
-                config.getAbandonSolutionAfterNMillis(),
-                Optional.empty());
+                return true;
+            },
+            config.getAbandonSolutionAfterNMillis(),
+            config.getAdditionalSolverAfterNMillis(),
+            config.getAbandonSolutionAfterNMillis(),
+            Optional.empty());
+
+        if (values.isEmpty()) {
+            LOG.warn("key {} not found.", k);
+            return null;
         }
 
-        return res;
+        return Joiner.on(',').join(values);
     }
 
     public String deleteWithInfiniteRetry(String k, int retryIntervalMs) throws Exception {
@@ -319,6 +264,186 @@ public class AmzaBotService {
         }
 
         return res;
+    }
+
+    public String delete(String k) throws Exception {
+        LOG.debug("delete {}", k);
+
+        if (partitionClient == null) {
+            initialize();
+        }
+
+        String res = get(k);
+
+        if (res != null) {
+            partitionClient.commit(
+                consistency,
+                null,
+                (commitKeyValueStream) -> {
+                    commitKeyValueStream.commit(
+                        k.getBytes(StandardCharsets.UTF_8),
+                        null,
+                        orderIdProvider.nextId(),
+                        true);
+
+                    return true;
+                },
+                config.getAdditionalSolverAfterNMillis(),
+                config.getAbandonSolutionAfterNMillis(),
+                Optional.empty());
+        }
+
+        return res;
+    }
+
+    public void multiSetWithInfiniteRetry(Set<Entry<String, String>> entries, int retryIntervalMs) throws Exception {
+        multiSetWithRetry(entries, Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    public void multiSetWithRetry(Set<Entry<String, String>> entries,
+        int retryCount, int retryIntervalMs) throws Exception {
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
+        }
+
+        int currentTryCount = 1;
+
+        while (retriesLeft > 0) {
+            try {
+                multiSet(entries);
+                retriesLeft = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred multi-setting {} keys - {}",
+                    entries.size(),
+                    e.getLocalizedMessage());
+
+                if (retriesLeft > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry batch write in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry batch write. Tried {} times.", currentTryCount);
+                    }
+                }
+            } finally {
+                retriesLeft--;
+                currentTryCount++;
+            }
+        }
+    }
+
+    public void multiSet(Set<Entry<String, String>> entries) throws Exception {
+        if (entries == null) {
+            LOG.warn("Empty set of entries.");
+            return;
+        }
+
+        if (partitionClient == null) {
+            initialize();
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Multi-set {}:{}", entries.size(), Joiner.on(",").join(entries));
+        }
+
+        if (config.getDropEverythingOnTheFloor()) {
+            LOG.warn("Dropping multi-sets on the floor.");
+            return;
+        }
+
+        partitionClient.commit(
+            consistency,
+            null,
+            (commitKeyValueStream) -> {
+                for (Entry<String, String> entry : entries) {
+                    commitKeyValueStream.commit(
+                        entry.getKey().getBytes(StandardCharsets.UTF_8),
+                        entry.getValue().getBytes(StandardCharsets.UTF_8),
+                        orderIdProvider.nextId(),
+                        false);
+                }
+
+                return true;
+            },
+            config.getAdditionalSolverAfterNMillis(),
+            config.getAbandonSolutionAfterNMillis(),
+            Optional.empty());
+    }
+
+    public void multiDeleteWithInfiniteRetry(Set<Entry<String, Integer>> entries, int retryIntervalMs) throws Exception {
+        multiDeleteWithRetry(entries, Integer.MAX_VALUE - 1, retryIntervalMs);
+    }
+
+    public void multiDeleteWithRetry(Set<Entry<String, Integer>> entries,
+        int retryCount, int retryIntervalMs) throws Exception {
+        int retriesLeft = retryCount;
+        if (retriesLeft < Integer.MAX_VALUE) {
+            retriesLeft++;
+        }
+
+        int currentTryCount = 1;
+
+        while (retriesLeft > 0) {
+            try {
+                multiDelete(entries);
+                retriesLeft = 0;
+            } catch (Exception e) {
+                LOG.error("Error occurred multi-deleting {} keys - {}",
+                    entries.size(),
+                    e.getLocalizedMessage());
+
+                if (retriesLeft > 0) {
+                    if (retryIntervalMs > 0) {
+                        LOG.info("Retry batch delete in {}ms. Tried {} times.", retryIntervalMs, currentTryCount);
+                        Thread.sleep(retryIntervalMs);
+                    } else {
+                        LOG.info("Retry batch delete. Tried {} times.", currentTryCount);
+                    }
+                }
+            } finally {
+                retriesLeft--;
+                currentTryCount++;
+            }
+        }
+    }
+
+    public void multiDelete(Set<Entry<String, Integer>> entries) throws Exception {
+        if (entries == null) {
+            LOG.warn("Empty set of entries.");
+            return;
+        }
+
+        if (partitionClient == null) {
+            initialize();
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Multi-delete {}:{}", entries.size(), Joiner.on(",").join(entries));
+        }
+
+        if (config.getDropEverythingOnTheFloor()) {
+            LOG.warn("Dropping multi-deletes on the floor.");
+            return;
+        }
+
+        partitionClient.commit(
+            consistency,
+            null,
+            (commitKeyValueStream) -> {
+                for (Entry<String, Integer> entry : entries) {
+                    commitKeyValueStream.commit(
+                        entry.getKey().getBytes(StandardCharsets.UTF_8),
+                        null,
+                        orderIdProvider.nextId(),
+                        true);
+                }
+
+                return true;
+            },
+            config.getAdditionalSolverAfterNMillis(),
+            config.getAbandonSolutionAfterNMillis(),
+            Optional.empty());
     }
 
     public Map<String, String> getAllWithInfiniteRetry(

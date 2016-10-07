@@ -11,9 +11,8 @@ import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpConfig;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpService;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.mlogger.core.AtomicCounter;
 import com.jivesoftware.os.mlogger.core.ValueType;
 import java.util.Map;
@@ -34,9 +33,8 @@ public class AmzaBotRandomOpTest {
 
     @BeforeMethod
     public void setUp() throws Exception {
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
-            new SnowflakeIdPacker(),
-            new JiveEpochTimestampProvider());
+        OrderIdProvider orderIdProvider = new OrderIdProviderImpl(
+            new ConstantWriterIdProvider(1));
 
         Map<PartitionName, PartitionClient> indexes = new ConcurrentHashMap<>();
         PartitionClientProvider partitionClientProvider = new PartitionClientProvider() {
@@ -64,15 +62,18 @@ public class AmzaBotRandomOpTest {
         config.setRingSize(1);
         config.setRetryWaitMs(100);
         config.setSnapshotFrequency(10);
+        config.setClientOrdering(false);
+        config.setBatchFactor(100);
 
         amzaKeyClearingHouse = new AmzaKeyClearingHouse();
         service = new AmzaBotRandomOpService(
             config,
             new AmzaBotService(amzaBotConfig,
                 partitionClientProvider,
+                () -> -1L,
                 Durability.valueOf(config.getDurability()),
                 Consistency.valueOf(config.getConsistency()),
-                "amzabot-randomop-test-",
+                "amzabot-randomop-test",
                 config.getRingSize()),
             amzaKeyClearingHouse);
         service.start();
@@ -100,19 +101,23 @@ public class AmzaBotRandomOpTest {
 
     @Test
     public void testCRUDRandomOp() throws Exception {
-        boolean create, read, update, delete;
-        create = read = update = delete = false;
+        boolean create, read, update, delete, batchWrite, batchDelete;
+        create = read = update = delete = batchWrite = batchDelete = false;
 
         AtomicCounter seq = new AtomicCounter(ValueType.COUNT);
 
-        while (!create || !read || !update || !delete) {
+        while (!create || !read || !update || !delete || !batchWrite || !batchDelete) {
             int op = service.randomOp("test:" + String.valueOf(seq.getValue()));
 
             if (op == 0) {
                 read = true;
             } else if (op == 1) {
                 delete = true;
-            } else if (op == 2 || op == 3) {
+            } else if (op == 2) {
+                batchWrite = true;
+            } else if (op == 3) {
+                batchDelete = true;
+            } else if (op == 4) {
                 update = true;
             } else {
                 create = true;

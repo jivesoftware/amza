@@ -309,6 +309,9 @@ amza.stats = {
                                     beginAtZero: false
                                 }
                             }]
+                    },
+                    animation: {
+                        duration: 0
                     }
                 }
             });

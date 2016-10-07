@@ -415,23 +415,29 @@ public class DeltaStripeWALStorage {
 
                     if (currentVersionProvider.isCurrentVersion(versionedPartitionName)) {
                         PartitionDelta mergeableDelta = entry.getValue();
-                        long mergeableCount = mergeableDelta.size();
-                        unmerged.addAndGet(mergeableCount);
-                        PartitionDelta currentDelta = new PartitionDelta(versionedPartitionName, newDeltaWAL, maxValueSizeInIndex, mergeableDelta);
-                        entry.setValue(currentDelta);
-                        mergeable.incrementAndGet();
-                        futures.add(mergeDeltaThreads.submit(() -> {
-                            return getMergeResult(walCompactionStats,
-                                partitionIndex,
-                                versionedPartitionProvider,
-                                currentVersionProvider,
-                                validate,
-                                mergeable,
-                                merged, unmerged,
-                                versionedPartitionName,
-                                mergeableCount,
-                                currentDelta);
-                        }));
+                        if (mergeableDelta.needsToMerge()) {
+                            long mergeableCount = mergeableDelta.size();
+                            unmerged.addAndGet(mergeableCount);
+                            PartitionDelta currentDelta = new PartitionDelta(versionedPartitionName, newDeltaWAL, maxValueSizeInIndex, mergeableDelta);
+                            entry.setValue(currentDelta);
+                            mergeable.incrementAndGet();
+                            futures.add(mergeDeltaThreads.submit(() -> {
+                                return getMergeResult(walCompactionStats,
+                                    partitionIndex,
+                                    versionedPartitionProvider,
+                                    currentVersionProvider,
+                                    validate,
+                                    mergeable,
+                                    merged,
+                                    unmerged,
+                                    versionedPartitionName,
+                                    mergeableCount,
+                                    currentDelta);
+                            }));
+                        } else {
+                            LOG.warn("Ignored merge for empty partition {}", versionedPartitionName);
+                            iter.remove();
+                        }
                     } else {
                         LOG.warn("Ignored merge for obsolete partition {}", versionedPartitionName);
                         iter.remove();

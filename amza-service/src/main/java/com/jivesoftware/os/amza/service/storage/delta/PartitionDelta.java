@@ -80,6 +80,10 @@ class PartitionDelta {
         return mergingDelta.get() != null;
     }
 
+    boolean needsToMerge() {
+        return !txIdWAL.isEmpty();
+    }
+
     public long size() {
         return pointerIndex.size();
     }

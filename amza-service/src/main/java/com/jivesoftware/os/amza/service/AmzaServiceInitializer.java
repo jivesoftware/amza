@@ -60,6 +60,7 @@ import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTakerFactory;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
@@ -156,6 +157,7 @@ public class AmzaServiceInitializer {
 
     public AmzaService initialize(AmzaServiceConfig config,
         BAInterner interner,
+        AquariumStats aquariumStats,
         AmzaStats amzaStats,
         SickThreads sickThreads,
         SickPartitions sickPartitions,
@@ -355,14 +357,16 @@ public class AmzaServiceInitializer {
         Member rootAquariumMember = ringMember.asAquariumMember();
         AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, orderIdProvider, walUpdated, rootAquariumMember, startupVersion);
         AtQuorum livelinessAtQuorm = count -> count > ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
-        Liveliness liveliness = new Liveliness(System::currentTimeMillis,
+        Liveliness liveliness = new Liveliness(aquariumStats,
+            System::currentTimeMillis,
             livelinessStorage,
             rootAquariumMember,
             livelinessAtQuorm,
             config.aquariumLeaderDeadAfterMillis,
             new AtomicLong(-1));
 
-        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(interner,
+        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(aquariumStats,
+            interner,
             ringMember,
             orderIdProvider,
             ringStoreReader,

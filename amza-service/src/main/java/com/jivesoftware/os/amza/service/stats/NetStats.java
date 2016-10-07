@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.stats;
 
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  *
@@ -8,6 +8,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class NetStats {
 
-    public final AtomicLong read = new AtomicLong();
-    public final AtomicLong wrote = new AtomicLong();
+    public final LongAdder read = new LongAdder();
+    public final LongAdder wrote = new LongAdder();
 }

@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -11,16 +12,19 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.ui.region.AquariumPluginRegion.AquariumPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  *
@@ -30,22 +34,27 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
+    private final NumberFormat format = NumberFormat.getInstance();
+
     private final String template;
     private final SoyRenderer renderer;
     private final AmzaRingStoreReader ringReader;
     private final AmzaAquariumProvider aquariumProvider;
     private final Liveliness liveliness;
+    private final AquariumStats aquariumStats;
 
     public AquariumPluginRegion(String template,
         SoyRenderer renderer,
         AmzaRingStoreReader ringReader,
         AmzaAquariumProvider aquariumProvider,
-        Liveliness liveliness) {
+        Liveliness liveliness,
+        AquariumStats aquariumStats) {
         this.template = template;
         this.renderer = renderer;
         this.ringReader = ringReader;
         this.aquariumProvider = aquariumProvider;
         this.liveliness = liveliness;
+        this.aquariumStats = aquariumStats;
     }
 
     public static class AquariumPluginRegionInput {
@@ -69,6 +78,34 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
             data.put("ringName", input.ringName);
             data.put("partitionName", input.partitionName);
             data.put("partitionVersion", input.hexPartitionVersion);
+
+            List<Map<String, String>> currentStats = Lists.newArrayList();
+            currentStats.add(ImmutableMap.of("name", "getMyCurrentWaterline", "value", format.format(aquariumStats.getMyCurrentWaterline.longValue())));
+            currentStats.add(ImmutableMap.of("name", "getOthersCurrentWaterline", "value", format.format(aquariumStats.getOthersCurrentWaterline.longValue())));
+            currentStats.add(ImmutableMap.of("name", "acknowledgeCurrentOther", "value", format.format(aquariumStats.acknowledgeCurrentOther.longValue())));
+            for (Map.Entry<State, LongAdder> entry : aquariumStats.currentState.entrySet()) {
+                currentStats.add(ImmutableMap.of("name", "current-" + entry.getKey().name(), "value", format.format(entry.getValue().longValue())));
+            }
+
+            List<Map<String, String>> desiredStats = Lists.newArrayList();
+            desiredStats.add(ImmutableMap.of("name", "getMyDesiredWaterline", "value", format.format(aquariumStats.getMyDesiredWaterline.longValue())));
+            desiredStats.add(ImmutableMap.of("name", "getOthersDesiredWaterline", "value", format.format(aquariumStats.getOthersDesiredWaterline.longValue())));
+            desiredStats.add(ImmutableMap.of("name", "acknowledgeDesiredOther", "value", format.format(aquariumStats.acknowledgeDesiredOther.longValue())));
+            for (Map.Entry<State, LongAdder> entry : aquariumStats.currentState.entrySet()) {
+                desiredStats.add(ImmutableMap.of("name", "desired-" + entry.getKey().name(), "value", format.format(entry.getValue().longValue())));
+            }
+
+            Map<String, Object> stats = Maps.newHashMap();
+            stats.put("tapTheGlass", format.format(aquariumStats.tapTheGlass.longValue()));
+            stats.put("feedTheFish", format.format(aquariumStats.feedTheFish.longValue()));
+            stats.put("acknowledgeOther", format.format(aquariumStats.acknowledgeOther.longValue()));
+            
+            stats.put("awaitOnline", format.format(aquariumStats.awaitOnline.longValue()));
+            stats.put("awaitTimedOut", format.format(aquariumStats.awaitTimedOut.longValue()));
+            
+            stats.put("current", currentStats);
+            stats.put("desired", desiredStats);
+            data.put("stats", stats);
 
             long now = System.currentTimeMillis();
             List<Map<String, Object>> live = new ArrayList<>();

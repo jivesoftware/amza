@@ -7,10 +7,46 @@
  * @param? partitionVersion
  * @param? liveliness
  * @param? aquarium
+ * @param? stats
  */
 {template .aquariumPluginRegion}
    
     <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-equalizer"></span>{sp}Stats</div>
+            <div class="panel-body">
+                <ul class="list-inline">
+                    <li>tapTheGlass <span class="badge">{$stats.tapTheGlass}</span></li>
+                    <li>feedTheFish <span class="badge">{$stats.feedTheFish}</span></li>
+                    <li>acknowledgeOther <span class="badge">{$stats.acknowledgeOther}</span></li>
+                    <li>awaitOnline <span class="badge">{$stats.awaitOnline}</span></li>
+                    <li>awaitTimedOut <span class="badge">{$stats.awaitTimedOut}</span></li>
+                </ul>
+                <ul class="list-inline">
+                    <li>
+                        <ul class="list-unstyled">
+                            {if $stats.current}
+                                {foreach $i in $stats.current}
+                                    <li>
+                                        {$i.name} <span class="badge">{$i.value}</span>
+                                    </li>
+                                {/foreach}
+                            {/if}
+                        </ul>
+                    </li>
+                    <li>
+                        <ul class="list-unstyled">
+                            {if $stats.desired}
+                                {foreach $i in $stats.desired}
+                                    <li>
+                                        {$i.name} <span class="badge">{$i.value}</span>
+                                    </li>
+                                {/foreach}
+                            {/if}
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
         <div class="panel-heading"><span class="glyphicon glyphicon-piggy-bank"></span>{sp}Liveliness</div>
             <div class="panel-body">
 

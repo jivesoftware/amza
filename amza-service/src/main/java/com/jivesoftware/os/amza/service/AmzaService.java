@@ -603,7 +603,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 });
             }
 
-            amzaStats.netStats.wrote.addAndGet(bytes.longValue());
+            amzaStats.netStats.wrote.add(bytes.longValue());
 
             if (needsToMarkAsKetchup) {
                 try {

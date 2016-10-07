@@ -490,10 +490,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         StringBuilder sb = new StringBuilder();
         sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.get(), false)).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.get(), false)).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.get(), false)).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.get(), false)).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.longValue(), false)).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.longValue(), false)).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.longValue(), false)).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.longValue(), false)).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.get()).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.get()).append("</span>");
 

@@ -54,6 +54,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
+import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -229,9 +230,11 @@ public class Main {
             .build(); //TODO expose to conf
 
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(httpClient, interner); // TODO config
+        AquariumStats aquariumStats = new AquariumStats();
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             interner,
+            aquariumStats,
             amzaStats,
             sickThreads,
             sickPartitions,
@@ -281,7 +284,7 @@ public class Main {
             .addInjectable(BAInterner.class, interner)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
-        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
+        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
                 @Override
                 public void addEndpoint(Class clazz) {

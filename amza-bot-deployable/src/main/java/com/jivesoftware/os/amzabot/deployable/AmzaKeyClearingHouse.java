@@ -62,8 +62,8 @@ public class AmzaKeyClearingHouse {
         return keyMap.get(key);
     }
 
-    public void delete(String key) {
-        keyMap.remove(key);
+    public Integer delete(String key) {
+        return keyMap.remove(key);
     }
 
     public String genRandomValue(int valueSizeThreshold) {

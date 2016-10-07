@@ -255,19 +255,28 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
 
         String total = "";
         List<String> ls = new ArrayList<>();
-        List<Map<String, Object>> ws = new ArrayList<>();
         int s = 1;
         for (double m : waveforms[0].metric()) {
             ls.add("\"" + s + "\"");
             s++;
         }
 
+        List<Map<String, Object>> ws = new ArrayList<>();
         for (int i = 0; i < waveName.length; i++) {
             List<String> values = Lists.newArrayList();
             double[] metric = waveforms[i].metric();
+            boolean nonZero = false;
+
             for (double m : metric) {
+                if (m < 0.0d || m > 0.0d) {
+                    nonZero = true;
+                }
                 values.add("\"" + String.valueOf(m) + "\"");
             }
+            if (!nonZero) {
+                continue;
+            }
+
             ws.add(waveform(waveName[i], new Color[]{colors[i]}, 1f, values, fill[i], false));
             if (i > 0) {
                 total += ", ";
@@ -277,7 +286,6 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
             int g = c.getGreen();
             int b = c.getBlue();
             String colorDiv = "<div style=\"display:inline-block; width:10px; height:10px; background:rgb(" + r + "," + g + "," + b + ");\"></div>";
-
             total += colorDiv + waveName[i] + "=" + numberFormat.format(waveforms[i].total());
         }
 

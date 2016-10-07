@@ -59,11 +59,11 @@
                 </div>
                 <div style="width:100%; height:{$r.height}px; resize: both;">
                     <div style="width:100%; height:100%; background-color:black;">
-                        <canvas class="amza-wave" id="values"
-                            data-amza-wave-id="{$r.id}" data-amza-wave-type="{$r.graphType}">
+                        <canvas class="stats-wave" id="values"
+                            data-stats-wave-id="{$r.id}" data-stats-wave-type="{$r.graphType}">
                         </canvas>
                         <script>
-                            miru.amza.data['{$r.id}'] = {$r.waveform|noAutoescape};
+                            amza.stats.data['{$r.id}'] = {$r.waveform|noAutoescape};
                         </script>
                     </div>
                 </div>

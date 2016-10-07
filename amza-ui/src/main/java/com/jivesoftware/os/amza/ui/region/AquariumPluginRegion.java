@@ -158,7 +158,7 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
 
             }
 
-            wavformGroups.addAll(wavformGroup("states", null, "states", stateColors, names, waves, fills));
+            wavformGroups.addAll(wavformGroup("states", null, "aquarium-states", stateColors, names, waves, fills));
 
             data.put("wavestats", wavformGroups);
 

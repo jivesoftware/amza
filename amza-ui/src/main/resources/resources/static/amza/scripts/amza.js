@@ -306,7 +306,7 @@ amza.stats = {
                         yAxes: [{
                                 position: "right",
                                 ticks: {
-                                    beginAtZero: true
+                                    beginAtZero: false
                                 }
                             }]
                     }

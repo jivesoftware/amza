@@ -83,10 +83,10 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
     public void refresh() {
         long timestamp = System.currentTimeMillis();
         for (Entry<State, LongAdder> e : aquariumStats.currentState.entrySet()) {
-            currentStateMetricBuffer.get(e.getKey()).add(timestamp, e.getValue());
+            currentStateMetricBuffer.get(e.getKey()).set(timestamp, e.getValue());
         }
         for (Entry<State, LongAdder> e : aquariumStats.desiredState.entrySet()) {
-            desiredStateMetricBuffer.get(e.getKey()).add(timestamp, e.getValue());
+            desiredStateMetricBuffer.get(e.getKey()).set(timestamp, e.getValue());
         }
     }
 

@@ -8,45 +8,70 @@
  * @param? liveliness
  * @param? aquarium
  * @param? stats
+ * @param? wavestats
  */
 {template .aquariumPluginRegion}
-   
-    <div class="panel panel-default">
-        <div class="panel-heading"><span class="glyphicon glyphicon-equalizer"></span>{sp}Stats</div>
-            <div class="panel-body">
-                <ul class="list-inline">
-                    <li>tapTheGlass <span class="badge">{$stats.tapTheGlass}</span></li>
-                    <li>feedTheFish <span class="badge">{$stats.feedTheFish}</span></li>
-                    <li>acknowledgeOther <span class="badge">{$stats.acknowledgeOther}</span></li>
-                    <li>awaitOnline <span class="badge">{$stats.awaitOnline}</span></li>
-                    <li>awaitTimedOut <span class="badge">{$stats.awaitTimedOut}</span></li>
-                </ul>
-                <ul class="list-inline">
-                    <li>
-                        <ul class="list-unstyled">
-                            {if $stats.current}
-                                {foreach $i in $stats.current}
-                                    <li>
-                                        {$i.name} <span class="badge">{$i.value}</span>
-                                    </li>
-                                {/foreach}
-                            {/if}
+     {if $wavestats}
+        <div class="panel panel-default">
+            <div class="panel-heading"><span class="glyphicon glyphicon-equalizer"></span>{sp}Stats</div>
+                <div class="panel-body">
+                    <ul class="list-inline">
+                        <li>tapTheGlass <span class="badge">{$stats.tapTheGlass}</span></li>
+                        <li>feedTheFish <span class="badge">{$stats.feedTheFish}</span></li>
+                        <li>acknowledgeOther <span class="badge">{$stats.acknowledgeOther}</span></li>
+                        <li>awaitOnline <span class="badge">{$stats.awaitOnline}</span></li>
+                        <li>awaitTimedOut <span class="badge">{$stats.awaitTimedOut}</span></li>
                         </ul>
-                    </li>
-                    <li>
-                        <ul class="list-unstyled">
-                            {if $stats.desired}
-                                {foreach $i in $stats.desired}
-                                    <li>
-                                        {$i.name} <span class="badge">{$i.value}</span>
-                                    </li>
-                                {/foreach}
-                            {/if}
-                        </ul>
-                    </li>
-                </ul>
+                    <ul class="list-inline">
+                        <li>
+                            <ul class="list-unstyled">
+                                {if $stats.current}
+                                    {foreach $i in $stats.current}
+                                        <li>
+                                            {$i.name} <span class="badge">{$i.value}</span>
+                                        </li>
+                                    {/foreach}
+                                {/if}
+                            </ul>
+                        </li>
+                        <li>
+                            <ul class="list-unstyled">
+                                {if $stats.desired}
+                                    {foreach $i in $stats.desired}
+                                        <li>
+                                            {$i.name} <span class="badge">{$i.value}</span>
+                                        </li>
+                                    {/foreach}
+                                {/if}
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
+    {/if}
+
+    {if $wavestats}
+        <div class="panel panel-default" style="background-color: rgba(255, 255, 255, 0.9);">
+            {foreach $r in $wavestats}
+                <div class="panel-heading">
+                    {$r.title} ({$r.total|noAutoescape})
+                </div>
+                <div style="width:100%; height:{$r.height}px; resize: both;">
+                    <div style="width:100%; height:100%; background-color:black;">
+                        <canvas class="amza-wave" id="values"
+                            data-amza-wave-id="{$r.id}" data-amza-wave-type="{$r.graphType}">
+                        </canvas>
+                        <script>
+                            miru.amza.data['{$r.id}'] = {$r.waveform|noAutoescape};
+                        </script>
+                    </div>
+                </div>
+            {/foreach}
+        </div>
+    {/if}
+
+    <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-piggy-bank"></span>{sp}Liveliness</div>
             <div class="panel-body">
 

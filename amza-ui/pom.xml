@@ -40,6 +40,10 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.jivesoftware.os.leaps-n-bounds</groupId>
+            <artifactId>leaps-n-bounds</artifactId>
+        </dependency>
+        <dependency>
             <groupId>commons-lang</groupId>
             <artifactId>commons-lang</artifactId>
         </dependency>

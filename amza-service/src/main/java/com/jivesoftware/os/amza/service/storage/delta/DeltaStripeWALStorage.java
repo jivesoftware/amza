@@ -507,7 +507,7 @@ public class DeltaStripeWALStorage {
         }
 
         try {
-            //deltaWALFactory.destroy(wal);
+            deltaWALFactory.destroy(wal);
             LOG.info("Compacted delta partitions.");
         } catch (Exception x) {
             sickThreads.sick(x);

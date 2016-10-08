@@ -170,7 +170,7 @@ public class HttpRowsTaker implements RowsTaker {
                 new Object[] { localRingMember, remoteRingHost, takeSessionId }, x);
             return false;
         } finally {
-            amzaStats.pongsSent.incrementAndGet();
+            amzaStats.pongsSent.increment();
         }
     }
 }

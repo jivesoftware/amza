@@ -71,7 +71,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("leadershipToken") long leadershipToken) {
 
         try {
-            amzaStats.rowsStream.incrementAndGet();
+            amzaStats.rowsStream.increment();
 
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
@@ -95,8 +95,8 @@ public class AmzaReplicationRestEndpoints {
                     throw new IOException("Failed to stream takes.", x);
                 } finally {
                     dos.flush();
-                    amzaStats.rowsStream.decrementAndGet();
-                    amzaStats.completedRowsStream.incrementAndGet();
+                    amzaStats.rowsStream.decrement();
+                    amzaStats.completedRowsStream.increment();
                 }
             };
             return Response.ok(stream).build();
@@ -118,7 +118,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
-            amzaStats.availableRowsStream.incrementAndGet();
+            amzaStats.availableRowsStream.increment();
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
 
             new Thread(() -> {
@@ -145,7 +145,7 @@ public class AmzaReplicationRestEndpoints {
 
             return chunkedOutput;
         } finally {
-            amzaStats.availableRowsStream.decrementAndGet();
+            amzaStats.availableRowsStream.decrement();
         }
     }
 
@@ -159,7 +159,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("txId") long txId,
         @PathParam("leadershipToken") long leadershipToken) {
         try {
-            amzaStats.rowsTaken.incrementAndGet();
+            amzaStats.rowsTaken.increment();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
                 takeSessionId,
                 VersionedPartitionName.fromBase64(versionedPartitionName, interner),
@@ -171,8 +171,8 @@ public class AmzaReplicationRestEndpoints {
                 new Object[] { ringMemberName, versionedPartitionName, txId }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         } finally {
-            amzaStats.rowsTaken.decrementAndGet();
-            amzaStats.completedRowsTake.incrementAndGet();
+            amzaStats.rowsTaken.decrement();
+            amzaStats.completedRowsTake.increment();
         }
     }
 
@@ -189,7 +189,7 @@ public class AmzaReplicationRestEndpoints {
             LOG.warn("Failed pong for member:{} session:{}", new Object[] { ringMemberName, takeSessionId }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed pong.", x);
         } finally {
-            amzaStats.pongsReceived.incrementAndGet();
+            amzaStats.pongsReceived.increment();
         }
     }
 

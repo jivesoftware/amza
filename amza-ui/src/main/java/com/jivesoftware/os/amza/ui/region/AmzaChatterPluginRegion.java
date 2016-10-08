@@ -157,31 +157,28 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 AmzaStats.Totals totals = amzaStats.getPartitionTotals().get(versionedPartitionName.getPartitionName());
                 if (totals != null) {
                     cells[partitionInteractionIndex] = new Element[]{
-                        totals.gets.get() < 1 ? null : new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null),
-                        totals.getsLatency.get() < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLatency
-                        .get()),
+                        totals.gets.longValue()< 1 ? null : new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.longValue()), null),
+                        totals.getsLatency < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLatency),
                         null),
-                        totals.scans.get() < 1 ? null : new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null),
-                        totals.scansLatency.get() < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLatency
-                        .get()),
+                        totals.scans.longValue() < 1 ? null : new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.longValue()), null),
+                        totals.scansLatency < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLatency),
                         null),
-                        totals.directApplies.get() < 1 ? null : new Element("interactions", "interactions", "directApplies", numberFormat.format(
-                        totals.directApplies.get()), null),
-                        totals.directAppliesLag.get() < 1 ? null : new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(
-                        totals.directAppliesLag.get()), null),
-                        totals.updates.get() < 1 ? null : new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()),
+                        totals.directApplies.longValue() < 1 ? null : new Element("interactions", "interactions", "directApplies", numberFormat.format(
+                        totals.directApplies.longValue()), null),
+                        totals.directAppliesLag < 1 ? null : new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(
+                        totals.directAppliesLag), null),
+                        totals.updates.longValue() < 1 ? null : new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.longValue()),
                         null),
-                        totals.updatesLag.get() < 1 ? null : new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag
-                        .get()), null)};
+                        totals.updatesLag < 1 ? null : new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag), null)};
 
                     cells[partitionStatsIndex] = new Element[]{
-                        totals.offers.get() < 1 ? null : new Element("stats", "stats", "offers", numberFormat.format(totals.offers.get()), null),
-                        totals.offersLag.get() < 1 ? null : new Element("stats", "stats", "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
-                        totals.takes.get() < 1 ? null : new Element("stats", "stats", "takes", numberFormat.format(totals.takes.get()), null),
-                        totals.takesLag.get() < 1 ? null : new Element("stats", "stats", "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
-                        totals.takeApplies.get() < 1 ? null : new Element("stats", "stats", "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
-                        totals.takeAppliesLag.get() < 1 ? null : new Element("stats", "stats", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag
-                        .get()), null)
+                        totals.offers.longValue() < 1 ? null : new Element("stats", "stats", "offers", numberFormat.format(totals.offers.longValue()), null),
+                        totals.offersLag < 1 ? null : new Element("stats", "stats", "offersLag", getDurationBreakdown(totals.offersLag), null),
+                        totals.takes.longValue() < 1 ? null : new Element("stats", "stats", "takes", numberFormat.format(totals.takes.longValue()), null),
+                        totals.takesLag < 1 ? null : new Element("stats", "stats", "takesLag", getDurationBreakdown(totals.takesLag), null),
+                        totals.takeApplies.longValue() < 1 ? null : new Element("stats", "stats", "takeApplies", numberFormat.format(totals.takeApplies.longValue()), null),
+                        totals.takeAppliesLag < 1 ? null : new Element("stats", "stats", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag
+                        ), null)
                     };
                 }
 
@@ -344,50 +341,50 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             AmzaStats.Totals totals = amzaStats.getGrandTotal();
             if (totals != null) {
                 List headerCell = ((List) header.get(partitionInteractionIndex));
-                if (totals.gets.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null));
+                if (totals.gets.longValue()> 0) {
+                    headerCell.add(new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.longValue()), null));
                 }
-                if (totals.getsLatency.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "getsLatency", getDurationBreakdown(totals.getsLatency.get()), null));
+                if (totals.getsLatency > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "getsLatency", getDurationBreakdown(totals.getsLatency), null));
                 }
-                if (totals.scans.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null));
+                if (totals.scans.longValue() > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.longValue()), null));
                 }
-                if (totals.scansLatency.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "scansLatency", getDurationBreakdown(totals.scansLatency.get()), null));
+                if (totals.scansLatency > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "scansLatency", getDurationBreakdown(totals.scansLatency), null));
                 }
-                if (totals.directApplies.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "directApplies", numberFormat.format(totals.directApplies.get()), null));
+                if (totals.directApplies.longValue() > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "directApplies", numberFormat.format(totals.directApplies.longValue()), null));
                 }
-                if (totals.directAppliesLag.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null));
+                if (totals.directAppliesLag > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(totals.directAppliesLag), null));
                 }
-                if (totals.updates.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()), null));
+                if (totals.updates.longValue() > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.longValue()), null));
                 }
-                if (totals.updatesLag.get() > 0) {
-                    headerCell.add(new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null));
+                if (totals.updatesLag > 0) {
+                    headerCell.add(new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag), null));
                 }
 
                 headerCell = ((List) header.get(partitionStatsIndex));
-                if (totals.offers.get() > 0) {
-                    headerCell.add(new Element("stats", "stats", "offers", numberFormat.format(totals.offers.get()), null));
+                if (totals.offers.longValue() > 0) {
+                    headerCell.add(new Element("stats", "stats", "offers", numberFormat.format(totals.offers.longValue()), null));
                 }
 
-                if (totals.offersLag.get() > 0) {
-                    headerCell.add(new Element("stats", "stats", "offersLag", getDurationBreakdown(totals.offersLag.get()), null));
+                if (totals.offersLag > 0) {
+                    headerCell.add(new Element("stats", "stats", "offersLag", getDurationBreakdown(totals.offersLag), null));
                 }
-                if (totals.takes.get() > 0) {
-                    headerCell.add(new Element("stats", "stats", "takes", numberFormat.format(totals.takes.get()), null));
+                if (totals.takes.longValue() > 0) {
+                    headerCell.add(new Element("stats", "stats", "takes", numberFormat.format(totals.takes.longValue()), null));
                 }
-                if (totals.takesLag.get() > 0) {
-                    headerCell.add(new Element("stats", "stats", "takesLag", getDurationBreakdown(totals.takesLag.get()), null));
+                if (totals.takesLag > 0) {
+                    headerCell.add(new Element("stats", "stats", "takesLag", getDurationBreakdown(totals.takesLag), null));
                 }
-                if (totals.takeApplies.get() > 0) {
-                    headerCell.add(new Element("stats", "stats", "takeApplies", numberFormat.format(totals.takeApplies.get()), null));
+                if (totals.takeApplies.longValue() > 0) {
+                    headerCell.add(new Element("stats", "stats", "takeApplies", numberFormat.format(totals.takeApplies.longValue()), null));
                 }
-                if (totals.takeAppliesLag.get() > 0) {
-                    headerCell.add(new Element("stats", "stats", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()), null));
+                if (totals.takeAppliesLag > 0) {
+                    headerCell.add(new Element("stats", "stats", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag), null));
                 }
 
             }

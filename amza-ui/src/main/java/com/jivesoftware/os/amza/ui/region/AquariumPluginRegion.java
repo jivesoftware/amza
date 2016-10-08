@@ -127,7 +127,18 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                 .add(ImmutableMap.of("name", "acknowledgeDesiredOther", "value", numberFormat.format(aquariumStats.acknowledgeDesiredOther.longValue())));
 
             Map<String, Object> stats = Maps.newHashMap();
+
             stats.put("tapTheGlass", numberFormat.format(aquariumStats.tapTheGlass.longValue()));
+            stats.put("tapTheGlassNotified", numberFormat.format(aquariumStats.tapTheGlassNotified.longValue()));
+            stats.put("captureEndState", numberFormat.format(aquariumStats.captureEndState.longValue()));
+            stats.put("suggestState", numberFormat.format(aquariumStats.suggestState.longValue()));
+            stats.put("getLivelyEndState", numberFormat.format(aquariumStats.getLivelyEndState.longValue()));
+
+            stats.put("getStateForMember", numberFormat.format(aquariumStats.getStateForMember.longValue()));
+            stats.put("isLivelyStateForMember", numberFormat.format(aquariumStats.isLivelyStateForMember.longValue()));
+            stats.put("isLivelyEndStateForMember", numberFormat.format(aquariumStats.isLivelyEndStateForMember.longValue()));
+
+
             stats.put("feedTheFish", numberFormat.format(aquariumStats.feedTheFish.longValue()));
             stats.put("acknowledgeOther", numberFormat.format(aquariumStats.acknowledgeOther.longValue()));
 

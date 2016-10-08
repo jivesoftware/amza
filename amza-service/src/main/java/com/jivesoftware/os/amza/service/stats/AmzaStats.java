@@ -17,7 +17,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * @author jonathan.colt
@@ -27,14 +27,14 @@ public class AmzaStats {
     private static final SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
     private static final JiveEpochTimestampProvider jiveEpochTimestampProvider = new JiveEpochTimestampProvider();
 
-    private final Map<RingMember, AtomicLong> took = new ConcurrentSkipListMap<>();
+    private final Map<RingMember, LongAdder> took = new ConcurrentSkipListMap<>();
 
     private final Map<CompactionFamily, Map<String, CompactionStats>> ongoingCompaction = new ConcurrentHashMap<>();
-    private final Map<CompactionFamily, AtomicLong> totalCompactions = new ConcurrentHashMap<>();
+    private final Map<CompactionFamily, LongAdder> totalCompactions = new ConcurrentHashMap<>();
     private final List<Entry<String, CompactionStats>> recentCompaction = new ArrayList<>();
 
-    public final Map<RingMember, AtomicLong> longPolled = new ConcurrentSkipListMap<>();
-    public final Map<RingMember, AtomicLong> longPollAvailables = new ConcurrentSkipListMap<>();
+    public final Map<RingMember, LongAdder> longPolled = new ConcurrentSkipListMap<>();
+    public final Map<RingMember, LongAdder> longPollAvailables = new ConcurrentSkipListMap<>();
 
     private final Totals grandTotals = new Totals();
     private final Map<PartitionName, Totals> partitionTotals = new ConcurrentHashMap<>();
@@ -44,23 +44,23 @@ public class AmzaStats {
     public final IoStats ioStats = new IoStats();
     public final NetStats netStats = new NetStats();
 
-    public final AtomicLong addMember = new AtomicLong();
-    public final AtomicLong removeMember = new AtomicLong();
-    public final AtomicLong getRing = new AtomicLong();
-    public final AtomicLong rowsStream = new AtomicLong();
-    public final AtomicLong completedRowsStream = new AtomicLong();
+    public final LongAdder addMember = new LongAdder();
+    public final LongAdder removeMember = new LongAdder();
+    public final LongAdder getRing = new LongAdder();
+    public final LongAdder rowsStream = new LongAdder();
+    public final LongAdder completedRowsStream = new LongAdder();
 
-    public final AtomicLong availableRowsStream = new AtomicLong();
-    public final AtomicLong rowsTaken = new AtomicLong();
-    public final AtomicLong completedRowsTake = new AtomicLong();
+    public final LongAdder availableRowsStream = new LongAdder();
+    public final LongAdder rowsTaken = new LongAdder();
+    public final LongAdder completedRowsTake = new LongAdder();
 
-    public final AtomicLong pingsSent = new AtomicLong();
-    public final AtomicLong pingsReceived = new AtomicLong();
-    public final AtomicLong pongsSent = new AtomicLong();
-    public final AtomicLong pongsReceived = new AtomicLong();
+    public final LongAdder pingsSent = new LongAdder();
+    public final LongAdder pingsReceived = new LongAdder();
+    public final LongAdder pongsSent = new LongAdder();
+    public final LongAdder pongsReceived = new LongAdder();
 
-    public final AtomicLong backPressure = new AtomicLong();
-    public final AtomicLong pushBacks = new AtomicLong();
+    public final LongAdder backPressure = new LongAdder();
+    public final LongAdder pushBacks = new LongAdder();
 
     public long[] deltaStripeMergeLoaded = new long[0];
     public double[] deltaStripeLoad = new double[0];
@@ -68,11 +68,11 @@ public class AmzaStats {
     public long[] deltaStripeMergePending = new long[0];
     public double[] deltaStripeMerge = new double[0];
 
-    public final AtomicLong deltaFirstCheckRemoves = new AtomicLong();
-    public final AtomicLong deltaSecondCheckRemoves = new AtomicLong();
+    public final LongAdder deltaFirstCheckRemoves = new LongAdder();
+    public final LongAdder deltaSecondCheckRemoves = new LongAdder();
 
-    public final AtomicLong takes = new AtomicLong();
-    public final AtomicLong takeExcessRows = new AtomicLong();
+    public final LongAdder takes = new LongAdder();
+    public final LongAdder takeExcessRows = new LongAdder();
 
     public AmzaStats() {
     }
@@ -116,47 +116,47 @@ public class AmzaStats {
 
     static public class Totals {
 
-        public final AtomicLong gets = new AtomicLong();
-        public final AtomicLong getsLatency = new AtomicLong();
-        public final AtomicLong scans = new AtomicLong();
-        public final AtomicLong scansLatency = new AtomicLong();
-        public final AtomicLong scanKeys = new AtomicLong();
-        public final AtomicLong scanKeysLatency = new AtomicLong();
-        public final AtomicLong updates = new AtomicLong();
-        public final AtomicLong updatesLag = new AtomicLong();
-        public final AtomicLong offers = new AtomicLong();
-        public final AtomicLong offersLag = new AtomicLong();
-        public final AtomicLong takes = new AtomicLong();
-        public final AtomicLong takesLag = new AtomicLong();
-        public final AtomicLong takeApplies = new AtomicLong();
-        public final AtomicLong takeAppliesLag = new AtomicLong();
-        public final AtomicLong directApplies = new AtomicLong();
-        public final AtomicLong directAppliesLag = new AtomicLong();
-        public final AtomicLong acks = new AtomicLong();
-        public final AtomicLong acksLag = new AtomicLong();
-        public final AtomicLong quorums = new AtomicLong();
-        public final AtomicLong quorumsLatency = new AtomicLong();
-        public final AtomicLong quorumTimeouts = new AtomicLong();
+        public final LongAdder gets = new LongAdder();
+        public volatile long getsLatency = 0;
+        public final LongAdder scans = new LongAdder();
+        public volatile long scansLatency = 0;
+        public final LongAdder scanKeys = new LongAdder();
+        public volatile long scanKeysLatency = 0;
+        public final LongAdder updates = new LongAdder();
+        public volatile long updatesLag = 0;
+        public final LongAdder offers = new LongAdder();
+        public volatile long offersLag = 0;
+        public final LongAdder takes = new LongAdder();
+        public volatile long takesLag = 0;
+        public final LongAdder takeApplies = new LongAdder();
+        public volatile long takeAppliesLag = 0;
+        public final LongAdder directApplies = new LongAdder();
+        public volatile long directAppliesLag = 0;
+        public final LongAdder acks = new LongAdder();
+        public volatile long acksLag = 0;
+        public final LongAdder quorums = new LongAdder();
+        public volatile long quorumsLatency = 0;
+        public final LongAdder quorumTimeouts = new LongAdder();
     }
 
     public void longPolled(RingMember member) {
-        longPolled.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+        longPolled.computeIfAbsent(member, (key) -> new LongAdder()).increment();
     }
 
     public void longPollAvailables(RingMember member) {
-        longPollAvailables.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+        longPollAvailables.computeIfAbsent(member, (key) -> new LongAdder()).increment();
     }
 
     public void took(RingMember member) {
-        took.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+        took.computeIfAbsent(member, (key) -> new LongAdder()).increment();
     }
 
     public long getTotalTakes(RingMember member) {
-        AtomicLong got = took.get(member);
+        LongAdder got = took.get(member);
         if (got == null) {
             return 0;
         }
-        return got.get();
+        return got.longValue();
     }
 
     public static enum CompactionFamily {
@@ -248,7 +248,7 @@ public class AmzaStats {
         Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
         CompactionStats compactionStats = got.remove(name);
 
-        totalCompactions.computeIfAbsent(family, (key) -> new AtomicLong()).incrementAndGet();
+        totalCompactions.computeIfAbsent(family, (key) -> new LongAdder()).increment();
         if (compactionStats != null) {
             compactionStats.finished();
             recentCompaction.add(new AbstractMap.SimpleEntry<>(family + " " + name, compactionStats));
@@ -276,7 +276,7 @@ public class AmzaStats {
     }
 
     public long getTotalCompactions(CompactionFamily family) {
-        return totalCompactions.computeIfAbsent(family, (key) -> new AtomicLong()).get();
+        return totalCompactions.computeIfAbsent(family, (key) -> new LongAdder()).longValue();
     }
 
     public Totals getGrandTotal() {
@@ -284,95 +284,95 @@ public class AmzaStats {
     }
 
     public void updates(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.updates.addAndGet(count);
+        grandTotals.updates.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.updates.addAndGet(count);
+        totals.updates.add(count);
         long lag = lag(smallestTxId);
-        totals.updatesLag.set(lag);
-        grandTotals.updatesLag.set((grandTotals.updatesLag.get() + lag) / 2);
+        totals.updatesLag = lag;
+        grandTotals.updatesLag = (grandTotals.updatesLag + lag) / 2;
     }
 
     public void offers(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.offers.addAndGet(count);
+        grandTotals.offers.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.offers.addAndGet(count);
+        totals.offers.add(count);
         long lag = lag(smallestTxId);
-        totals.offersLag.set(lag);
-        grandTotals.offersLag.set((grandTotals.offersLag.get() + lag) / 2);
+        totals.offersLag = lag;
+        grandTotals.offersLag = (grandTotals.offersLag + lag) / 2;
     }
 
     public void acks(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.acks.addAndGet(count);
+        grandTotals.acks.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.acks.addAndGet(count);
+        totals.acks.add(count);
         long lag = lag(smallestTxId);
-        totals.acksLag.set(lag);
-        grandTotals.acksLag.set((grandTotals.acksLag.get() + lag) / 2);
+        totals.acksLag = lag;
+        grandTotals.acksLag = (grandTotals.acksLag + lag) / 2;
     }
 
     public void quorums(PartitionName partitionName, int count, long lag) {
-        grandTotals.quorums.addAndGet(count);
+        grandTotals.quorums.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.quorums.addAndGet(count);
-        totals.quorumsLatency.set(lag);
-        grandTotals.quorumsLatency.set((grandTotals.quorumsLatency.get() + lag) / 2);
+        totals.quorums.add(count);
+        totals.quorumsLatency = lag;
+        grandTotals.quorumsLatency = (grandTotals.quorumsLatency + lag) / 2;
     }
 
     public void quorumTimeouts(PartitionName partitionName, int count) {
-        grandTotals.quorumTimeouts.addAndGet(count);
+        grandTotals.quorumTimeouts.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.quorumTimeouts.addAndGet(count);
+        totals.quorumTimeouts.add(count);
     }
 
     public void took(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.takes.addAndGet(count);
+        grandTotals.takes.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.takes.addAndGet(count);
+        totals.takes.add(count);
         long lag = lag(smallestTxId);
-        totals.takesLag.set(lag);
-        grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
+        totals.takesLag = lag;
+        grandTotals.takesLag = (grandTotals.takesLag + lag) / 2;
     }
 
     public void tookApplied(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.takeApplies.addAndGet(count);
+        grandTotals.takeApplies.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.takeApplies.addAndGet(count);
+        totals.takeApplies.add(count);
         long lag = lag(smallestTxId);
-        totals.takeAppliesLag.set(lag);
-        grandTotals.takeAppliesLag.set((grandTotals.takeAppliesLag.get() + lag) / 2);
+        totals.takeAppliesLag = lag;
+        grandTotals.takeAppliesLag = (grandTotals.takeAppliesLag + lag) / 2;
     }
 
     public void direct(PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.directApplies.addAndGet(count);
+        grandTotals.directApplies.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.directApplies.addAndGet(count);
+        totals.directApplies.add(count);
         long lag = lag(smallestTxId);
-        totals.directAppliesLag.set(lag);
-        grandTotals.directAppliesLag.set((grandTotals.directAppliesLag.get() + lag) / 2);
+        totals.directAppliesLag = lag;
+        grandTotals.directAppliesLag = (grandTotals.directAppliesLag + lag) / 2;
     }
 
     public void gets(PartitionName partitionName, int count, long lag) {
-        grandTotals.gets.addAndGet(count);
+        grandTotals.gets.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.gets.addAndGet(count);
-        totals.getsLatency.set(lag);
-        grandTotals.getsLatency.set((grandTotals.getsLatency.get() + lag) / 2);
+        totals.gets.add(count);
+        totals.getsLatency = lag;
+        grandTotals.getsLatency = (grandTotals.getsLatency + lag) / 2;
     }
 
     public void scans(PartitionName partitionName, int count, long lag) {
-        grandTotals.scans.addAndGet(count);
+        grandTotals.scans.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.scans.addAndGet(count);
-        totals.scansLatency.set(lag);
-        grandTotals.scansLatency.set((grandTotals.scansLatency.get() + lag) / 2);
+        totals.scans.add(count);
+        totals.scansLatency = lag;
+        grandTotals.scansLatency = (grandTotals.scansLatency + lag) / 2;
     }
 
     public void scanKeys(PartitionName partitionName, int count, long lag) {
-        grandTotals.scanKeys.addAndGet(count);
+        grandTotals.scanKeys.add(count);
         Totals totals = partitionTotals(partitionName);
-        totals.scanKeys.addAndGet(count);
-        totals.scanKeysLatency.set(lag);
-        grandTotals.scanKeysLatency.set((grandTotals.scanKeysLatency.get() + lag) / 2);
+        totals.scanKeys.add(count);
+        totals.scanKeysLatency = lag;
+        grandTotals.scanKeysLatency = (grandTotals.scanKeysLatency + lag) / 2;
     }
 
     private Totals partitionTotals(PartitionName versionedPartitionName) {

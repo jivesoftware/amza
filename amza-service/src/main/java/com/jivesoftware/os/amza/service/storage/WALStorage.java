@@ -1089,8 +1089,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         }
                         return true;
                     }));
-            amzaStats.takes.incrementAndGet();
-            amzaStats.takeExcessRows.addAndGet(excessRows[0]);
+            amzaStats.takes.increment();
+            amzaStats.takeExcessRows.add(excessRows[0]);
             return readFromTransactionId;
         } finally {
             releaseOne();
@@ -1116,8 +1116,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         }
                         return true;
                     }));
-            amzaStats.takes.incrementAndGet();
-            amzaStats.takeExcessRows.addAndGet(excessRows[0]);
+            amzaStats.takes.increment();
+            amzaStats.takeExcessRows.add(excessRows[0]);
             return readFromTransactionId;
         } finally {
             releaseOne();

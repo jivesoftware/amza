@@ -29,7 +29,6 @@ import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
-import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.lang.management.GarbageCollectorMXBean;
@@ -46,7 +45,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 import javax.management.Attribute;
 import javax.management.AttributeList;
 import javax.management.InstanceNotFoundException;
@@ -211,19 +210,19 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 }
             } else {
 
-                data.put("addMember", numberFormat.format(amzaStats.addMember.get()));
-                data.put("removeMember", numberFormat.format(amzaStats.removeMember.get()));
-                data.put("getRing", numberFormat.format(amzaStats.getRing.get()));
-                data.put("rowsStream", numberFormat.format(amzaStats.rowsStream.get()));
-                data.put("availableRowsStream", numberFormat.format(amzaStats.availableRowsStream.get()));
-                data.put("rowsTaken", numberFormat.format(amzaStats.rowsTaken.get()));
+                data.put("addMember", numberFormat.format(amzaStats.addMember.longValue()));
+                data.put("removeMember", numberFormat.format(amzaStats.removeMember.longValue()));
+                data.put("getRing", numberFormat.format(amzaStats.getRing.longValue()));
+                data.put("rowsStream", numberFormat.format(amzaStats.rowsStream.longValue()));
+                data.put("availableRowsStream", numberFormat.format(amzaStats.availableRowsStream.longValue()));
+                data.put("rowsTaken", numberFormat.format(amzaStats.rowsTaken.longValue()));
 
                 List<Map<String, String>> longPolled = new ArrayList<>();
-                for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
-                    AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
+                for (Entry<RingMember, LongAdder> polled : amzaStats.longPolled.entrySet()) {
+                    LongAdder longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
                     longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
-                        "longPolled", numberFormat.format(polled.getValue().get()),
-                        "longPollAvailables", numberFormat.format(longPollAvailables == null ? -1L : longPollAvailables.get())));
+                        "longPolled", numberFormat.format(polled.getValue().longValue()),
+                        "longPollAvailables", numberFormat.format(longPollAvailables == null ? -1L : longPollAvailables.longValue())));
                 }
 
                 data.put("longPolled", longPolled);
@@ -255,11 +254,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         Map<String, Object> data = Maps.newHashMap();
         try {
             List<Map<String, String>> longPolled = new ArrayList<>();
-            for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
-                AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
+            for (Entry<RingMember, LongAdder> polled : amzaStats.longPolled.entrySet()) {
+                LongAdder longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
                 longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
-                    "longPolled", numberFormat.format(polled.getValue().get()),
-                    "longPollAvailables", numberFormat.format(longPollAvailables == null ? -1L : longPollAvailables.get())));
+                    "longPolled", numberFormat.format(polled.getValue().longValue()),
+                    "longPollAvailables", numberFormat.format(longPollAvailables == null ? -1L : longPollAvailables.longValue())));
             }
 
             data.put("longPolled", longPolled);
@@ -443,27 +442,27 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("neighborStates", Collections.emptyList());
             }
         }
-        map.put("gets", numberFormat.format(totals.gets.get()));
-        map.put("getsLag", getDurationBreakdown(totals.getsLatency.get()));
-        map.put("scans", numberFormat.format(totals.scans.get()));
-        map.put("scansLag", getDurationBreakdown(totals.scansLatency.get()));
-        map.put("scanKeys", numberFormat.format(totals.scanKeys.get()));
-        map.put("scanKeysLag", getDurationBreakdown(totals.scanKeysLatency.get()));
-        map.put("directApplies", numberFormat.format(totals.directApplies.get()));
-        map.put("directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()));
-        map.put("updates", numberFormat.format(totals.updates.get()));
-        map.put("updatesLag", getDurationBreakdown(totals.updatesLag.get()));
-        map.put("offers", numberFormat.format(totals.offers.get()));
-        map.put("offersLag", getDurationBreakdown(totals.offersLag.get()));
-        map.put("takes", numberFormat.format(totals.takes.get()));
-        map.put("takesLag", getDurationBreakdown(totals.takesLag.get()));
-        map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
-        map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
-        map.put("acks", numberFormat.format(totals.acks.get()));
-        map.put("acksLag", getDurationBreakdown(totals.acksLag.get()));
-        map.put("quorums", numberFormat.format(totals.quorums.get()));
-        map.put("quorumsLag", getDurationBreakdown(totals.quorumsLatency.get()));
-        map.put("quorumTimeouts", numberFormat.format(totals.quorumTimeouts.get()));
+        map.put("gets", numberFormat.format(totals.gets.longValue()));
+        map.put("getsLag", getDurationBreakdown(totals.getsLatency));
+        map.put("scans", numberFormat.format(totals.scans.longValue()));
+        map.put("scansLag", getDurationBreakdown(totals.scansLatency));
+        map.put("scanKeys", numberFormat.format(totals.scanKeys.longValue()));
+        map.put("scanKeysLag", getDurationBreakdown(totals.scanKeysLatency));
+        map.put("directApplies", numberFormat.format(totals.directApplies.longValue()));
+        map.put("directAppliesLag", getDurationBreakdown(totals.directAppliesLag));
+        map.put("updates", numberFormat.format(totals.updates.longValue()));
+        map.put("updatesLag", getDurationBreakdown(totals.updatesLag));
+        map.put("offers", numberFormat.format(totals.offers.longValue()));
+        map.put("offersLag", getDurationBreakdown(totals.offersLag));
+        map.put("takes", numberFormat.format(totals.takes.longValue()));
+        map.put("takesLag", getDurationBreakdown(totals.takesLag));
+        map.put("takeApplies", numberFormat.format(totals.takeApplies.longValue()));
+        map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag));
+        map.put("acks", numberFormat.format(totals.acks.longValue()));
+        map.put("acksLag", getDurationBreakdown(totals.acksLag));
+        map.put("quorums", numberFormat.format(totals.quorums.longValue()));
+        map.put("quorumsLag", getDurationBreakdown(totals.quorumsLatency));
+        map.put("quorumTimeouts", numberFormat.format(totals.quorumTimeouts.longValue()));
 
         return map;
     }
@@ -497,8 +496,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             "</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.longValue(), false)).append(
             "</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.get()).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.get()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.longValue()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.longValue()).append("</span>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
@@ -522,61 +521,61 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         Totals grandTotal = amzaStats.getGrandTotal();
 
-        sb.append(progress("Gets (" + numberFormat.format(grandTotal.gets.get()) + ")",
-            (int) (((double) grandTotal.getsLatency.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.getsLatency.longValue()) + " lag"));
+        sb.append(progress("Gets (" + numberFormat.format(grandTotal.gets.longValue()) + ")",
+            (int) (((double) grandTotal.getsLatency / 1000d) * 100),
+            getDurationBreakdown(grandTotal.getsLatency) + " lag"));
 
-        sb.append(progress("Scans (" + numberFormat.format(grandTotal.scans.get()) + ")",
-            (int) (((double) grandTotal.scansLatency.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scansLatency.longValue()) + " lag"));
+        sb.append(progress("Scans (" + numberFormat.format(grandTotal.scans.longValue()) + ")",
+            (int) ((grandTotal.scansLatency / 1000d) * 100),
+            getDurationBreakdown(grandTotal.scansLatency) + " lag"));
 
-        sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.get()) + ")",
-            (int) (((double) grandTotal.scanKeysLatency.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scanKeysLatency.longValue()) + " lag"));
+        sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.longValue()) + ")",
+            (int) ((grandTotal.scanKeysLatency / 1000d) * 100),
+            getDurationBreakdown(grandTotal.scanKeysLatency) + " lag"));
 
-        sb.append(progress("Direct Applied (" + numberFormat.format(grandTotal.directApplies.get()) + ")",
-            (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.directAppliesLag.longValue()) + " lag"));
+        sb.append(progress("Direct Applied (" + numberFormat.format(grandTotal.directApplies.longValue()) + ")",
+            (int) ((grandTotal.directAppliesLag / 1000d) * 100),
+            getDurationBreakdown(grandTotal.directAppliesLag) + " lag"));
 
-        sb.append(progress("Updates (" + numberFormat.format(grandTotal.updates.get()) + ")",
-            (int) (((double) grandTotal.updatesLag.longValue() / 10000d) * 100),
-            getDurationBreakdown(grandTotal.updatesLag.longValue()) + " lag"));
+        sb.append(progress("Updates (" + numberFormat.format(grandTotal.updates.longValue()) + ")",
+            (int) ((grandTotal.updatesLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.updatesLag) + " lag"));
 
-        sb.append(progress("Offers (" + numberFormat.format(grandTotal.offers.get()) + ")",
-            (int) (((double) grandTotal.offersLag.longValue() / 10000d) * 100),
-            getDurationBreakdown(grandTotal.offersLag.longValue()) + " lag"));
+        sb.append(progress("Offers (" + numberFormat.format(grandTotal.offers.longValue()) + ")",
+            (int) ((grandTotal.offersLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.offersLag) + " lag"));
 
-        sb.append(progress("Took (" + numberFormat.format(grandTotal.takes.get()) + ")",
-            (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
-            getDurationBreakdown(grandTotal.takesLag.longValue()) + " lag"));
+        sb.append(progress("Took (" + numberFormat.format(grandTotal.takes.longValue()) + ")",
+            (int) ((grandTotal.takesLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.takesLag) + " lag"));
 
-        sb.append(progress("Took Applied (" + numberFormat.format(grandTotal.takeApplies.get()) + ")",
-            (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
-            getDurationBreakdown(grandTotal.takeAppliesLag.longValue()) + " lag"));
+        sb.append(progress("Took Applied (" + numberFormat.format(grandTotal.takeApplies.longValue()) + ")",
+            (int) ((grandTotal.takeAppliesLag / 1000d) * 100),
+            getDurationBreakdown(grandTotal.takeAppliesLag) + " lag"));
 
-        sb.append(progress("Took Average Rows (" + numberFormat.format(amzaStats.takes.get()) + ")",
-            (int) (((double) amzaStats.takeExcessRows.get() / amzaStats.takes.get()) / 4096 * 100),
-            numberFormat.format(amzaStats.takeExcessRows.get())));
+        sb.append(progress("Took Average Rows (" + numberFormat.format(amzaStats.takes.longValue()) + ")",
+            (int) (((double) amzaStats.takeExcessRows.longValue()/ amzaStats.takes.longValue()) / 4096 * 100),
+            numberFormat.format(amzaStats.takeExcessRows.longValue())));
 
-        sb.append(progress("Acks (" + numberFormat.format(grandTotal.acks.get()) + ")",
-            (int) (((double) grandTotal.acksLag.longValue() / 10000d) * 100),
-            getDurationBreakdown(grandTotal.acksLag.longValue()) + " lag"));
+        sb.append(progress("Acks (" + numberFormat.format(grandTotal.acks.longValue()) + ")",
+            (int) ((grandTotal.acksLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.acksLag) + " lag"));
 
-        sb.append(progress("Quorums (" + numberFormat.format(grandTotal.quorums.get()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.get()) + ")",
-            (int) (((double) grandTotal.quorumsLatency.longValue() / 10000d) * 100),
-            getDurationBreakdown(grandTotal.quorumsLatency.longValue()) + " lag"));
+        sb.append(progress("Quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
+            (int) ((grandTotal.quorumsLatency / 10000d) * 100),
+            getDurationBreakdown(grandTotal.quorumsLatency) + " lag"));
 
-        sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.get()) + ")",
-            (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
+        sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.longValue()) + ")",
+            (int) ((amzaStats.availableRowsStream.longValue() / 100d) * 100), ""));
 
-        sb.append(progress("Active Row Streaming (" + numberFormat.format(amzaStats.rowsStream.get()) + ")",
-            (int) (((double) amzaStats.rowsStream.get() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsStream.get())));
+        sb.append(progress("Active Row Streaming (" + numberFormat.format(amzaStats.rowsStream.longValue()) + ")",
+            (int) ((amzaStats.rowsStream.longValue() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsStream.longValue())));
 
-        sb.append(progress("Active Row Acknowledging (" + numberFormat.format(amzaStats.rowsTaken.get()) + ")",
-            (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsTake.get())));
+        sb.append(progress("Active Row Acknowledging (" + numberFormat.format(amzaStats.rowsTaken.longValue()) + ")",
+            (int) ((amzaStats.rowsTaken.longValue() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsTake.longValue())));
 
-        sb.append(progress("Back Pressure (" + numberFormat.format(amzaStats.backPressure.get()) + ")",
-            (int) (((double) amzaStats.backPressure.get() / 10000d) * 100), "" + amzaStats.pushBacks.get()));
+        sb.append(progress("Back Pressure (" + numberFormat.format(amzaStats.backPressure.longValue()) + ")",
+            (int) ((amzaStats.backPressure.longValue() / 10000d) * 100), "" + amzaStats.pushBacks.longValue()));
 
         long[] count = amzaStats.deltaStripeMergeLoaded;
         double[] load = amzaStats.deltaStripeLoad;
@@ -599,25 +598,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         int expungeCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.expunge);
 
         sb.append(progress("Tombstone Compactions (" + numberFormat.format(tombostoneCompaction) + ")",
-            (int) (((double) tombostoneCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.tombstone)));
+            (int) ((tombostoneCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.tombstone)));
 
         sb.append(progress("Merge Compactions (" + numberFormat.format(mergeCompaction) + ")",
-            (int) (((double) mergeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.merge)));
+            (int) ((mergeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.merge)));
 
         sb.append(progress("Expunge Compactions (" + numberFormat.format(expungeCompaction) + ")",
-            (int) (((double) expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge)));
-
-        sb.append("<p><pre>");
-        for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {
-            sb.append("ERROR ").append(l).append("\n");
-        }
-        for (String l : LoggerSummary.INSTANCE.lastNWarns.get()) {
-            sb.append("WARN ").append(l).append("\n");
-        }
-        for (String l : LoggerSummary.INSTANCE.lastNInfos.get()) {
-            sb.append("INFO ").append(l).append("\n");
-        }
-        sb.append("</pre><p>");
+            (int) ((expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge)));
 
         return sb.toString();
     }

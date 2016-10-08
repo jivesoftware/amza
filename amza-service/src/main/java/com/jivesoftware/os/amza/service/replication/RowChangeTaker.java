@@ -374,7 +374,7 @@ public class RowChangeTaker implements RowChanges {
                             }
                         },
                         () -> {
-                            amzaStats.pingsReceived.incrementAndGet();
+                            amzaStats.pingsReceived.increment();
                             ping.set(System.currentTimeMillis());
                         });
                 } catch (InterruptedException ie) {
@@ -892,12 +892,12 @@ public class RowChangeTaker implements RowChanges {
                                 amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), numFlushed, oldestTxId.longValue());
                             }
                         }
-                        amzaStats.backPressure.set(0);
+                        amzaStats.backPressure.sumThenReset();
                         break;
                     } catch (DeltaOverCapacityException x) {
                         Thread.sleep(100); // TODO configure!
-                        amzaStats.backPressure.incrementAndGet();
-                        amzaStats.pushBacks.incrementAndGet();
+                        amzaStats.backPressure.increment();
+                        amzaStats.pushBacks.increment();
                     }
                 }
             }

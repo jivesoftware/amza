@@ -445,7 +445,7 @@ public class TakeCoordinator {
                 while (true) {
                     long currentOffer = offered.get();
                     if (currentOffer == 0) {
-                        amzaStats.pingsSent.incrementAndGet();
+                        amzaStats.pingsSent.increment();
                         pingCallback.call(); // Ping aka keep the socket alive
                         break;
                     } else if (offered.compareAndSet(currentOffer, 0)) {
@@ -467,7 +467,7 @@ public class TakeCoordinator {
                         while (true) {
                             long currentOffer = offered.get();
                             if (currentOffer == 0) {
-                                amzaStats.pingsSent.incrementAndGet();
+                                amzaStats.pingsSent.increment();
                                 pingCallback.call(); // Ping aka keep the socket alive
                                 break;
                             } else if (offered.compareAndSet(currentOffer, 0)) {

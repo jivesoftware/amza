@@ -75,7 +75,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
-import static org.apache.commons.logging.LogFactory.releaseAll;
 
 /**
  * @author jonathan.colt
@@ -682,7 +681,7 @@ public class DeltaStripeWALStorage {
                             removes.add(keyedTimestampId);
                         }
                     } else {
-                        amzaStats.deltaFirstCheckRemoves.incrementAndGet();
+                        amzaStats.deltaFirstCheckRemoves.increment();
                     }
                     return true;
                 });
@@ -707,7 +706,7 @@ public class DeltaStripeWALStorage {
                             if (got != null && CompareTimestampVersions.compare(got.getTimestampId(), got.getVersion(),
                                 value.getTimestampId(), value.getVersion()) >= 0) {
                                 iter.remove();
-                                amzaStats.deltaSecondCheckRemoves.incrementAndGet();
+                                amzaStats.deltaSecondCheckRemoves.increment();
                             }
                         }
 

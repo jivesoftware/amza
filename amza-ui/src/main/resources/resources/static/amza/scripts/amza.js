@@ -3,14 +3,14 @@ window.$ = window.jQuery;
 window.amza = {};
 
 
-amza.stats = {
+amza.metrics = {
     input: {},
     requireFocus: true,
     html: null,
     init: function () {
         $stats = $('#stats');
 
-        amza.stats.poll();
+        amza.metrics.poll();
     },
     poll: function () {
         $.ajax({
@@ -23,7 +23,7 @@ amza.stats = {
             },
             //contentType: "application/json",
             success: function (data) {
-                amza.stats.draw(data);
+                amza.metrics.draw(data);
             },
             error: function () {
                 //TODO error message
@@ -34,10 +34,10 @@ amza.stats = {
     draw: function (data) {
         $('#stats').html(data);
 
-        if (!amza.stats.requireFocus || amza.windowFocused) {
-            //amza.stats.update();
+        if (!amza.metrics.requireFocus || amza.windowFocused) {
+            //amza.metrics.update();
         }
-        setTimeout(amza.stats.poll, 1000);
+        setTimeout(amza.metrics.poll, 1000);
     }
 };
 
@@ -343,7 +343,7 @@ $(document).ready(function () {
         amza.chord.init();
     }
     if ($('#stats').length) {
-        amza.stats.init();
+        amza.metrics.init();
     }
     if ($('#overview').length) {
         amza.overview.init();

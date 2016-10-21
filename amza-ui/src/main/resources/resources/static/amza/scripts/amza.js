@@ -18,8 +18,8 @@ amza.metrics = {
             url: "/amza/ui/metrics/stats/",
             dataType: "html",
             data: {
-                partitionName: $('#stats').data('partition-name'),
-                exact: $('#stats').data('partition-exact')
+                partitionName: $('#metrics').data('partition-name'),
+                exact: $('#metrics').data('partition-exact')
             },
             //contentType: "application/json",
             success: function (data) {
@@ -32,7 +32,7 @@ amza.metrics = {
         });
     },
     draw: function (data) {
-        $('#stats').html(data);
+        $('#metrics').html(data);
 
         if (!amza.metrics.requireFocus || amza.windowFocused) {
             //amza.metrics.update();
@@ -342,7 +342,7 @@ $(document).ready(function () {
     if ($('#chord').length) {
         amza.chord.init();
     }
-    if ($('#stats').length) {
+    if ($('#metrics').length) {
         amza.metrics.init();
     }
     if ($('#overview').length) {

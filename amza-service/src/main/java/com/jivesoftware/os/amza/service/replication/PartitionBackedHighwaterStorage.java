@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -123,7 +124,12 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public void setIfLarger(final RingMember member, final VersionedPartitionName versionedPartitionName, int updates, long highwaterTxId) throws Exception {
+    public void setIfLarger(RingMember member,
+        VersionedPartitionName versionedPartitionName,
+        long highwaterTxId,
+        int deltaIndex,
+        int updates) throws Exception {
+
         if (member.equals(rootRingMember)) {
             return;
         }
@@ -134,14 +140,17 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
                 (t) -> new ConcurrentHashMap<>());
             HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.computeIfAbsent(versionedPartitionName, (t) -> new HighwaterUpdates());
-            highwaterUpdates.update(highwaterTxId, updates);
+            highwaterUpdates.updateTxId(highwaterTxId);
+            if (updates > 0) {
+                highwaterUpdates.addDeltaUpdates(deltaIndex, updates);
+            }
         } finally {
             bigBird.release();
         }
     }
 
     @Override
-    public void clear(final RingMember member, final VersionedPartitionName versionedPartitionName) throws Exception {
+    public void clear(RingMember member, VersionedPartitionName versionedPartitionName) throws Exception {
         bigBird.acquire();
         try {
             ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
@@ -164,16 +173,16 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);
         if (highwaterUpdates == null) {
             PartitionProperties partitionProperties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
-            long txtId = -1L;
+            long txId = -1L;
             if (partitionProperties.durability != Durability.ephemeral) {
                 TimestampedValue got = systemWALStorage.getTimestampedValue(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     walKey(versionedPartitionName, member));
                 if (got != null) {
-                    txtId = UIO.bytesLong(got.getValue());
+                    txId = UIO.bytesLong(got.getValue());
                 }
             }
             highwaterUpdates = partitionHighwaterUpdates.computeIfAbsent(versionedPartitionName, (t) -> new HighwaterUpdates());
-            highwaterUpdates.update(txtId, 0);
+            highwaterUpdates.updateTxId(txId);
         }
         return highwaterUpdates.getTxId();
 
@@ -219,15 +228,16 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public void flush(Callable<Void> preFlush) throws Exception {
+    public boolean flush(int deltaIndex, Callable<Void> preFlush) throws Exception {
         if (updatesSinceLastFlush.get() < flushHighwatersAfterNUpdates) {
-            return;
+            return false;
         }
         bigBird.acquire(numPermits);
         try {
             long flushedUpdates = updatesSinceLastFlush.get();
-            if (flushedUpdates > flushHighwatersAfterNUpdates) {
-
+            if (flushedUpdates < flushHighwatersAfterNUpdates) {
+                return false;
+            } else {
                 systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
                         if (preFlush != null) {
@@ -236,24 +246,28 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
                         long timestampAndVersion = orderIdProvider.nextId();
                         for (Entry<RingMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates>> ringEntry
-                        : hostToPartitionToHighwaterUpdates.entrySet()) {
+                            : hostToPartitionToHighwaterUpdates.entrySet()) {
                             RingMember ringMember = ringEntry.getKey();
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {
                                 VersionedPartitionName versionedPartitionName = partitionEntry.getKey();
                                 PartitionProperties properties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
                                 if (properties.durability != Durability.ephemeral) {
                                     HighwaterUpdates highwaterUpdates = partitionEntry.getValue();
-                                    if (highwaterUpdates != null && highwaterUpdates.updates.get() > 0) {
-                                        try {
-                                            long txId = highwaterUpdates.getTxId();
-                                            long total = highwaterUpdates.updates.get();
-                                            if (!scan.row(-1, walKey(versionedPartitionName, ringMember),
-                                                UIO.longBytes(txId), timestampAndVersion, false, timestampAndVersion)) {
-                                                return false;
+                                    if (highwaterUpdates != null) {
+                                        AtomicLong updates = highwaterUpdates.updates.get(deltaIndex);
+                                        if (updates != null && updates.get() > 0) {
+                                            try {
+                                                long txId = highwaterUpdates.getTxId();
+                                                long total = updates.get();
+                                                if (!scan.row(-1, walKey(versionedPartitionName, ringMember),
+                                                    UIO.longBytes(txId), timestampAndVersion, false, timestampAndVersion)) {
+                                                    return false;
+                                                }
+                                                highwaterUpdates.updateTxId(txId);
+                                                highwaterUpdates.addDeltaUpdates(deltaIndex, -total);
+                                            } catch (Exception x) {
+                                                throw new RuntimeException();
                                             }
-                                            highwaterUpdates.update(txId, -total);
-                                        } catch (Exception x) {
-                                            throw new RuntimeException();
                                         }
                                     }
                                 }
@@ -263,6 +277,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
                     }, walUpdated);
                 updatesSinceLastFlush.addAndGet(-flushedUpdates);
+                return true;
             }
         } finally {
             bigBird.release(numPermits);
@@ -272,13 +287,13 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     static class HighwaterUpdates {
 
         private final AtomicLong txId;
-        private final AtomicLong updates = new AtomicLong(0);
+        private final Map<Integer, AtomicLong> updates = Maps.newConcurrentMap();
 
         public HighwaterUpdates() {
             this.txId = new AtomicLong(-1L);
         }
 
-        public long update(long txId, long updates) {
+        public void updateTxId(long txId) {
             long got = this.txId.longValue();
             while (txId > got) {
                 if (this.txId.compareAndSet(got, txId)) {
@@ -287,7 +302,10 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                     got = this.txId.get();
                 }
             }
-            return this.updates.addAndGet(updates);
+        }
+
+        public long addDeltaUpdates(int deltaIndex, long updates) {
+            return this.updates.computeIfAbsent(deltaIndex, k -> new AtomicLong()).addAndGet(updates);
         }
 
         public long getTxId() {

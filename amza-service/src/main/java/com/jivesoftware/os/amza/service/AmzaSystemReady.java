@@ -135,18 +135,20 @@ public class AmzaSystemReady {
     }
 
     public void await(long timeoutInMillis) throws Exception {
-        if (!ready.get()) {
-            if (timeoutInMillis == 0) {
-                throw new FailedToAchieveQuorumException("System has not reached ready state");
-            }
-            synchronized (ready) {
-                while (!ready.get()) {
-                    if (timeoutInMillis == 0) {
-                        throw new FailedToAchieveQuorumException("Timed out waiting for system to reach ready state");
-                    }
-                    long start = System.currentTimeMillis();
-                    ready.wait(timeoutInMillis);
-                    timeoutInMillis = Math.max(timeoutInMillis - (start - System.currentTimeMillis()), 0);
+        if (ready.get()) {
+            return;
+        }
+        if (timeoutInMillis == 0) {
+            throw new FailedToAchieveQuorumException("System has not reached ready state");
+        }
+        long end = System.currentTimeMillis() + timeoutInMillis;
+        synchronized (ready) {
+            while (!ready.get()) {
+                long timeToWait = end - System.currentTimeMillis();
+                if (timeToWait > 0) {
+                    ready.wait(timeToWait);
+                } else {
+                    throw new FailedToAchieveQuorumException("Timed out waiting for system to reach ready state");
                 }
             }
         }

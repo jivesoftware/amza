@@ -30,19 +30,22 @@ public class RowsChanged {
     private final List<KeyedTimestampId> clobber;
     private final long smallestCommittedTxId;
     private final long largestCommittedTxId;
+    private final int deltaIndex;
 
     public RowsChanged(VersionedPartitionName versionedPartitionName,
         Map<WALKey, WALValue> apply,
         List<KeyedTimestampId> remove,
         List<KeyedTimestampId> clobber,
         long smallestCommittedTxId,
-        long largestCommittedTxId) {
+        long largestCommittedTxId,
+        int deltaIndex) {
         this.versionedPartitionName = versionedPartitionName;
         this.apply = apply;
         this.remove = remove;
         this.clobber = clobber;
         this.smallestCommittedTxId = smallestCommittedTxId;
         this.largestCommittedTxId = largestCommittedTxId;
+        this.deltaIndex = deltaIndex;
     }
 
     public VersionedPartitionName getVersionedPartitionName() {
@@ -79,6 +82,10 @@ public class RowsChanged {
         return largestCommittedTxId;
     }
 
+    public int getDeltaIndex() {
+        return deltaIndex;
+    }
+
     @Override
     public String toString() {
         return "RowsChanged{" +
@@ -88,6 +95,7 @@ public class RowsChanged {
             ", clobber=" + clobber +
             ", smallestCommittedTxId=" + smallestCommittedTxId +
             ", largestCommittedTxId=" + largestCommittedTxId +
+            ", deltaIndex=" + deltaIndex +
             '}';
     }
 

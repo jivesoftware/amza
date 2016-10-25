@@ -24,7 +24,11 @@ public interface HighwaterStorage {
 
     void clearRing(RingMember ringMember) throws Exception;
 
-    void setIfLarger(RingMember ringMember, VersionedPartitionName versionedPartitionName, int updates, long highWatermark) throws Exception;
+    void setIfLarger(RingMember ringMember,
+        VersionedPartitionName versionedPartitionName,
+        long highwaterTxId,
+        int deltaIndex,
+        int updates) throws Exception;
 
     void clear(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 
@@ -32,7 +36,7 @@ public interface HighwaterStorage {
 
     WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception;
 
-    void flush(Callable<Void> preFlush) throws Exception;
+    boolean flush(int deltaIndex, Callable<Void> preFlush) throws Exception;
 
     void delete(VersionedPartitionName versionedPartitionName) throws Exception;
 

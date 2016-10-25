@@ -27,6 +27,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -199,14 +200,14 @@ public class PartitionStripeProvider {
         return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
             return tx.tx(
                 new TxPartitionStripe() {
-                @Override
-                public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
-                    return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
-                        PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
-                        return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
-                    });
-                }
-            },
+                    @Override
+                    public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
+                        return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
+                            PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
+                            return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
+                        });
+                    }
+                },
                 highwaterStorage,
                 versionedAquarium1);
         });
@@ -306,6 +307,7 @@ public class PartitionStripeProvider {
         private final AtomicLong forceFlushedToVersion = new AtomicLong(0);
         private final Object force = new Object();
         private final long asyncFlushIntervalMillis;
+        private final Callable<Void> flushDelta;
 
         public AsyncStripeFlusher(DeltaStripeWALStorage deltaStripeWALStorage,
             HighwaterStorage highwaterStorage,
@@ -314,6 +316,10 @@ public class PartitionStripeProvider {
             this.deltaStripeWALStorage = deltaStripeWALStorage;
             this.highwaterStorage = highwaterStorage;
             this.asyncFlushIntervalMillis = asyncFlushIntervalMillis;
+            this.flushDelta = () -> {
+                deltaStripeWALStorage.flush(true);
+                return null;
+            };
         }
 
         public void forceFlush(Durability durability, long waitForFlushInMillis) throws Exception {
@@ -403,10 +409,9 @@ public class PartitionStripeProvider {
         }
 
         private void flush() throws Exception {
-            highwaterStorage.flush(() -> {
-                deltaStripeWALStorage.flush(true); // TODO eval for correctness
-                return null;
-            });
+            if (!highwaterStorage.flush(deltaStripeWALStorage.getId(), flushDelta)) {
+                flushDelta.call();
+            }
         }
 
         private void start(ExecutorService flusherExecutor) {

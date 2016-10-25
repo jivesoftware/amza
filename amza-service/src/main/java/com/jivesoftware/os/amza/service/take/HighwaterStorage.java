@@ -32,7 +32,7 @@ public interface HighwaterStorage {
 
     WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception;
 
-    void flush(Callable<Void> preFlush) throws Exception;
+    boolean flush(Callable<Void> preFlush) throws Exception;
 
     void delete(VersionedPartitionName versionedPartitionName) throws Exception;
 

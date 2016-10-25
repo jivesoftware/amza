@@ -219,15 +219,16 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public void flush(Callable<Void> preFlush) throws Exception {
+    public boolean flush(Callable<Void> preFlush) throws Exception {
         if (updatesSinceLastFlush.get() < flushHighwatersAfterNUpdates) {
-            return;
+            return false;
         }
         bigBird.acquire(numPermits);
         try {
             long flushedUpdates = updatesSinceLastFlush.get();
-            if (flushedUpdates > flushHighwatersAfterNUpdates) {
-
+            if (flushedUpdates < flushHighwatersAfterNUpdates) {
+                return false;
+            } else {
                 systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
                         if (preFlush != null) {
@@ -263,6 +264,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
                     }, walUpdated);
                 updatesSinceLastFlush.addAndGet(-flushedUpdates);
+                return true;
             }
         } finally {
             bigBird.release(numPermits);

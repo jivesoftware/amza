@@ -27,6 +27,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -306,6 +307,7 @@ public class PartitionStripeProvider {
         private final AtomicLong forceFlushedToVersion = new AtomicLong(0);
         private final Object force = new Object();
         private final long asyncFlushIntervalMillis;
+        private final Callable<Void> flushDelta;
 
         public AsyncStripeFlusher(DeltaStripeWALStorage deltaStripeWALStorage,
             HighwaterStorage highwaterStorage,
@@ -314,6 +316,10 @@ public class PartitionStripeProvider {
             this.deltaStripeWALStorage = deltaStripeWALStorage;
             this.highwaterStorage = highwaterStorage;
             this.asyncFlushIntervalMillis = asyncFlushIntervalMillis;
+            this.flushDelta = () -> {
+                deltaStripeWALStorage.flush(true);
+                return null;
+            };
         }
 
         public void forceFlush(Durability durability, long waitForFlushInMillis) throws Exception {
@@ -403,10 +409,9 @@ public class PartitionStripeProvider {
         }
 
         private void flush() throws Exception {
-            highwaterStorage.flush(() -> {
-                deltaStripeWALStorage.flush(true); // TODO eval for correctness
-                return null;
-            });
+            if (!highwaterStorage.flush(flushDelta)) {
+                flushDelta.call();
+            }
         }
 
         private void start(ExecutorService flusherExecutor) {

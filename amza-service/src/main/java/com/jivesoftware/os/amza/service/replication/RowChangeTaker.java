@@ -696,8 +696,13 @@ public class RowChangeTaker implements RowChanges {
                                     updates = takeRowStream.flush();
                                 }
 
-                                for (Entry<RingMember, Long> entry : takeRowStream.flushedHighwatermarks.entrySet()) {
-                                    highwaterStorage.setIfLarger(entry.getKey(), localVersionedPartitionName, updates, entry.getValue());
+                                for (Entry<RingMember, DeltaIndexAndTxId> entry : takeRowStream.flushedHighwatermarks.entrySet()) {
+                                    DeltaIndexAndTxId deltaIndexAndTxId = entry.getValue();
+                                    highwaterStorage.setIfLarger(entry.getKey(),
+                                        localVersionedPartitionName,
+                                        deltaIndexAndTxId.txId,
+                                        deltaIndexAndTxId.deltaIndex,
+                                        updates);
                                 }
 
                                 if (rowsResult.partitionVersion == -1) {
@@ -725,8 +730,11 @@ public class RowChangeTaker implements RowChanges {
                                 } else if (rowsResult.otherHighwaterMarks != null) {
                                     // Other highwater are provided when taken fully.
                                     for (Entry<RingMember, Long> otherHighwaterMark : rowsResult.otherHighwaterMarks.entrySet()) {
-                                        highwaterStorage.setIfLarger(otherHighwaterMark.getKey(), localVersionedPartitionName, updates,
-                                            otherHighwaterMark.getValue());
+                                        highwaterStorage.setIfLarger(otherHighwaterMark.getKey(),
+                                            localVersionedPartitionName,
+                                            otherHighwaterMark.getValue(),
+                                            -1,
+                                            0);
                                     }
 
                                     LOG.inc("take>fully>all");
@@ -798,7 +806,16 @@ public class RowChangeTaker implements RowChanges {
 
     }
 
-    static class TakeRowStream implements RowStream {
+    private static class DeltaIndexAndTxId {
+        private final int deltaIndex;
+        private long txId = -1;
+
+        private DeltaIndexAndTxId(int deltaIndex) {
+            this.deltaIndex = deltaIndex;
+        }
+    }
+
+    private static class TakeRowStream implements RowStream {
 
         private final AmzaStats amzaStats;
         private final VersionedPartitionName versionedPartitionName;
@@ -814,7 +831,7 @@ public class RowChangeTaker implements RowChanges {
         private final AtomicReference<WALHighwater> highwater = new AtomicReference<>();
         private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
         private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
-        private final Map<RingMember, Long> flushedHighwatermarks = new HashMap<>();
+        private final Map<RingMember, DeltaIndexAndTxId> flushedHighwatermarks = new HashMap<>();
 
         public TakeRowStream(AmzaStats amzaStats,
             VersionedPartitionName versionedPartitionName,
@@ -882,10 +899,10 @@ public class RowChangeTaker implements RowChanges {
                         if (changes != null) {
                             if (walh != null) {
                                 for (RingMemberHighwater memberHighwater : walh.ringMemberHighwater) {
-                                    flushedHighwatermarks.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
+                                    mergeHighwater(changes.getDeltaIndex(), memberHighwater.ringMember, memberHighwater.transactionId);
                                 }
                             }
-                            flushedHighwatermarks.merge(ringMember, highWaterMark.longValue(), Math::max);
+                            mergeHighwater(changes.getDeltaIndex(), ringMember, highWaterMark.longValue());
                             flushed.set(streamed.get());
                             int numFlushed = changes.getApply().size();
                             if (numFlushed > 0) {
@@ -903,6 +920,11 @@ public class RowChangeTaker implements RowChanges {
             }
             highwater.set(null);
             return flushed.get();
+        }
+
+        private void mergeHighwater(int deltaIndex, RingMember ringMember, long transactionId) {
+            DeltaIndexAndTxId deltaIndexAndTxId = flushedHighwatermarks.computeIfAbsent(ringMember, key -> new DeltaIndexAndTxId(deltaIndex));
+            deltaIndexAndTxId.txId = Math.max(transactionId, deltaIndexAndTxId.txId);
         }
 
         public long largestFlushedTxId() {

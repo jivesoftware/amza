@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
-import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
@@ -36,7 +35,9 @@ import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
+import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -96,7 +97,9 @@ public class StripedPartition implements Partition {
 
         long end = System.currentTimeMillis() + timeoutInMillis;
         systemReady.await(timeoutInMillis);
-        long remainingTimeInMillis = Math.max(end - System.currentTimeMillis(), 0);
+        if (System.currentTimeMillis() > end) {
+            throw new FailedToAchieveQuorumException("Timed out waiting for system ready");
+        }
 
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
         if (properties.requireConsistency && !properties.consistency.supportsWrites(consistency)) {
@@ -137,14 +140,18 @@ public class StripedPartition implements Partition {
             });
 
             if (takeQuorum > 0) {
-                LOG.debug("Awaiting quorum for {} ms", remainingTimeInMillis);
-                int takenBy = ackWaters.await(versionedAquarium.getVersionedPartitionName(),
-                    commit.getLargestCommittedTxId(),
-                    neighbors,
-                    takeQuorum,
-                    remainingTimeInMillis,
-                    leadershipToken,
-                    takeCoordinator);
+                long timeToWait = Math.max(0, end - System.currentTimeMillis());
+                LOG.debug("Awaiting quorum for {} ms", timeToWait);
+                int takenBy = 0;
+                if (timeToWait > 0) {
+                    takenBy = ackWaters.await(versionedAquarium.getVersionedPartitionName(),
+                        commit.getLargestCommittedTxId(),
+                        neighbors,
+                        takeQuorum,
+                        timeToWait,
+                        leadershipToken,
+                        takeCoordinator);
+                }
                 if (takenBy < takeQuorum) {
                     throw new FailedToAchieveQuorumException(
                         "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
@@ -157,9 +164,12 @@ public class StripedPartition implements Partition {
             return null;
         });
 
-        // TODO consider creating stripes per durability
         long fsyncWaitInMillis = Math.max(end - System.currentTimeMillis(), 0);
-        partitionStripeProvider.flush(partitionName, properties.durability, fsyncWaitInMillis);
+        if (fsyncWaitInMillis > 0) {
+            partitionStripeProvider.flush(partitionName, properties.durability, fsyncWaitInMillis);
+        } else {
+            throw new FailedToAchieveQuorumException("Timed out before commit achieved durability:" + properties.durability);
+        }
     }
 
     private void checkReadConsistencySupport(Consistency consistency) throws Exception {

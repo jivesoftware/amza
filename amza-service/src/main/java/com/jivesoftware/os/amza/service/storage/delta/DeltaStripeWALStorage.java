@@ -688,7 +688,7 @@ public class DeltaStripeWALStorage {
 
             long[] appliedCount = { 0 };
             if (apply.isEmpty()) {
-                rowsChanged[0] = new RowsChanged(versionedPartitionName, Collections.emptyMap(), removes, clobbers, -1, -1);
+                rowsChanged[0] = new RowsChanged(versionedPartitionName, Collections.emptyMap(), removes, clobbers, -1, -1, index);
             } else {
                 txPartitionDelta(versionedPartitionName, delta -> {
                     WALHighwater partitionHighwater = null;
@@ -730,7 +730,8 @@ public class DeltaStripeWALStorage {
                             removes,
                             clobbers,
                             updateApplied.txId,
-                            updateApplied.txId);
+                            updateApplied.txId,
+                            index);
                     }
                     updated.updated(versionedPartitionName, updateApplied.txId);
                     return true;

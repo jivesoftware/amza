@@ -200,14 +200,14 @@ public class PartitionStripeProvider {
         return transactor.doWithOne(versionedAquarium, versionedAquarium1 -> {
             return tx.tx(
                 new TxPartitionStripe() {
-                @Override
-                public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
-                    return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
-                        PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
-                        return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
-                    });
-                }
-            },
+                    @Override
+                    public <S> S tx(PartitionStripeTx<S> partitionStripeTx) throws Exception {
+                        return storageVersionProvider.tx(partitionName, storageVersion, (deltaIndex, stripeIndex, storageVersion1) -> {
+                            PartitionStripe partitionStripe = deltaIndex == -1 ? null : partitionStripes[deltaIndex][stripeIndex];
+                            return partitionStripeTx.tx(deltaIndex, stripeIndex, partitionStripe);
+                        });
+                    }
+                },
                 highwaterStorage,
                 versionedAquarium1);
         });
@@ -409,7 +409,7 @@ public class PartitionStripeProvider {
         }
 
         private void flush() throws Exception {
-            if (!highwaterStorage.flush(flushDelta)) {
+            if (!highwaterStorage.flush(deltaStripeWALStorage.getId(), flushDelta)) {
                 flushDelta.call();
             }
         }

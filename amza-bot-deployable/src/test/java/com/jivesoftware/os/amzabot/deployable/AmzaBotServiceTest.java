@@ -266,4 +266,21 @@ public class AmzaBotServiceTest {
         }
     }
 
+    @Test
+    public void verifySbBehavior() throws Exception {
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < 2; i++) {
+            if (sb.length() > 0) {
+                sb.append(",");
+            }
+            sb.append(i);
+            sb.append(":");
+            sb.append(i);
+        }
+
+        sb.insert(0, "pre: ");
+        Assert.assertEquals(sb.toString(), "pre: 0:0,1:1");
+    }
+
 }

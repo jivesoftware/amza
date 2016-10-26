@@ -61,7 +61,7 @@ class AmzaBotHealthCheck implements HealthCheck {
 
                 @Override
                 public String getDescription() {
-                    StringBuilder sb = new StringBuilder("Invalid key list: ");
+                    StringBuilder sb = new StringBuilder();
 
                     quarantinedKeys.forEach((key, entry) -> {
                         if (sb.length() > 0) {
@@ -74,6 +74,7 @@ class AmzaBotHealthCheck implements HealthCheck {
                         sb.append(entry.getValue());
                     });
 
+                    sb.insert(0, "Invalid key list: ");
                     return sb.toString();
                 }
 

@@ -103,6 +103,8 @@ public class AmzaKeyClearingHouse {
     }
 
     public void quarantineEntry(Entry<String, Integer> entry, Integer value) {
+        LOG.error("Quarantine entry {}:{}:{}", entry.getKey(), entry.getValue(), value);
+
         quarantinedKeyMap.put(entry.getKey(),
             new SimpleEntry<>(entry.getValue().hashCode(), value));
         keyMap.remove(entry.getKey());

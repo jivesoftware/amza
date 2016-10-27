@@ -197,12 +197,14 @@ public class Main {
 
         AtomicReference<Callable<RingTopology>> topologyProvider = new AtomicReference<>(); // bit of a hack
 
-        InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", 0L, true);
+        InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", "", 0L, true);
         ConnectionDescriptorsProvider connectionsProvider = (connectionDescriptorsRequest, expectedReleaseGroup) -> {
             try {
                 RingTopology systemRing = topologyProvider.get().call();
                 List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.entries,
                     input -> new ConnectionDescriptor(instanceDescriptor,
+                        false,
+                        false,
                         new HostPort(input.ringHost.getHost(), input.ringHost.getPort()),
                         Collections.emptyMap(),
                         Collections.emptyMap())));
@@ -220,7 +222,7 @@ public class Main {
             10_000); // TODO config
         connectionPoolProvider.start();
 
-        TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().builder(
+        TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>(null).builder(
             connectionPoolProvider,
             new HttpDeliveryClientHealthProvider("", null, "", 5000, 100))
             .deadAfterNErrors(10)
@@ -286,21 +288,21 @@ public class Main {
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
-                @Override
-                public void addEndpoint(Class clazz) {
-                    System.out.println("Adding endpoint=" + clazz);
-                    jerseyEndpoints.addEndpoint(clazz);
-                }
-
-                @Override
-                public void addInjectable(Class clazz, Object instance) {
-                    System.out.println("Injecting " + clazz + " " + instance);
-                    jerseyEndpoints.addInjectable(clazz, instance);
-                }
+            @Override
+            public void addEndpoint(Class clazz) {
+                System.out.println("Adding endpoint=" + clazz);
+                jerseyEndpoints.addEndpoint(clazz);
             }
+
+            @Override
+            public void addInjectable(Class clazz, Object instance) {
+                System.out.println("Injecting " + clazz + " " + instance);
+                jerseyEndpoints.addInjectable(clazz, instance);
+            }
+        }
         );
 
-        InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
+        InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", false, null, null, null, 128, 10000);
         initializeRestfulServer.addClasspathResource("/resources");
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);
         RestfulServer restfulServer = initializeRestfulServer.build();

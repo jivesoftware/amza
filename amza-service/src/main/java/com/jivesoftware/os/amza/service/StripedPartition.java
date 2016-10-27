@@ -156,6 +156,10 @@ public class StripedPartition implements Partition {
                     throw new FailedToAchieveQuorumException(
                         "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
                 }
+                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
+                    throw new FailedToAchieveQuorumException("Leader has changed.");
+                }
             }
             //TODO necessary? aquarium.tapTheGlass();
 
@@ -243,8 +247,8 @@ public class StripedPartition implements Partition {
         TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-            long[] lastTxId = { -1 };
-            boolean[] done = { false };
+            long[] lastTxId = {-1};
+            boolean[] done = {false};
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;

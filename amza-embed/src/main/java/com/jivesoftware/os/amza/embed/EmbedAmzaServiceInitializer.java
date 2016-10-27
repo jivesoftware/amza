@@ -141,7 +141,7 @@ public class EmbedAmzaServiceInitializer {
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
 
-        TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
+        TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
         TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
             clientHealthProvider)

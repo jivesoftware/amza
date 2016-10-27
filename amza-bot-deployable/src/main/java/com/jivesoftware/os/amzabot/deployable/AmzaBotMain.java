@@ -46,7 +46,6 @@ import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
-import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
 import java.util.Arrays;
@@ -95,11 +94,11 @@ public class AmzaBotMain {
             deployable.buildManageServer().start();
 
             HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceConfig.getInstanceKey(),
-                HttpRequestHelperUtils.buildRequestHelper(instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
+                HttpRequestHelperUtils.buildRequestHelper(false, false, null, instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
                 instanceConfig.getConnectionsHealth(), 5_000, 100);
 
             @SuppressWarnings("unchecked")
-            TenantAwareHttpClient<String> amzaClient = new TenantRoutingHttpClientInitializer<>().builder(
+            TenantAwareHttpClient<String> amzaClient = deployable.getTenantRoutingHttpClientInitializer().builder(
                 deployable.getTenantRoutingProvider().getConnections("amza", "main", 10_000), // TODO config
                 clientHealthProvider)
                 .deadAfterNErrors(10)

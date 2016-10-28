@@ -94,6 +94,7 @@
             <artifactId>jersey-server</artifactId>
         </dependency>
         <dependency>
+            <!--Do not remove! If you do you will break http chunked output!-->
             <groupId>org.glassfish.jersey.containers</groupId>
             <artifactId>jersey-container-servlet</artifactId>
             <scope>runtime</scope>

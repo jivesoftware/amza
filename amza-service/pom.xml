@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.614</version>
+        <version>0.615</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -93,6 +93,7 @@
             <artifactId>jersey-server</artifactId>
         </dependency>
         <dependency>
+            <!--Do not remove! If you do you will break http chunked output!-->
             <groupId>org.glassfish.jersey.containers</groupId>
             <artifactId>jersey-container-servlet</artifactId>
             <scope>runtime</scope>

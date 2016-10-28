@@ -35,9 +35,7 @@ import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
-import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelyEndState;
-import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -155,10 +153,6 @@ public class StripedPartition implements Partition {
                 if (takenBy < takeQuorum) {
                     throw new FailedToAchieveQuorumException(
                         "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
-                }
-                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-                if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
-                    throw new FailedToAchieveQuorumException("Leader has changed.");
                 }
             }
             //TODO necessary? aquarium.tapTheGlass();

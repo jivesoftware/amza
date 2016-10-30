@@ -67,7 +67,6 @@ public class AmzaBotMain {
 
             final Deployable deployable = new Deployable(args, configBinder, instanceConfig, null);
             HealthFactory.initialize(deployable::config, new DeployableHealthCheckRegistry(deployable));
-            deployable.buildStatusReporter(null).start();
             deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new HasUI.UI("manage", "manage", "/manage/ui"),
                 new HasUI.UI("Reset Errors", "manage", "/manage/resetErrors"),
                 new HasUI.UI("Reset Health", "manage", "/manage/resetHealth"),
@@ -188,7 +187,7 @@ public class AmzaBotMain {
             deployable.addInjectables(UiService.class, uiService);
 
             deployable.addResource(sourceTree);
-            deployable.enableSwagger("com.jivesoftware.os.amzabot.deployable.endpoints");
+            deployable.enableSwagger("com.jivesoftware.os.amzabot.deployable");
 
             deployable.buildServer().start();
             clientHealthProvider.start();

@@ -23,13 +23,13 @@ public class UiHomeRegion implements UiPageRegion<Void> {
     public String render(Void input) {
         Map<String, Object> data = Maps.newHashMap();
 
-        data.put("errors", String.valueOf(LoggerSummary.INSTANCE.errors + LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.errors));
+        data.put("errors", String.valueOf(LoggerSummary.INSTANCE.errors.longValue() + LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.errors.longValue()));
         data.put("recentErrors", recentLogs(LoggerSummary.INSTANCE.lastNErrors.get(), LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.lastNErrors.get()));
 
-        data.put("warns", String.valueOf(LoggerSummary.INSTANCE.warns + LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.warns));
+        data.put("warns", String.valueOf(LoggerSummary.INSTANCE.warns.longValue() + LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.warns.longValue()));
         data.put("recentWarns", recentLogs(LoggerSummary.INSTANCE.lastNWarns.get(), LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.lastNWarns.get()));
 
-        data.put("infos", String.valueOf(LoggerSummary.INSTANCE.infos + LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.infos));
+        data.put("infos", String.valueOf(LoggerSummary.INSTANCE.infos.longValue() + LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.infos.longValue()));
         data.put("recentInfos", recentLogs(LoggerSummary.INSTANCE.lastNInfos.get(), LoggerSummary.INSTANCE_EXTERNAL_INTERACTIONS.lastNInfos.get()));
 
         ingressed(data);

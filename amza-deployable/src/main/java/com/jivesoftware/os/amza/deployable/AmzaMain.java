@@ -83,7 +83,6 @@ public class AmzaMain {
                 new HasUI.UI("Health", "manage", "/manage/ui"),
                 new HasUI.UI("Amza", "main", "/amza"))));
 
-            deployable.buildStatusReporter(null).start();
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));
             deployable.addHealthCheck(new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)));

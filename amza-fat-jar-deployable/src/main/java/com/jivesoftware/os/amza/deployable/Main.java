@@ -302,7 +302,7 @@ public class Main {
         }
         );
 
-        InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", false, null, null, null, 128, 10000);
+        InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(false, port, "AmzaNode", false, null, null, null, 128, 10000);
         initializeRestfulServer.addClasspathResource("/resources");
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);
         RestfulServer restfulServer = initializeRestfulServer.build();

@@ -188,6 +188,7 @@ public class AmzaBotMain {
             deployable.addInjectables(UiService.class, uiService);
 
             deployable.addResource(sourceTree);
+            deployable.enableSwagger("com.jivesoftware.os.amzabot.deployable.endpoints");
 
             deployable.buildServer().start();
             clientHealthProvider.start();

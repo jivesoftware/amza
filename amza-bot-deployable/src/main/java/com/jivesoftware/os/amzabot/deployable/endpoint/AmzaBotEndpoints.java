@@ -3,6 +3,7 @@ package com.jivesoftware.os.amzabot.deployable.endpoint;
 import com.jivesoftware.os.amzabot.deployable.AmzaBotService;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import io.swagger.annotations.Api;
 import java.util.Map.Entry;
 import java.util.Set;
 import javax.inject.Singleton;
@@ -16,6 +17,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+@Api(value = "Amza Bot")
 @Singleton
 @Path("/api/amzabot/v1")
 public class AmzaBotEndpoints {

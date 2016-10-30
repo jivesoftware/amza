@@ -5,6 +5,7 @@ import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineConfig;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotCoalmineService;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import io.swagger.annotations.Api;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.inject.Singleton;
@@ -14,6 +15,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 
+@Api(value = "Amza Bot Coalmine")
 @Singleton
 @Path("/api/amzabot/v1")
 public class AmzaBotCoalmineEndpoints {

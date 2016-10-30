@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amzabot.deployable.endpoint;
 
-import com.jivesoftware.os.amzabot.deployable.AmzaBotUtil;
 import com.jivesoftware.os.amzabot.deployable.bot.AmzaBotRandomOpService;
+import io.swagger.annotations.Api;
 import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -11,6 +11,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+@Api(value = "Amza Bot Random Op")
 @Singleton
 @Path("/api/amzabot/v1")
 public class AmzaBotRandomOpEndpoints {

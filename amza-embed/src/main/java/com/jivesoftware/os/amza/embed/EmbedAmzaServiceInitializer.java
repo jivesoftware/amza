@@ -90,6 +90,7 @@ public class EmbedAmzaServiceInitializer {
         String rackName,
         String hostName,
         int port,
+        boolean authEnabled,
         String clusterName,
         AmzaServiceConfig amzaServiceConfig,
         LABPointerIndexConfig indexConfig,
@@ -210,7 +211,11 @@ public class EmbedAmzaServiceInitializer {
             -1,
             -1);
 
-        deployable.addRouteOAuth("/amza/*");
+        if (authEnabled) {
+            deployable.addRouteOAuth("/amza/*");
+        } else {
+            deployable.addNoAuth("/amza/*");
+        }
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {

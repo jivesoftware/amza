@@ -157,6 +157,7 @@ public class AmzaMain {
                 instanceConfig.getRack(),
                 instanceConfig.getHost(),
                 instanceConfig.getMainPort(),
+                instanceConfig.getMainServiceAuthEnabled(),
                 instanceConfig.getClusterName(),
                 amzaServiceConfig,
                 labConfig,

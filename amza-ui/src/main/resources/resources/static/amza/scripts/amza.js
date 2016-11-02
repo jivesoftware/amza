@@ -44,7 +44,7 @@ amza.metrics = {
 amza.arc = {
     fetch: function () {
         var gotData;
-        $.ajax("/amza/arc", {
+        $.ajax("/amza/ui/arc", {
             method: "get",
             async: false,
             success: function (data) {
@@ -61,7 +61,7 @@ amza.arc = {
             }};
     },
     init: function () {
-        $.ajax("/amza/arc", {
+        $.ajax("/amza/ui/arc", {
             method: "get",
             success: function (data) {
                 amza.arc.build(data);
@@ -109,7 +109,7 @@ amza.arc = {
 
 amza.chord = {
     init: function () {
-        $.ajax("/amza/chord", {
+        $.ajax("/amza/ui/chord", {
             method: "get",
             success: function (data) {
                 amza.chord.build(data);

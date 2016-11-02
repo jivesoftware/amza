@@ -77,6 +77,7 @@ import com.jivesoftware.os.routing.bird.shared.InstanceDescriptor;
 import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescriptorProvider;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -288,18 +289,23 @@ public class Main {
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
-            @Override
-            public void addEndpoint(Class clazz) {
-                System.out.println("Adding endpoint=" + clazz);
-                jerseyEndpoints.addEndpoint(clazz);
-            }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    System.out.println("Adding endpoint=" + clazz);
+                    jerseyEndpoints.addEndpoint(clazz);
+                }
 
-            @Override
-            public void addInjectable(Class clazz, Object instance) {
-                System.out.println("Injecting " + clazz + " " + instance);
-                jerseyEndpoints.addInjectable(clazz, instance);
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    System.out.println("Injecting " + clazz + " " + instance);
+                    jerseyEndpoints.addInjectable(clazz, instance);
+                }
+
+                @Override
+                public void addSessionAuth(String... paths) throws Exception {
+                    System.out.println("Ignoring session auth request for paths: " + Arrays.toString(paths));
+                }
             }
-        }
         );
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(false, port, "AmzaNode", false, null, null, null, 128, 10000);

@@ -210,19 +210,24 @@ public class EmbedAmzaServiceInitializer {
             -1,
             -1);
 
+        deployable.addRouteOAuth("/amza/*");
+
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
             new AmzaUIInitializer.InjectionCallback() {
 
                 @Override
                 public void addEndpoint(Class clazz) {
-                    System.out.println("Adding endpoint=" + clazz);
                     deployable.addEndpoints(clazz);
                 }
 
                 @Override
                 public void addInjectable(Class clazz, Object instance) {
-                    System.out.println("Injecting " + clazz + " " + instance);
                     deployable.addInjectables(clazz, instance);
+                }
+
+                @Override
+                public void addSessionAuth(String... paths) throws Exception {
+                    deployable.addSessionAuth(paths);
                 }
             });
 

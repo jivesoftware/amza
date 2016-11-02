@@ -180,7 +180,10 @@ public class AmzaMain {
 
             lifecycle.startAmzaService();
             lifecycle.startRoutingBirdAmzaDiscovery();
+
             deployable.addEndpoints(LoadBalancerHealthCheckEndpoints.class);
+            deployable.addNoAuth("/health/check");
+
             deployable.buildServer().start();
             clientHealthProvider.start();
             serviceStartupHealthCheck.success();

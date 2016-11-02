@@ -46,11 +46,13 @@ import java.util.List;
  */
 public class AmzaUIInitializer {
 
-    public static interface InjectionCallback {
+    public interface InjectionCallback {
 
         void addEndpoint(Class clazz);
 
         void addInjectable(Class clazz, Object instance);
+
+        void addSessionAuth(String... paths) throws Exception;
     }
 
     public void initialize(String clusterName,
@@ -61,7 +63,7 @@ public class AmzaUIInitializer {
         AmzaStats amzaStats,
         TimestampProvider timestampProvider,
         IdPacker idPacker,
-        InjectionCallback injectionCallback) {
+        InjectionCallback injectionCallback) throws Exception {
 
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
 
@@ -149,6 +151,8 @@ public class AmzaUIInitializer {
             injectionCallback.addEndpoint(plugin.endpointsClass);
             injectionCallback.addInjectable(plugin.region.getClass(), plugin.region);
         }
+
+        injectionCallback.addSessionAuth("/amza/*");
 
         injectionCallback.addEndpoint(AmzaUIEndpoints.class);
         injectionCallback.addInjectable(AmzaClusterName.class, new AmzaClusterName((clusterName == null) ? "manual" : clusterName));

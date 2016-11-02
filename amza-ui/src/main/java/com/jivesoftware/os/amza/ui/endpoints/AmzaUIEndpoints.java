@@ -50,7 +50,7 @@ import javax.ws.rs.core.UriInfo;
  * @author jonathan.colt
  */
 @Singleton
-@Path("/amza")
+@Path("/amza/ui")
 public class AmzaUIEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();

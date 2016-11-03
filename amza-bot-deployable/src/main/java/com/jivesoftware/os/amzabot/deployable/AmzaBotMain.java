@@ -34,6 +34,7 @@ import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import com.jivesoftware.os.routing.bird.deployable.config.extractor.ConfigBinder;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
+import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.FileDescriptorCountHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
@@ -67,13 +68,7 @@ public class AmzaBotMain {
 
             final Deployable deployable = new Deployable(args, configBinder, instanceConfig, null);
             HealthFactory.initialize(deployable::config, new DeployableHealthCheckRegistry(deployable));
-            deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new HasUI.UI("manage", "manage", "/manage/ui"),
-                new HasUI.UI("Reset Errors", "manage", "/manage/resetErrors"),
-                new HasUI.UI("Reset Health", "manage", "/manage/resetHealth"),
-                new HasUI.UI("Tail", "manage", "/manage/tail"),
-                new HasUI.UI("Thread Dump", "manage", "/manage/threadDump"),
-                new HasUI.UI("Health", "manage", "/manage/ui"),
-                new HasUI.UI("AmzaBot", "main", "/"))));
+            deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("AmzaBot", "main", "/"))));
 
             AmzaKeyClearingHousePool amzaKeyClearingHousePool = new AmzaKeyClearingHousePool();
             AmzaBotHealthCheck amzaBotHealthCheck =

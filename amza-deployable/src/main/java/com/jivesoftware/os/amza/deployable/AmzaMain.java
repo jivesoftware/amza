@@ -31,6 +31,7 @@ import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
+import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
 import com.jivesoftware.os.routing.bird.endpoints.base.LoadBalancerHealthCheckEndpoints;
 import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
@@ -75,13 +76,7 @@ public class AmzaMain {
             final Deployable deployable = new Deployable(args);
             HealthFactory.initialize(deployable::config, new DeployableHealthCheckRegistry(deployable));
 
-            deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new HasUI.UI("manage", "manage", "/manage/ui"),
-                new HasUI.UI("Reset Errors", "manage", "/manage/resetErrors"),
-                new HasUI.UI("Reset Health", "manage", "/manage/resetHealth"),
-                new HasUI.UI("Tail", "manage", "/manage/tail"),
-                new HasUI.UI("Thread Dump", "manage", "/manage/threadDump"),
-                new HasUI.UI("Health", "manage", "/manage/ui"),
-                new HasUI.UI("Amza", "main", "/amza"))));
+            deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("Amza", "main", "/amza"))));
 
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));

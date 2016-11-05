@@ -76,7 +76,7 @@ public class AmzaMain {
             final Deployable deployable = new Deployable(args);
             HealthFactory.initialize(deployable::config, new DeployableHealthCheckRegistry(deployable));
 
-            deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("Amza", "main", "/amza"))));
+            deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("Amza", "main", "/amza/ui"))));
 
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));

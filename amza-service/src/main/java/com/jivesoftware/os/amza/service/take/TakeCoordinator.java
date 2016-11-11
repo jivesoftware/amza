@@ -529,6 +529,19 @@ public class TakeCoordinator {
         }
     }
 
+    public void invalidate(AmzaRingReader ringReader,
+        RingMember remoteRingMember,
+        long takeSessionId,
+        VersionedPartitionName versionedPartitionName) throws Exception {
+        LOG.info("Received request to invalidate ring from member:{} session:{} partition:{}", remoteRingMember, takeSessionId, versionedPartitionName);
+        byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
+        TakeRingCoordinator ringCoordinator = takeRingCoordinators.get(ringName);
+        if (ringCoordinator != null) {
+            RingTopology ring = ringReader.getRing(ringName);
+            ringCoordinator.cya(ring);
+        }
+    }
+
     private static class SessionKey {
         private final RingMember ringMember;
         private final long sessionId;

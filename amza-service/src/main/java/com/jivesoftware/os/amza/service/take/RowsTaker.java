@@ -62,4 +62,10 @@ public interface RowsTaker {
 
     boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId);
 
+    boolean invalidate(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        long takeSessionId,
+        VersionedPartitionName remoteVersionedPartitionName);
+
 }

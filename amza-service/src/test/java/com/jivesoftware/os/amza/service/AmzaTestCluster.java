@@ -234,6 +234,15 @@ public class AmzaTestCluster {
                     }
                 }
             }
+
+            @Override
+            public boolean invalidate(RingMember localRingMember,
+                RingMember remoteRingMember,
+                RingHost remoteRingHost,
+                long takeSessionId,
+                VersionedPartitionName remoteVersionedPartitionName) {
+                return true;
+            }
         };
 
         final ObjectMapper mapper = new ObjectMapper();

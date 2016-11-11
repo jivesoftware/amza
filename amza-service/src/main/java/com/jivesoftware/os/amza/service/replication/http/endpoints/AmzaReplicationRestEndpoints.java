@@ -193,4 +193,24 @@ public class AmzaReplicationRestEndpoints {
         }
     }
 
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/invalidate/{memberName}/{takeSessionId}/{versionedPartitionName}")
+    public Response invalidate(@PathParam("memberName") String ringMemberName,
+        @PathParam("takeSessionId") long takeSessionId,
+        @PathParam("versionedPartitionName") String versionedPartitionName) {
+        try {
+            amzaInstance.invalidate(new RingMember(ringMemberName),
+                takeSessionId,
+                VersionedPartitionName.fromBase64(versionedPartitionName, interner));
+            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
+        } catch (Exception x) {
+            LOG.warn("Failed invalidate for member:{} session:{} partition:{}", new Object[] { ringMemberName, takeSessionId, versionedPartitionName }, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed pong.", x);
+        } finally {
+            amzaStats.pongsReceived.increment();
+        }
+    }
+
 }

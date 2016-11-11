@@ -299,7 +299,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     Thread.sleep(Math.min(100, Math.max(timeRemaining / 2, 10))); //TODO this is stupid
                 }
             }
-        } while (System.currentTimeMillis() < endAfterTimestamp);
+        }
+        while (System.currentTimeMillis() < endAfterTimestamp);
 
         if (!online) {
             throw new TimeoutException(errorMessage != null ? errorMessage : "Timed out waiting for the partition to come online");
@@ -331,7 +332,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     disposed = true;
                     break;
                 }
-            } while (System.currentTimeMillis() < endAfterTimestamp);
+            }
+            while (System.currentTimeMillis() < endAfterTimestamp);
         }
 
         if (disposed) {
@@ -432,7 +434,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Awaiting leader for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 }
-            } while (System.currentTimeMillis() < endAfterTimestamp);
+            }
+            while (System.currentTimeMillis() < endAfterTimestamp);
         }
         throw new TimeoutException("Timed out awaiting leader for " + partitionName);
     }
@@ -614,7 +617,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 try {
                     versionedAquarium.wipeTheGlass();
                 } catch (Exception x) {
-                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
                 }
             }
             return null;
@@ -710,6 +713,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void pong(RingMember remoteRingMember, long takeSessionId) throws Exception {
         takeCoordinator.pong(remoteRingMember, takeSessionId);
+    }
+
+    @Override
+    public void invalidate(RingMember remoteRingMember, long takeSessionId, VersionedPartitionName versionedPartitionName) throws Exception {
+        takeCoordinator.invalidate(ringStoreReader, remoteRingMember, takeSessionId, versionedPartitionName);
     }
 
     public void compactAllTombstones() throws Exception {

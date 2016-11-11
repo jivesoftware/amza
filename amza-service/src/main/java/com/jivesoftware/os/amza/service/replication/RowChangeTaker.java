@@ -352,8 +352,14 @@ public class RowChangeTaker implements RowChanges {
 
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
                             if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
-                                LOG.info("NOT A MEMBER: local:{} remote:{} txId:{} partition:{}",
-                                    ringHost, remoteRingHost, txId, remoteVersionedPartitionName);
+                                RowsTaker rowsTaker = system ? systemRowsTaker : stripedRowsTaker;
+                                boolean invalidated = rowsTaker.invalidate(amzaRingReader.getRingMember(),
+                                    remoteRingMember,
+                                    remoteRingHost,
+                                    sessionId,
+                                    remoteVersionedPartitionName);
+                                LOG.info("Not a member of ring invalidated:{} local:{} remote:{} txId:{} partition:{}",
+                                    invalidated, ringHost, remoteRingHost, txId, remoteVersionedPartitionName);
                                 return;
                             }
 

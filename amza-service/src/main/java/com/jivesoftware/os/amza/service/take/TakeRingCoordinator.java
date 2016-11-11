@@ -252,6 +252,10 @@ public class TakeRingCoordinator {
         }
     }
 
+    public void invalidate(RingMember remoteRingMember) {
+
+    }
+
     static public class VersionedRing {
 
         final RingTopology ring;

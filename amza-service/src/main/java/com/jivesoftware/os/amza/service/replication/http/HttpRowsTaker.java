@@ -173,4 +173,35 @@ public class HttpRowsTaker implements RowsTaker {
             amzaStats.pongsSent.increment();
         }
     }
+
+    @Override
+    public boolean invalidate(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        long takeSessionId,
+        VersionedPartitionName remoteVersionedPartitionName) {
+        try {
+            String endpoint = "/amza/invalidate/" + localRingMember.getMember() + "/" + takeSessionId + "/" + remoteVersionedPartitionName.toBase64();
+            return ringClient.call("",
+                new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
+                "invalidate",
+                httpClient -> {
+                    HttpResponse response = httpClient.postJson(endpoint, "{}", null);
+                    if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
+                        throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
+                    }
+                    try {
+                        return new ClientResponse<>(mapper.readValue(response.getResponseBody(), Boolean.class), true);
+                    } catch (IOException e) {
+                        throw new RuntimeException("Failed to deserialize response");
+                    }
+                });
+        } catch (Exception x) {
+            LOG.warn("Failed to invalidate for local:{} remote:{} session:{} partition:{}",
+                new Object[] { localRingMember, remoteRingHost, takeSessionId, remoteVersionedPartitionName }, x);
+            return false;
+        } finally {
+            amzaStats.invalidatesSent.increment();
+        }
+    }
 }

@@ -53,4 +53,6 @@ public interface AmzaInstance {
         long leadershipToken) throws Exception;
 
     void pong(RingMember remoteRingMember, long takeSessionId) throws Exception;
+
+    void invalidate(RingMember ringMember, long takeSessionId, VersionedPartitionName versionedPartitionName) throws Exception;
 }

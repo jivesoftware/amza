@@ -59,6 +59,9 @@ public class AmzaStats {
     public final LongAdder pongsSent = new LongAdder();
     public final LongAdder pongsReceived = new LongAdder();
 
+    public final LongAdder invalidatesSent = new LongAdder();
+    public final LongAdder invalidatesReceived = new LongAdder();
+
     public final LongAdder backPressure = new LongAdder();
     public final LongAdder pushBacks = new LongAdder();
 

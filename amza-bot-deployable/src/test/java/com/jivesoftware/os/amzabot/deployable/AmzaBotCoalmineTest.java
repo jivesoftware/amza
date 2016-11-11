@@ -44,6 +44,11 @@ public class AmzaBotCoalmineTest {
             public PartitionClient getPartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
                 return getPartition(partitionName);
             }
+
+            @Override
+            public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+                return null;
+            }
         };
 
         InstanceConfig instanceConfig = BindInterfaceToConfiguration.bindDefault(InstanceConfig.class);

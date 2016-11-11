@@ -1,0 +1,16 @@
+{namespace soy.amza.page}
+
+/**
+ * @param? sender
+ * @param? receiver
+ */
+{template .adminRegion}
+
+    <div class="panel panel-default">
+        <div class="panel-heading">Sync</div>
+        <div class="panel-body">
+            <h4>Sender: {if $sender}enabled{else}disabled{/if}</h4>
+            <h4>Receiver: {if $receiver}enabled{else}disabled{/if}</h4>
+        </div>
+    </div>
+{/template}

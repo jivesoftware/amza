@@ -14,6 +14,8 @@ public interface PartitionProvider {
 
     Partition getPartition(PartitionName partitionName) throws Exception;
 
+    PartitionProperties getProperties(PartitionName partitionName) throws Exception;
+
     RingMember awaitLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception;
 
     void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception;

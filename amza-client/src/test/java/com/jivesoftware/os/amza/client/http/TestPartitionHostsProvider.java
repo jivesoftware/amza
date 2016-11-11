@@ -19,6 +19,11 @@ public class TestPartitionHostsProvider implements PartitionHostsProvider {
     }
 
     @Override
+    public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
+        return null;
+    }
+
+    @Override
     public void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
         // do nothing
     }

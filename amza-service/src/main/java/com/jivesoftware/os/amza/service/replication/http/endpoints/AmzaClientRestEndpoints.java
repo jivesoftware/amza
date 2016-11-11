@@ -75,6 +75,20 @@ public class AmzaClientRestEndpoints {
         this.interner = interner;
     }
 
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/properties/{base64PartitionName}")
+    public Response getProperties(@PathParam("base64PartitionName") String base64PartitionName) {
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+        try {
+            PartitionProperties properties = client.getProperties(partitionName);
+            return Response.ok(properties).build();
+        } catch (Exception e) {
+            LOG.error("Failed while attempting to getProperties:{}", new Object[] { partitionName }, e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to getProperties.", e);
+        }
+    }
+
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Path("/configPartition/{base64PartitionName}/{ringSize}")

@@ -6,10 +6,11 @@ import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import java.util.Optional;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface PartitionHostsProvider {
+
+    PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception;
 
     void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception;
 

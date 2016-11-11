@@ -4,12 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.jivesoftware.os</groupId>
     <artifactId>amza</artifactId>
-    <version>0.633</version>
+    <version>0.634</version>
     <packaging>pom</packaging>
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.633</version>
+        <version>0.634</version>
         <relativePath>inheritance-poms/global-repo-management/pom.xml</relativePath>
     </parent>
     <modules>
@@ -23,6 +23,7 @@
         <module>amza-fat-jar-deployable</module>
         <module>amza-deployable</module>
         <module>amza-lab-storage</module>
+        <module>amza-sync-deployable</module>
         <module>amza-bot-deployable</module>
     </modules>
 </project>

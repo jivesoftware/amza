@@ -44,6 +44,11 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
+    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+        return partitionProvider.getProperties(partitionName);
+    }
+
+    @Override
     public RingTopology configPartition(PartitionName partitionName, PartitionProperties partitionProperties, int ringSize) throws
         Exception {
         byte[] ringNameBytes = partitionName.getRingName();

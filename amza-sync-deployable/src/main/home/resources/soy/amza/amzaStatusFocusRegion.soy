@@ -1,0 +1,48 @@
+{namespace soy.amza.page}
+
+/**
+ * Status focus page
+ *
+ * @param partitionBase64
+ * @param? error
+ * @param? progress
+ */
+{template .statusFocusRegion}
+    <div id="status-focus" class="panel panel-default">
+        <div class="panel-heading">Progress</div>
+        <div class="panel-body">
+            {if $error}
+                <div class="alert alert-warning" role="alert">{$error}</div>
+            {/if}
+            {if $progress}
+                <table class="table table-condensed">
+                    <thead>
+                        <tr>
+                            <th>To</th>
+                            <th>Cursor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {foreach $p in $progress}
+                            <tr>
+                                <td>{$p.toPartition}</td>
+                                <td>{$p.cursor}</td>
+                            </tr>
+                            {if isLast($p)}
+                                <tr>
+                                    <td colspan="2">
+                                        <input class="btn btn-default" type="button" value="Reset" onclick="if (confirm('Are you sure you want to reset progress?')) sync.statusFocus.reset(this, '{$partitionBase64}'); return false"/>
+                                    </td>
+                                </tr>
+                            {/if}
+                        {ifempty}
+                            <tr>
+                                <td colspan="2">No progress found</td>
+                            </tr>
+                        {/foreach}
+                    </tbody>
+                </table>
+            {/if}
+        </div>
+    </div>
+{/template}

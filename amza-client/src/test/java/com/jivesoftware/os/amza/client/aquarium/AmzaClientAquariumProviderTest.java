@@ -52,6 +52,11 @@ public class AmzaClientAquariumProviderTest {
             public PartitionClient getPartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
                 return getPartition(partitionName);
             }
+
+            @Override
+            public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+                return null;
+            }
         };
         AquariumStats aquariumStats = new AquariumStats();
 

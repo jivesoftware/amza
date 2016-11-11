@@ -28,6 +28,10 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         this.client = client;
     }
 
+    @Override
+    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+        return client.getProperties(partitionName);
+    }
 
     public static interface CommitLatency extends TimerHealthCheckConfig {
 

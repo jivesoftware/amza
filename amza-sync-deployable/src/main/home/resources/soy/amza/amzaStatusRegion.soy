@@ -1,0 +1,27 @@
+{namespace soy.amza.page}
+
+/**
+ * Status page
+ *
+ * @param? partition
+ * @param? statusFocusRegion
+ */
+{template .statusRegion}
+    <div class="panel panel-default">
+        <div class="panel-heading">Partition</div>
+        <div class="panel-body">
+            <label for="partitionPicker">Select Partition</label>
+            <form id="partitionPickerForm" class="j-form" data-active-class="btn-default" data-input-el="#partitionPicker" data-form-el="#partitionPickerForm"
+                data-jive-ui="jive/ui/typeahead/partition_typeahead" method="post" name="partitionPickerForm" action="#"
+                //TODO wire this up correctly
+                onsubmit="location.href='/ui/status/'+document.getElementById('partitionPicker').value+'#focus'; return false">
+                <input type="text" autocomplete="off" role="combobox" style="width:280px; padding-left:10px;"
+                    class="j-partition-autocomplete j-autocomplete-input j-ui-elem" placeholder="Partition" value="{$partition?:''}"
+                    name="partition" id="partitionPicker" data-original-title="" title="">
+            </form>
+        </div>
+    </div>
+    {if $statusFocusRegion}
+        {$statusFocusRegion|noAutoescape}
+    {/if}
+{/template}

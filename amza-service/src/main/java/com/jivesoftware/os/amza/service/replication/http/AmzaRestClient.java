@@ -16,6 +16,8 @@ import java.util.List;
  */
 public interface AmzaRestClient {
 
+    PartitionProperties getProperties(PartitionName partitionName) throws Exception;
+
     StateMessageCause commit(PartitionName partitionName, Consistency consistency, boolean checkLeader, long partitionAwaitOnlineTimeoutMillis, IReadable read)
         throws Exception;
 

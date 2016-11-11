@@ -21,6 +21,7 @@ import com.jivesoftware.os.routing.bird.shared.ClientCall;
 import com.jivesoftware.os.routing.bird.shared.ClientCall.ClientResponse;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.NextClientStrategy;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.http.HttpStatus;
@@ -49,6 +50,22 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
         public RingMembersChangedException(String message) {
             super(message);
         }
+    }
+
+    @Override
+    public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
+        String base64PartitionName = partitionName.toBase64();
+        return tenantAwareHttpClient.call("", roundRobinStrategy, "configPartition", (client) -> {
+            HttpResponse got = client.get("/amza/v1/properties/" + base64PartitionName, null);
+            if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+                try {
+                    return new ClientResponse<>(mapper.readValue(got.getResponseBody(), PartitionProperties.class), true);
+                } catch (IOException x) {
+                    throw new RuntimeException("Failed getting properties for " + partitionName, x);
+                }
+            }
+            throw new RuntimeException("Failed to get properties:" + partitionName + " statusCode:" + got.getStatusCode());
+        });
     }
 
     @Override
@@ -102,7 +119,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
             } finally {
                 got.close();
             }
-            throw new RuntimeException("Failed to config partition:" + partitionName);
+            throw new RuntimeException("Failed to config partition:" + partitionName + " statusCode:" + got.getStatusCode());
         });
 
         HostPort[] orderHostPorts = new HostPort[partitionsRing.members.length];
@@ -195,6 +212,6 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
         } finally {
             got.close();
         }
-        throw new RuntimeException("No routes to partition:" + partitionName);
+        throw new RuntimeException("No routes to partition:" + partitionName + " statusCode:" + got.getStatusCode());
     }
 }

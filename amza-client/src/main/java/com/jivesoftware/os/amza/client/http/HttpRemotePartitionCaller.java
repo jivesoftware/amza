@@ -167,8 +167,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
     public PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader,
         RingMember ringMember,
         HttpClient client,
-        Map<RingMember, Long> membersTxId,
-        TxKeyValueStream stream) throws HttpClientException {
+        Map<RingMember, Long> membersTxId) throws HttpClientException {
 
         long transactionId = membersTxId.getOrDefault(ringMember, -1L);
         HttpStreamResponse got = client.streamingPostStreamableRequest(
@@ -190,8 +189,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         RingMember ringMember,
         HttpClient client,
         byte[] prefix,
-        Map<RingMember, Long> membersTxId,
-        TxKeyValueStream stream) throws HttpClientException {
+        Map<RingMember, Long> membersTxId) throws HttpClientException {
 
         byte[] intLongBuffer = new byte[8];
 

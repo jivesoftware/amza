@@ -414,6 +414,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
+    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+        return partitionCreator.getProperties(partitionName);
+    }
+
+    @Override
     public RingMember awaitLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception {
         if (partitionName.isSystemPartition()) {
             throw new IllegalArgumentException("System partitions do not have leaders. " + partitionName);

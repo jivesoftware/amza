@@ -15,7 +15,7 @@
         <jive.utils.version>0.108</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.23</mlogger.version>
-        <routing.bird.version>0.159</routing.bird.version>
+        <routing.bird.version>0.161</routing.bird.version>
         <aquarium.version>0.29</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
@@ -36,7 +36,15 @@
                 <artifactId>aquarium</artifactId>
                 <version>${aquarium.version}</version>
             </dependency>
-            
+
+            <dependency>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>deployable-scripts</artifactId>
+                <type>tar.gz</type>
+                <classifier>bin</classifier>
+                <scope>runtime</scope>
+                <version>${routing.bird.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>routing-bird-server</artifactId>
@@ -44,10 +52,7 @@
             </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
-                <artifactId>deployable-scripts</artifactId>
-                <type>tar.gz</type>
-                <classifier>bin</classifier>
-                <scope>runtime</scope>
+                <artifactId>routing-bird-server-oauth</artifactId>
                 <version>${routing.bird.version}</version>
             </dependency>
             <dependency>
@@ -122,6 +127,11 @@
                 <version>${glassfish.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.glassfish.jersey.security</groupId>
+                <artifactId>oauth1-signature</artifactId>
+                <version>${glassfish.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>log4j</groupId>
                 <artifactId>log4j</artifactId>
                 <version>1.2.16</version>
@@ -155,7 +165,11 @@
                 <groupId>oauth.signpost</groupId>
                 <artifactId>signpost-core</artifactId>
                 <version>1.2.1.1</version>
-                <scope>compile</scope>
+            </dependency>
+            <dependency>
+                <groupId>oauth.signpost</groupId>
+                <artifactId>signpost-commonshttp4</artifactId>
+                <version>1.2.1.2</version>
             </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.mlogger</groupId>

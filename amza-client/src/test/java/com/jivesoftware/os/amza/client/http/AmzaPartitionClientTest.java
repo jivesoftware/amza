@@ -174,8 +174,7 @@ public class AmzaPartitionClientTest {
         public PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader,
             RingMember ringMember,
             TestClient client,
-            Map<RingMember, Long> membersTxId,
-            TxKeyValueStream stream) throws Exception {
+            Map<RingMember, Long> membersTxId) throws Exception {
             throw new UnsupportedOperationException("blah");
         }
 
@@ -184,8 +183,7 @@ public class AmzaPartitionClientTest {
             RingMember ringMember,
             TestClient client,
             byte[] prefix,
-            Map<RingMember, Long> membersTxId,
-            TxKeyValueStream stream) throws Exception {
+            Map<RingMember, Long> membersTxId) throws Exception {
             throw new UnsupportedOperationException("blah");
         }
 

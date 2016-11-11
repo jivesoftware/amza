@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
@@ -309,7 +310,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takeFromTransactionId",
             (leader, ringMember, client) -> {
-                return remotePartitionCaller.takeFromTransactionId(leader, ringMember, client, membersTxId, stream);
+                return remotePartitionCaller.takeFromTransactionId(leader, ringMember, client, membersTxId);
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.newArrayList(
@@ -340,7 +341,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takePrefixFromTransactionId",
             (leader, ringMember, client) -> {
-                return remotePartitionCaller.takePrefixFromTransactionId(leader, ringMember, client, prefix, membersTxId, stream);
+                return remotePartitionCaller.takePrefixFromTransactionId(leader, ringMember, client, prefix, membersTxId);
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.newArrayList(

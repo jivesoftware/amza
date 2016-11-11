@@ -48,19 +48,30 @@ public class Ring {
     }
 
     public RingMemberAndHost[] orderedRing(List<RingMember> membersInOrder) {
-        Map<RingMember, RingMemberAndHost> memberHosts = Maps.newHashMapWithExpectedSize(members.length);
-        for (RingMemberAndHost member : members) {
-            memberHosts.put(member.ringMember, member);
-        }
         List<RingMemberAndHost> ordered = Lists.newArrayListWithCapacity(members.length);
-        for (RingMember ringMember : membersInOrder) {
-            RingMemberAndHost ringMemberAndHost = memberHosts.remove(ringMember);
-            if (ringMemberAndHost != null) {
+        if (membersInOrder == null) {
+            if (leaderIndex >= 0) {
+                ordered.add(members[leaderIndex]);
+            }
+            for (int i = 0; i < members.length; i++) {
+                if (i != leaderIndex) {
+                    ordered.add(members[i]);
+                }
+            }
+        } else {
+            Map<RingMember, RingMemberAndHost> memberHosts = Maps.newHashMapWithExpectedSize(members.length);
+            for (RingMemberAndHost member : members) {
+                memberHosts.put(member.ringMember, member);
+            }
+            for (RingMember ringMember : membersInOrder) {
+                RingMemberAndHost ringMemberAndHost = memberHosts.remove(ringMember);
+                if (ringMemberAndHost != null) {
+                    ordered.add(ringMemberAndHost);
+                }
+            }
+            for (RingMemberAndHost ringMemberAndHost : memberHosts.values()) {
                 ordered.add(ringMemberAndHost);
             }
-        }
-        for (RingMemberAndHost ringMemberAndHost : memberHosts.values()) {
-            ordered.add(ringMemberAndHost);
         }
         return ordered.toArray(new RingMemberAndHost[0]);
     }

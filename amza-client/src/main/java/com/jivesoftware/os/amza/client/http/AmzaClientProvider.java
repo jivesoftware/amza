@@ -65,4 +65,9 @@ public class AmzaClientProvider<C, E extends Throwable> implements PartitionClie
             }
         });
     }
+
+    @Override
+    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+        return partitionHostsProvider.getPartitionProperties(partitionName);
+    }
 }

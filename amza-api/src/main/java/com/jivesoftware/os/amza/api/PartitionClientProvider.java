@@ -14,4 +14,6 @@ public interface PartitionClientProvider {
     PartitionClient getPartition(PartitionName partitionName,
         int ringSize,
         PartitionProperties partitionProperties) throws Exception;
+
+    PartitionProperties getProperties(PartitionName partitionName) throws Exception;
 }

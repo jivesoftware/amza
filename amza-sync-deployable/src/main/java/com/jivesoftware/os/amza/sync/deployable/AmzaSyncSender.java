@@ -25,6 +25,7 @@ import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -141,7 +142,7 @@ public class AmzaSyncSender {
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
                     PartitionName partitionName = cursorToPartitionName(key);
-                    Cursor cursor = mapper.readValue(value, Cursor.class);
+                    Cursor cursor = mapper.readValue(value, SerializableCursor.class).toCursor();
                     return stream.stream(partitionName, cursor);
                 }
                 return true;
@@ -223,6 +224,7 @@ public class AmzaSyncSender {
             partitions = whitelist;
         } else {
             partitions = Maps.newHashMap();
+            LOG.warn("Syncing all partitions is not supported yet");
             List<PartitionName> allPartitions = Lists.newArrayList(); //TODO partitionClientProvider.getAllPartitionNames();
             for (PartitionName partitionName : allPartitions) {
                 partitions.put(partitionName, partitionName);
@@ -314,12 +316,12 @@ public class AmzaSyncSender {
     private Cursor getPartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName) throws Exception {
         PartitionClient cursorClient = cursorClient();
         byte[] cursorKey = cursorKey(fromPartitionName, toPartitionName);
-        Cursor[] result = new Cursor[1];
+        SerializableCursor[] result = new SerializableCursor[1];
         cursorClient.get(Consistency.leader_quorum, null,
             unprefixedWALKeyStream -> unprefixedWALKeyStream.stream(cursorKey),
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
-                    result[0] = mapper.readValue(value, Cursor.class);
+                    result[0] = mapper.readValue(value, SerializableCursor.class);
                 }
                 return true;
             },
@@ -327,13 +329,13 @@ public class AmzaSyncSender {
             abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             Optional.empty());
-        return result[0];
+        return result[0] != null ? result[0].toCursor() : new Cursor();
     }
 
-    private void savePartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Map<RingMember, Long> cursor) throws Exception {
+    private void savePartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Cursor cursor) throws Exception {
         PartitionClient cursorClient = cursorClient();
         byte[] cursorKey = cursorKey(fromPartitionName, toPartitionName);
-        byte[] value = mapper.writeValueAsBytes(cursor);
+        byte[] value = mapper.writeValueAsBytes(SerializableCursor.fromCursor(cursor));
         cursorClient.commit(Consistency.leader_quorum, null,
             commitKeyValueStream -> commitKeyValueStream.commit(cursorKey, value, -1, false),
             additionalSolverAfterNMillis,
@@ -368,4 +370,22 @@ public class AmzaSyncSender {
         return PartitionName.fromBytes(toPartitionBytes, 0, interner);
     }
 
+    private static class SerializableCursor extends HashMap<String, Long> {
+
+        public static SerializableCursor fromCursor(Cursor cursor) {
+            SerializableCursor serializableCursor = new SerializableCursor();
+            for (Entry<RingMember, Long> entry : cursor.entrySet()) {
+                serializableCursor.put(entry.getKey().getMember(), entry.getValue());
+            }
+            return serializableCursor;
+        }
+
+        public Cursor toCursor() {
+            Cursor cursor = new Cursor();
+            for (Entry<String, Long> entry : entrySet()) {
+                cursor.put(new RingMember(entry.getKey()), entry.getValue());
+            }
+            return cursor;
+        }
+    }
 }

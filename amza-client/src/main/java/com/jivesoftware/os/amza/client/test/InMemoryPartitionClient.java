@@ -11,24 +11,38 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Allows you to write tests without standing up an amza cluster.
  */
 public class InMemoryPartitionClient implements PartitionClient {
 
+    private final RingMember ringMember;
+    private final ConcurrentSkipListMap<Long, Tx> transactions;
     private final ConcurrentSkipListMap<byte[], WALValue> index;
     private final OrderIdProvider orderIdProvider;
 
-    public InMemoryPartitionClient(ConcurrentSkipListMap<byte[], WALValue> index, OrderIdProvider orderIdProvider) {
+    private final AtomicLong txProvider = new AtomicLong();
+
+    public InMemoryPartitionClient(RingMember ringMember,
+        ConcurrentSkipListMap<Long, Tx> transactions,
+        ConcurrentSkipListMap<byte[], WALValue> index,
+        OrderIdProvider orderIdProvider) {
+        this.ringMember = ringMember;
+        this.transactions = transactions;
         this.index = index;
         this.orderIdProvider = orderIdProvider;
     }
@@ -53,6 +67,8 @@ public class InMemoryPartitionClient implements PartitionClient {
                     || (existing.getTimestampId() == update.getTimestampId() && existing.getVersion() > update.getVersion()))) {
                     return existing;
                 } else {
+                    long txId = txProvider.incrementAndGet();
+                    transactions.put(txId, new Tx(txId, prefix, key, update.getValue(), update.getTimestampId(), update.getTombstoned()));
                     return update;
                 }
             });
@@ -141,7 +157,22 @@ public class InMemoryPartitionClient implements PartitionClient {
         long additionalSolverAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        throw new UnsupportedOperationException("Not yet");
+        Long fromTxId = memberTxIds != null ? memberTxIds.getOrDefault(ringMember, 0L) : 0L;
+        ConcurrentNavigableMap<Long, Tx> take = transactions.tailMap(fromTxId, false);
+        long lastTxId = -1;
+        boolean tookToEnd = true;
+        for (Tx tx : take.values()) {
+            if (stream.stream(tx.txId, tx.prefix, tx.key, tx.value, tx.valueTimestamp, tx.valueTombstoned, 0L)) {
+                lastTxId = tx.txId;
+            } else {
+                tookToEnd = false;
+                break;
+            }
+        }
+
+        return new TakeResult(ringMember,
+            lastTxId,
+            tookToEnd ? new WALHighwater(Collections.singletonList(new RingMemberHighwater(ringMember, transactions.lastKey()))) : null);
     }
 
     @Override
@@ -165,4 +196,22 @@ public class InMemoryPartitionClient implements PartitionClient {
         return index.size();
     }
 
+    public static class Tx {
+
+        public final long txId;
+        public final byte[] prefix;
+        public final byte[] key;
+        public final byte[] value;
+        public final long valueTimestamp;
+        public final boolean valueTombstoned;
+
+        public Tx(long txId, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) {
+            this.txId = txId;
+            this.prefix = prefix;
+            this.key = key;
+            this.value = value;
+            this.valueTimestamp = valueTimestamp;
+            this.valueTombstoned = valueTombstoned;
+        }
+    }
 }

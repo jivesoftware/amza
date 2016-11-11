@@ -4,8 +4,10 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
+import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient.Tx;
 import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
@@ -45,7 +47,9 @@ public class AmzaClientAquariumProviderTest {
             @Override
             public PartitionClient getPartition(PartitionName partitionName) throws Exception {
                 return indexes.computeIfAbsent(partitionName,
-                    partitionName1 -> new InMemoryPartitionClient(new ConcurrentSkipListMap<>(KeyUtil.lexicographicalComparator()), orderIdProvider));
+                    partitionName1 -> new InMemoryPartitionClient(new RingMember("member1"),
+                        new ConcurrentSkipListMap<>(),
+                        new ConcurrentSkipListMap<>(KeyUtil.lexicographicalComparator()), orderIdProvider));
             }
 
             @Override

@@ -47,7 +47,7 @@ public class AmzaSyncClientInitializer {
             port,
             config.getSyncSenderSocketTimeout());
 
-        return new AmzaSyncClient(requestHelper,
+        return new HttpAmzaSyncClient(requestHelper,
             "/api/sync/v1/commit/rows",
             "/api/sync/v1/ensure/partition");
     }

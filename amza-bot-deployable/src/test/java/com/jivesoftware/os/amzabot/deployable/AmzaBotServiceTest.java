@@ -38,7 +38,7 @@ public class AmzaBotServiceTest {
             @Override
             public PartitionClient getPartition(PartitionName partitionName) throws Exception {
                 return indexes.computeIfAbsent(partitionName,
-                    partitionName1 -> new InMemoryPartitionClient(new ConcurrentSkipListMap<>(KeyUtil.lexicographicalComparator()), orderIdProvider));
+                    partitionName1 -> new InMemoryPartitionClient(ringMember, transactions, new ConcurrentSkipListMap<>(KeyUtil.lexicographicalComparator()), orderIdProvider));
             }
 
             @Override

@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -38,7 +39,10 @@ public class AmzaBotServiceTest {
             @Override
             public PartitionClient getPartition(PartitionName partitionName) throws Exception {
                 return indexes.computeIfAbsent(partitionName,
-                    partitionName1 -> new InMemoryPartitionClient(ringMember, transactions, new ConcurrentSkipListMap<>(KeyUtil.lexicographicalComparator()), orderIdProvider));
+                    partitionName1 -> new InMemoryPartitionClient(new RingMember("member1"),
+                        new ConcurrentSkipListMap<>(),
+                        new ConcurrentSkipListMap<>(KeyUtil.lexicographicalComparator()),
+                        orderIdProvider));
             }
 
             @Override

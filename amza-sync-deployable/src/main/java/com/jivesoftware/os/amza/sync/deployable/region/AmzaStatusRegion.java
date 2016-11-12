@@ -26,9 +26,8 @@ public class AmzaStatusRegion implements PageRegion<PartitionName> {
     public String render(PartitionName partitionName) {
         Map<String, Object> data = Maps.newHashMap();
         if (partitionName != null) {
-            String partition = new String(partitionName.getRingName(), StandardCharsets.UTF_8)
-                + '/' + new String(partitionName.getName(), StandardCharsets.UTF_8);
-            data.put("partition", partition);
+            data.put("ringName", new String(partitionName.getRingName(), StandardCharsets.UTF_8));
+            data.put("partitionName", new String(partitionName.getName(), StandardCharsets.UTF_8));
             data.put("statusFocusRegion", statusFocusRegion.render(partitionName));
         }
         return renderer.render(template, data);

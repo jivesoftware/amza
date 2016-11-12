@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
-import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.nio.charset.StandardCharsets;
 import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -23,35 +23,51 @@ public class AmzaSyncUIEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaSyncUIService syncUIService;
-    private final BAInterner interner;
 
-    public AmzaSyncUIEndpoints(@Context AmzaSyncUIService syncUIService, @Context BAInterner interner) {
+    public AmzaSyncUIEndpoints(@Context AmzaSyncUIService syncUIService) {
         this.syncUIService = syncUIService;
-        this.interner = interner;
     }
 
     @GET
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response get() {
-        String rendered = syncUIService.render();
-        return Response.ok(rendered).build();
+        try {
+            String rendered = syncUIService.render();
+            return Response.ok(rendered).build();
+        } catch (Throwable t) {
+            LOG.error("Failed to get", t);
+            return Response.serverError().build();
+        }
     }
 
     @GET
     @Path("/status")
     @Produces(MediaType.TEXT_HTML)
     public Response getStatus() {
-        String rendered = syncUIService.renderStatus(null);
-        return Response.ok(rendered).build();
+        try {
+            String rendered = syncUIService.renderStatus(null);
+            return Response.ok(rendered).build();
+        } catch (Throwable t) {
+            LOG.error("Failed to getStatus", t);
+            return Response.serverError().build();
+        }
     }
 
     @GET
-    @Path("/status/{partitionNameBase64}")
+    @Path("/status/{ringName}/{partitionName}")
     @Produces(MediaType.TEXT_HTML)
-    public Response getStatus(@PathParam("partitionNameBase64") String partitionNameBase64) {
-        String rendered = syncUIService.renderStatus(PartitionName.fromBase64(partitionNameBase64, interner));
-        return Response.ok(rendered).build();
+    public Response getStatus(@PathParam("ringName") String ringName,
+        @PathParam("partitionName") String partitionName) {
+        try {
+            String rendered = syncUIService.renderStatus(new PartitionName(false,
+                ringName.getBytes(StandardCharsets.UTF_8),
+                partitionName.getBytes(StandardCharsets.UTF_8)));
+            return Response.ok(rendered).build();
+        } catch (Throwable t) {
+            LOG.error("Failed to getStatus({}, {})", new Object[] { ringName, partitionName }, t);
+            return Response.serverError().build();
+        }
     }
 
 }

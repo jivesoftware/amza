@@ -8,7 +8,6 @@ import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
@@ -119,6 +118,45 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
+        return getInternal(consistency,
+            prefix,
+            keys,
+            (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                return valueTombstoned || valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
+            },
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    @Override
+    public boolean getRaw(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        return getInternal(consistency,
+            prefix,
+            keys,
+            valuesStream,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    private boolean getInternal(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
         byte[] intLongBuffer = new byte[8];
         partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "get",
             (leader, ringMember, client) -> {
@@ -164,7 +202,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                     if (eosed > 0 && eosed < answers.size()) {
                         throw new RuntimeException("Mismatched response lengths");
                     }
-                    if (eosed == 0 && !latestTombstoned && !valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestVersion)) {
+                    if (eosed == 0 && !stream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestTombstoned, latestVersion)) {
                         break;
                     }
                 }

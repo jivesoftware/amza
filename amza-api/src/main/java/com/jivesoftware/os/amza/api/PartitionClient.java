@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.api;
 
 import com.jivesoftware.os.amza.api.partition.Consistency;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
@@ -47,6 +47,15 @@ public interface PartitionClient {
         byte[] prefix,
         UnprefixedWALKeys keys,
         KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception;
+
+    boolean getRaw(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueStream valuesStream,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,

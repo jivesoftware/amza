@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -92,6 +93,26 @@ public class InMemoryPartitionClient implements PartitionClient {
                 return valuesStream.stream(prefix, key, walValue.getValue(), walValue.getTimestampId(), walValue.getVersion());
             } else {
                 return valuesStream.stream(prefix, key, null, -1, -1);
+            }
+        });
+    }
+
+    @Override
+    public boolean getRaw(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+
+        return keys.consume(key -> {
+            WALValue walValue = index.get(WALKey.compose(prefix, key));
+            if (walValue != null) {
+                return valuesStream.stream(prefix, key, walValue.getValue(), walValue.getTimestampId(), walValue.getTombstoned(), walValue.getVersion());
+            } else {
+                return valuesStream.stream(prefix, key, null, -1, false, -1);
             }
         });
     }

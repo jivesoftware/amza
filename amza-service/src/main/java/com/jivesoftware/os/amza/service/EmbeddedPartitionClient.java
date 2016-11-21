@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
@@ -65,6 +66,18 @@ public class EmbeddedPartitionClient implements PartitionClient {
                 return valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
             }
         });
+    }
+
+    @Override
+    public boolean getRaw(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        return partition.get(consistency, prefix, keys, valuesStream);
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -183,9 +184,11 @@ public class InMemoryPartitionClient implements PartitionClient {
         long lastTxId = -1;
         boolean tookToEnd = true;
         for (Tx tx : take.values()) {
-            if (stream.stream(tx.txId, tx.prefix, tx.key, tx.value, tx.valueTimestamp, tx.valueTombstoned, 0L)) {
+            TxResult result = stream.stream(tx.txId, tx.prefix, tx.key, tx.value, tx.valueTimestamp, tx.valueTombstoned, 0L);
+            if (result.isAccepted()) {
                 lastTxId = tx.txId;
-            } else {
+            }
+            if (!result.wantsMore()) {
                 tookToEnd = false;
                 break;
             }

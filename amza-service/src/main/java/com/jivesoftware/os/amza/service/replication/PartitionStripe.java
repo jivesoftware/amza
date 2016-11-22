@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
@@ -320,7 +321,7 @@ public class PartitionStripe {
                 return true;
             }, (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueVersion != -1 && valueVersion < disposalVersion) {
-                    return true;
+                    return TxResult.MORE;
                 } else {
                     return txKeyValueStream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                 }
@@ -364,7 +365,7 @@ public class PartitionStripe {
                 return true;
             }, (rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueVersion != -1 && valueVersion < disposalVersion) {
-                    return true;
+                    return TxResult.MORE;
                 } else {
                     return txKeyValueStream.stream(rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion);
                 }

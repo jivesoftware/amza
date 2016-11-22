@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -235,7 +236,7 @@ public class AmzaClientService implements AmzaRestClient {
             UIO.writeLong(out, timestamp, "timestamp");
             UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
             UIO.writeLong(out, version, "version");
-            return true;
+            return TxResult.MORE;
         };
         TakeResult takeResult;
         if (usePrefix) {

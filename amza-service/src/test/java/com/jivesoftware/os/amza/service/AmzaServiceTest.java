@@ -197,7 +197,7 @@ public class AmzaServiceTest {
         private final Map<WALKey, TookValue> took = new ConcurrentHashMap<>();
 
         @Override
-        public boolean stream(long rowTxId, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws
+        public TxResult stream(long rowTxId, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws
             Exception {
             TookValue tookValue = new TookValue(rowTxId, value, valueTimestamp, valueTombstoned, valueVersion);
             took.compute(new WALKey(prefix, key), (WALKey k, TookValue existing) -> {
@@ -207,7 +207,7 @@ public class AmzaServiceTest {
                     return existing.compareTo(tookValue) >= 0 ? existing : tookValue;
                 }
             });
-            return true;
+            return TxResult.MORE;
         }
 
         static class TookValue implements Comparable<TookValue> {

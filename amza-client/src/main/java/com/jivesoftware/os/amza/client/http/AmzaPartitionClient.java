@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -402,7 +403,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         long maxTxId = -1;
         byte[] ringMemberBytes = UIO.readByteArray(fis, "ringMember", intLongBuffer);
         RingMember ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);
-        boolean done = false;
+        TxResult done = null;
 
         while (!UIO.readBoolean(fis, "eos")) {
             RowType rowType = RowType.fromByte(UIO.readByte(fis, "type"));
@@ -410,17 +411,43 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 highwaters.highwater(readHighwaters(fis, intLongBuffer));
             } else if (rowType.isPrimary()) {
                 long rowTxId = UIO.readLong(fis, "rowTxId", intLongBuffer);
-                if (done && rowTxId > maxTxId) {
+                if (done != null && rowTxId > maxTxId) {
+                    // streamed to end of txId
                     return new TakeResult(ringMember, maxTxId, null);
                 }
-                done |= !stream.stream(rowTxId,
-                    UIO.readByteArray(fis, "prefix", intLongBuffer),
-                    UIO.readByteArray(fis, "key", intLongBuffer),
-                    UIO.readByteArray(fis, "value", intLongBuffer),
-                    UIO.readLong(fis, "timestampId", intLongBuffer),
-                    UIO.readBoolean(fis, "tombstoned"),
-                    UIO.readLong(fis, "version", intLongBuffer));
-                maxTxId = Math.max(maxTxId, rowTxId);
+
+                if (done != null) {
+                    if (done.isAccepted()) {
+                        // ignore result; lastTxId is unchanged
+                        stream.stream(rowTxId,
+                            UIO.readByteArray(fis, "prefix", intLongBuffer),
+                            UIO.readByteArray(fis, "key", intLongBuffer),
+                            UIO.readByteArray(fis, "value", intLongBuffer),
+                            UIO.readLong(fis, "timestampId", intLongBuffer),
+                            UIO.readBoolean(fis, "tombstoned"),
+                            UIO.readLong(fis, "version", intLongBuffer));
+                    }
+                } else {
+                    TxResult result = stream.stream(rowTxId,
+                        UIO.readByteArray(fis, "prefix", intLongBuffer),
+                        UIO.readByteArray(fis, "key", intLongBuffer),
+                        UIO.readByteArray(fis, "value", intLongBuffer),
+                        UIO.readLong(fis, "timestampId", intLongBuffer),
+                        UIO.readBoolean(fis, "tombstoned"),
+                        UIO.readLong(fis, "version", intLongBuffer));
+                    if (result.isAccepted()) {
+                        maxTxId = Math.max(maxTxId, rowTxId);
+                    }
+                    if (!result.wantsMore()) {
+                        if (result.isAccepted()) {
+                            // stream to end of txId
+                            done = result;
+                        } else {
+                            // reject entire txId
+                            return new TakeResult(ringMember, maxTxId, null);
+                        }
+                    }
+                }
             }
         }
 

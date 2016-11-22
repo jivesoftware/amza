@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
@@ -146,7 +147,7 @@ public class AmzaSyncSenderTest {
             highwater -> {},
             (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 txId[0] = rowTxId;
-                return true;
+                return TxResult.MORE;
             },
             1_000L,
             10_000L,

@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -173,19 +174,37 @@ public class SystemPartition implements Partition {
         TxKeyValueStream stream) throws Exception {
 
         long[] lastTxId = { -1 };
-        boolean[] done = { false };
+        TxResult[] done = new TxResult[1];
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
         TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-
-            if (done[0] && rowTxId > lastTxId[0]) {
-                return false;
+            if (done[0] != null && rowTxId > lastTxId[0]) {
+                // streamed to end of txId
+                return done[0];
             }
 
-            done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
-            if (rowTxId > lastTxId[0]) {
-                lastTxId[0] = rowTxId;
+            if (done[0] != null) {
+                if (done[0].isAccepted()) {
+                    // ignore result; lastTxId is unchanged
+                    stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+                }
+            } else {
+                TxResult result = stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+                if (result.isAccepted()) {
+                    if (rowTxId > lastTxId[0]) {
+                        lastTxId[0] = rowTxId;
+                    }
+                }
+                if (!result.wantsMore()) {
+                    if (result.isAccepted()) {
+                        // stream to end of txId
+                        done[0] = result;
+                    } else {
+                        // reject entire txId
+                        return result;
+                    }
+                }
             }
-            return true;
+            return TxResult.MORE;
         };
         boolean tookToEnd;
         if (usePrefix) {

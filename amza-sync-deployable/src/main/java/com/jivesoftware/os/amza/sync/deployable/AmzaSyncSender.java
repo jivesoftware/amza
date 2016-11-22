@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
@@ -283,7 +284,7 @@ public class AmzaSyncSender {
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
-                    return rows.size() < batchSize;
+                    return rows.size() < batchSize ? TxResult.MORE : TxResult.ACCEPT_AND_STOP;
                 },
                 additionalSolverAfterNMillis,
                 abandonSolutionAfterNMillis,

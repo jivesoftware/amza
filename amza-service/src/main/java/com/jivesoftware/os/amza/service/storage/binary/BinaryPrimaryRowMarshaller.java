@@ -101,7 +101,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
                 return stream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
             (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
-                -> txKeyValueStream.stream(txId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
+                -> txKeyValueStream.stream(txId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion).wantsMore());
     }
 
     @Override

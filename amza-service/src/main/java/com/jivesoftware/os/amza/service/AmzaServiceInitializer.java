@@ -112,6 +112,7 @@ public class AmzaServiceInitializer {
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
         public int deltaMaxValueSizeInIndex = 8;
+        public int deltaMergeThreads = -1;
 
         public int ackWatersStripingLevel = 1024;
         public boolean ackWatersVerboseLogTimeouts = false;
@@ -284,6 +285,10 @@ public class AmzaServiceInitializer {
             -1,
             0,
             config.useMemMap);
+        int deltaMergeThreads = config.deltaMergeThreads;
+        if (deltaMergeThreads <= 0) {
+            deltaMergeThreads = numProc;
+        }
         for (int i = 0; i < numberOfStripes; i++) {
 
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], deltaRowIOProvider, primaryRowMarshaller,
@@ -300,7 +305,7 @@ public class AmzaServiceInitializer {
                 config.deltaMaxValueSizeInIndex,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction,
-                numProc);
+                deltaMergeThreads);
         }
 
         List<WALUpdated> walUpdateDelegates = Lists.newCopyOnWriteArrayList();

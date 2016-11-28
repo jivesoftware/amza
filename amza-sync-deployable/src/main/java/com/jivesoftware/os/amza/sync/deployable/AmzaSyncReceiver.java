@@ -5,6 +5,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.PeekingIterator;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -39,8 +40,8 @@ public class AmzaSyncReceiver {
 
         Consistency consistency = consistencyCache.computeIfAbsent(partitionName, partitionName1 -> {
             try {
-                PartitionProperties properties = partitionClientProvider.getProperties(partitionName1);
-                return properties != null ? properties.consistency : null;
+                RingPartitionProperties properties = partitionClientProvider.getProperties(partitionName1);
+                return properties != null ? properties.partitionProperties.consistency : null;
             } catch (Exception e) {
                 LOG.error("Failed to get properties for partition:{}", partitionName1);
                 return null;

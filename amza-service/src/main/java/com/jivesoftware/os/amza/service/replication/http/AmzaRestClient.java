@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -16,7 +17,7 @@ import java.util.List;
  */
 public interface AmzaRestClient {
 
-    PartitionProperties getProperties(PartitionName partitionName) throws Exception;
+    RingPartitionProperties getProperties(PartitionName partitionName) throws Exception;
 
     StateMessageCause commit(PartitionName partitionName, Consistency consistency, boolean checkLeader, long partitionAwaitOnlineTimeoutMillis, IReadable read)
         throws Exception;

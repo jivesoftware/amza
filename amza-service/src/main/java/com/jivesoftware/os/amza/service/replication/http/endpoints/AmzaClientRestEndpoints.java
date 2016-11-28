@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
 import com.jivesoftware.os.amza.api.filer.ICloseable;
@@ -81,7 +82,7 @@ public class AmzaClientRestEndpoints {
     public Response getProperties(@PathParam("base64PartitionName") String base64PartitionName) {
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         try {
-            PartitionProperties properties = client.getProperties(partitionName);
+            RingPartitionProperties properties = client.getProperties(partitionName);
             return Response.ok(properties).build();
         } catch (Exception e) {
             LOG.error("Failed while attempting to getProperties:{}", new Object[] { partitionName }, e);

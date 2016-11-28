@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -19,7 +20,7 @@ public class TestPartitionHostsProvider implements PartitionHostsProvider {
     }
 
     @Override
-    public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
+    public RingPartitionProperties getRingPartitionProperties(PartitionName partitionName) throws Exception {
         return null;
     }
 

@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.client.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -53,13 +54,13 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
     }
 
     @Override
-    public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
+    public RingPartitionProperties getRingPartitionProperties(PartitionName partitionName) throws Exception {
         String base64PartitionName = partitionName.toBase64();
         return tenantAwareHttpClient.call("", roundRobinStrategy, "configPartition", (client) -> {
             HttpResponse got = client.get("/amza/v1/properties/" + base64PartitionName, null);
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
                 try {
-                    return new ClientResponse<>(mapper.readValue(got.getResponseBody(), PartitionProperties.class), true);
+                    return new ClientResponse<>(mapper.readValue(got.getResponseBody(), RingPartitionProperties.class), true);
                 } catch (IOException x) {
                     throw new RuntimeException("Failed getting properties for " + partitionName, x);
                 }

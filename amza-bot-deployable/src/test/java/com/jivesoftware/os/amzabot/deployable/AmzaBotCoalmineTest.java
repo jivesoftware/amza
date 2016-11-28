@@ -2,6 +2,7 @@ package com.jivesoftware.os.amzabot.deployable;
 
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -50,7 +51,7 @@ public class AmzaBotCoalmineTest {
             }
 
             @Override
-            public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+            public RingPartitionProperties getProperties(PartitionName partitionName) throws Exception {
                 return null;
             }
         };

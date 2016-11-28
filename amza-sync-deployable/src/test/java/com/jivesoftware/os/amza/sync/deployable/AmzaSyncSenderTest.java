@@ -6,6 +6,7 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -17,7 +18,6 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
-import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient.Tx;
 import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -81,7 +81,7 @@ public class AmzaSyncSenderTest {
             }
 
             @Override
-            public void ensurePartition(PartitionName toPartitionName, PartitionProperties properties) throws Exception {
+            public void ensurePartition(PartitionName toPartitionName, PartitionProperties properties, int ringSize) throws Exception {
             }
         };
 
@@ -144,7 +144,8 @@ public class AmzaSyncSenderTest {
 
         long[] txId = { -1 };
         partition.takeFromTransactionId(null, null,
-            highwater -> {},
+            highwater -> {
+            },
             (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 txId[0] = rowTxId;
                 return TxResult.MORE;
@@ -192,9 +193,10 @@ public class AmzaSyncSenderTest {
         }
 
         @Override
-        public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
-            return new PartitionProperties(Durability.fsync_never, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, false, Consistency.none, false, true, false,
-                RowType.primary, "lab", 8, null, 4096, 16);
+        public RingPartitionProperties getProperties(PartitionName partitionName) throws Exception {
+            return new RingPartitionProperties(1,
+                new PartitionProperties(Durability.fsync_never, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, false, Consistency.none, false, true, false,
+                    RowType.primary, "lab", 8, null, 4096, 16));
         }
 
         @Override

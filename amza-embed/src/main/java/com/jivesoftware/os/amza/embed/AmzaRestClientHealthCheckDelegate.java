@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.embed;
 
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -29,7 +30,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
     }
 
     @Override
-    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+    public RingPartitionProperties getProperties(PartitionName partitionName) throws Exception {
         return client.getProperties(partitionName);
     }
 

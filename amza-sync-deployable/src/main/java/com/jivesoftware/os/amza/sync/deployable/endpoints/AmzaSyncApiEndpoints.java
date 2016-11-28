@@ -19,11 +19,10 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncReceiver;
-import com.jivesoftware.os.amza.sync.deployable.Row;
+import com.jivesoftware.os.amza.sync.deployable.Rows;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
-import java.util.List;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -59,7 +58,7 @@ public class AmzaSyncApiEndpoints {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response commitRows(@PathParam("partitionNameBase64") String partitionNameBase64,
-        List<Row> rows) throws Exception {
+        Rows rows) throws Exception {
         try {
             PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
             syncReceiver.commitRows(partitionName, rows);

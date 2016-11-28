@@ -30,8 +30,8 @@ public class HttpAmzaSyncClient implements AmzaSyncClient {
     }
 
     @Override
-    public void ensurePartition(PartitionName toPartitionName, PartitionProperties properties) throws Exception {
-        String endpoint = ensurePartitionPath + '/' + toPartitionName.toBase64();
+    public void ensurePartition(PartitionName toPartitionName, PartitionProperties properties, int ringSize) throws Exception {
+        String endpoint = ensurePartitionPath + '/' + toPartitionName.toBase64() + '/' + ringSize;
         String result = httpRequestHelper.executeRequest(properties, endpoint, String.class, null);
         if (result == null) {
             throw new SyncClientException("Empty response from sync receiver");

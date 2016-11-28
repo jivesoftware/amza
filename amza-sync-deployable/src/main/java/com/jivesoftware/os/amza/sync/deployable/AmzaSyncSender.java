@@ -9,6 +9,7 @@ import com.google.common.collect.SetMultimap;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -253,13 +254,20 @@ public class AmzaSyncSender {
 
     private boolean ensurePartition(PartitionName fromPartitionName, PartitionName toPartitionName) throws Exception {
         if (!ensuredPartitions.containsEntry(fromPartitionName, toPartitionName)) {
-            PartitionProperties properties = partitionClientProvider.getProperties(fromPartitionName);
+            RingPartitionProperties properties = partitionClientProvider.getProperties(fromPartitionName);
             if (properties == null) {
+                LOG.warn("Missing properties fromPartitionName:{}", fromPartitionName);
                 return false;
             }
 
-            LOG.info("Submitting properties fromPartitionName:{} toPartitionName:{}", fromPartitionName, toPartitionName);
-            toSyncClient.ensurePartition(toPartitionName, properties);
+            int ringSize = properties.ringSize;
+            if (ringSize <= 0) {
+                LOG.warn("Found invalid ringSize:{} fromPartitionName:{}", ringSize, fromPartitionName);
+                return false;
+            }
+
+            LOG.info("Submitting properties fromPartitionName:{} toPartitionName:{} ringSize:{}", fromPartitionName, toPartitionName, ringSize);
+            toSyncClient.ensurePartition(toPartitionName, properties.partitionProperties, ringSize);
             ensuredPartitions.put(fromPartitionName, toPartitionName);
         }
         return true;

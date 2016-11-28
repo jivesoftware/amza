@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -10,7 +11,7 @@ import java.util.Optional;
  */
 public interface PartitionHostsProvider {
 
-    PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception;
+    RingPartitionProperties getRingPartitionProperties(PartitionName partitionName) throws Exception;
 
     void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception;
 

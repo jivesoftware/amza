@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
+import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -45,8 +46,9 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
-        return partitionProvider.getProperties(partitionName);
+    public RingPartitionProperties getProperties(PartitionName partitionName) throws Exception {
+        RingTopology ringTopology = ringReader.getRing(partitionName.getRingName());
+        return new RingPartitionProperties(ringTopology.entries.size(), partitionProvider.getProperties(partitionName));
     }
 
     @Override

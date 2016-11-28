@@ -10,5 +10,5 @@ import java.util.List;
 public interface AmzaSyncClient {
     void commitRows(PartitionName toPartitionName, List<Row> rows) throws Exception;
 
-    void ensurePartition(PartitionName toPartitionName, PartitionProperties properties) throws Exception;
+    void ensurePartition(PartitionName toPartitionName, PartitionProperties properties, int ringSize) throws Exception;
 }

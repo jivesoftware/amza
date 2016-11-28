@@ -40,9 +40,9 @@ public interface AmzaRestClient {
 
     StateMessageCause status(PartitionName partitionName, Consistency consistency, boolean checkLeader, long partitionAwaitOnlineTimeoutMillis);
 
-    void takeFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception;
+    void takeFromTransactionId(PartitionName partitionName, int limit, IReadable in, IWriteable out) throws Exception;
 
-    void takePrefixFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception;
+    void takePrefixFromTransactionId(PartitionName partitionName, int limit, IReadable in, IWriteable out) throws Exception;
 
     long approximateCount(PartitionName partitionName) throws Exception;
 

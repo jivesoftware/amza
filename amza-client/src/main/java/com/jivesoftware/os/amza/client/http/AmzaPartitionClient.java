@@ -340,6 +340,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
     @Override
     public TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> membersTxId,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,
@@ -349,7 +350,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takeFromTransactionId",
             (leader, ringMember, client) -> {
-                return remotePartitionCaller.takeFromTransactionId(leader, ringMember, client, membersTxId);
+                return remotePartitionCaller.takeFromTransactionId(leader, ringMember, client, membersTxId, limit);
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.newArrayList(
@@ -372,6 +373,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
     public TakeResult takePrefixFromTransactionId(List<RingMember> membersInOrder,
         byte[] prefix,
         Map<RingMember, Long> membersTxId,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,
@@ -380,7 +382,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takePrefixFromTransactionId",
             (leader, ringMember, client) -> {
-                return remotePartitionCaller.takePrefixFromTransactionId(leader, ringMember, client, prefix, membersTxId);
+                return remotePartitionCaller.takePrefixFromTransactionId(leader, ringMember, client, prefix, membersTxId, limit);
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.newArrayList(

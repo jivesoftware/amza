@@ -167,11 +167,12 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
     public PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader,
         RingMember ringMember,
         HttpClient client,
-        Map<RingMember, Long> membersTxId) throws HttpClientException {
+        Map<RingMember, Long> membersTxId,
+        int limit) throws HttpClientException {
 
         long transactionId = membersTxId.getOrDefault(ringMember, -1L);
         HttpStreamResponse got = client.streamingPostStreamableRequest(
-            "/amza/v1/takeFromTransactionId/" + base64PartitionName,
+            "/amza/v1/takeFromTransactionId/" + base64PartitionName + '/' + limit,
             (out) -> {
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);
@@ -189,13 +190,14 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         RingMember ringMember,
         HttpClient client,
         byte[] prefix,
-        Map<RingMember, Long> membersTxId) throws HttpClientException {
+        Map<RingMember, Long> membersTxId,
+        int limit) throws HttpClientException {
 
         byte[] intLongBuffer = new byte[8];
 
         long transactionId = membersTxId.getOrDefault(ringMember, -1L);
         HttpStreamResponse got = client.streamingPostStreamableRequest(
-            "/amza/v1/takePrefixFromTransactionId/" + base64PartitionName,
+            "/amza/v1/takePrefixFromTransactionId/" + base64PartitionName + '/' + limit,
             (out) -> {
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);

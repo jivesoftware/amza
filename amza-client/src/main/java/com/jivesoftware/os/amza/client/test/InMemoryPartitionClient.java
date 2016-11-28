@@ -174,6 +174,7 @@ public class InMemoryPartitionClient implements PartitionClient {
     @Override
     public TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,
@@ -203,6 +204,7 @@ public class InMemoryPartitionClient implements PartitionClient {
     public TakeResult takePrefixFromTransactionId(List<RingMember> membersInOrder,
         byte[] prefix,
         Map<RingMember, Long> memberTxIds,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,

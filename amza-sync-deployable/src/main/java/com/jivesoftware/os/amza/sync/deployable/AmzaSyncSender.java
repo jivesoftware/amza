@@ -282,9 +282,10 @@ public class AmzaSyncSender {
 
         int synced = 0;
         while (true) {
-            List<Row> rows = Lists.newArrayListWithCapacity(batchSize);
+            List<Row> rows = Lists.newArrayListWithExpectedSize(batchSize);
             TakeResult takeResult = fromClient.takeFromTransactionId(null,
                 cursor,
+                batchSize,
                 highwater -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         cursor.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
@@ -292,7 +293,7 @@ public class AmzaSyncSender {
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
-                    return rows.size() < batchSize ? TxResult.MORE : TxResult.ACCEPT_AND_STOP;
+                    return TxResult.MORE;
                 },
                 additionalSolverAfterNMillis,
                 abandonSolutionAfterNMillis,

@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -122,6 +123,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
     @Override
     public TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,
@@ -132,13 +134,20 @@ public class EmbeddedPartitionClient implements PartitionClient {
             return new TakeResult(rootRingMember, -1L, null);
         }
         long txId = memberTxIds.getOrDefault(rootRingMember, -1L);
-        return partition.takeFromTransactionId(txId, highwaters, stream);
+        int[] count = { 0 };
+        return partition.takeFromTransactionId(txId, highwaters,
+            (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                TxResult result = stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                count[0]++;
+                return (limit > 0 && count[0] >= limit) ? TxResult.ACCEPT_AND_STOP : result;
+            });
     }
 
     @Override
     public TakeResult takePrefixFromTransactionId(List<RingMember> membersInOrder,
         byte[] prefix,
         Map<RingMember, Long> memberTxIds,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,
@@ -149,7 +158,13 @@ public class EmbeddedPartitionClient implements PartitionClient {
             return new TakeResult(rootRingMember, -1L, null);
         }
         long txId = memberTxIds.getOrDefault(rootRingMember, -1L);
-        return partition.takePrefixFromTransactionId(prefix, txId, highwaters, stream);
+        int[] count = { 0 };
+        return partition.takePrefixFromTransactionId(prefix, txId, highwaters,
+            (rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                TxResult result = stream.stream(rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                count[0]++;
+                return (limit > 0 && count[0] >= limit) ? TxResult.ACCEPT_AND_STOP : result;
+            });
     }
 
 }

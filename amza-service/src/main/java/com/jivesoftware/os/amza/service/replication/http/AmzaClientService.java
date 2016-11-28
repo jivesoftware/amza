@@ -192,20 +192,20 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public void takeFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
+    public void takeFromTransactionId(PartitionName partitionName, int limit, IReadable in, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         long transactionId = UIO.readLong(in, "transactionId", intLongBuffer);
         Partition partition = partitionProvider.getPartition(partitionName);
-        take(out, partition, false, null, transactionId, intLongBuffer);
+        take(out, partition, false, null, transactionId, limit, intLongBuffer);
     }
 
     @Override
-    public void takePrefixFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
+    public void takePrefixFromTransactionId(PartitionName partitionName, int limit, IReadable in, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
         byte[] prefix = UIO.readByteArray(in, "prefix", intLongBuffer);
         long txId = UIO.readLong(in, "txId", intLongBuffer);
-        take(out, partition, true, prefix, txId, intLongBuffer);
+        take(out, partition, true, prefix, txId, limit, intLongBuffer);
     }
 
     @Override
@@ -219,6 +219,7 @@ public class AmzaClientService implements AmzaRestClient {
         boolean usePrefix,
         byte[] prefix,
         long txId,
+        int limit,
         byte[] lengthBuffer) throws Exception {
 
         RingMember ringMember = ringReader.getRingMember();
@@ -228,6 +229,7 @@ public class AmzaClientService implements AmzaRestClient {
             UIO.writeByte(out, RowType.highwater.toByte(), "type");
             writeHighwaters(out, highwater, lengthBuffer);
         };
+        int[] count = { 0 };
         TxKeyValueStream stream = (rowTxId, prefix1, key, value, timestamp, tombstoned, version) -> {
             UIO.writeByte(out, (byte) 0, "eos");
             UIO.writeByte(out, RowType.primary.toByte(), "type");
@@ -238,7 +240,9 @@ public class AmzaClientService implements AmzaRestClient {
             UIO.writeLong(out, timestamp, "timestamp");
             UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
             UIO.writeLong(out, version, "version");
-            return TxResult.MORE;
+
+            count[0]++;
+            return (limit > 0 && count[0] >= limit) ? TxResult.ACCEPT_AND_STOP : TxResult.MORE;
         };
         TakeResult takeResult;
         if (usePrefix) {

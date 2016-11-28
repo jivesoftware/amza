@@ -396,8 +396,9 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/takeFromTransactionId/{base64PartitionName}")
+    @Path("/takeFromTransactionId/{base64PartitionName}/{limit}")
     public Object takeFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("limit") int limit,
         InputStream inputStream) {
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
@@ -407,7 +408,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), in, out);
+                client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), limit, in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takeFromTransactionId", x);
@@ -421,8 +422,9 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/takePrefixFromTransactionId/{base64PartitionName}")
+    @Path("/takePrefixFromTransactionId/{base64PartitionName}/{limit}")
     public Object takePrefixFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("limit") int limit,
         InputStream inputStream) {
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
@@ -433,7 +435,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), in, out);
+                client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), limit, in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takePrefixFromTransactionId", x);

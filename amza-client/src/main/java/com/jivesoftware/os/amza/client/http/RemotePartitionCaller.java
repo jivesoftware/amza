@@ -40,13 +40,15 @@ public interface RemotePartitionCaller<C, E extends Throwable> {
     PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader,
         RingMember ringMember,
         C client,
-        Map<RingMember, Long> membersTxId) throws E;
+        Map<RingMember, Long> membersTxId,
+        int limit) throws E;
 
     PartitionResponse<CloseableStreamResponse> takePrefixFromTransactionId(RingMember leader,
         RingMember ringMember,
         C client,
         byte[] prefix,
-        Map<RingMember, Long> membersTxId) throws E;
+        Map<RingMember, Long> membersTxId,
+        int limit) throws E;
 
     PartitionResponse<CloseableLong> getApproximateCount(RingMember leader,
         RingMember ringMember,

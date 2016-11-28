@@ -341,10 +341,10 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
     private static final HealthTimer takeFromLatency = HealthFactory.getHealthTimer(TakeFromLatency.class, TimerHealthChecker.FACTORY);
 
     @Override
-    public void takeFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
+    public void takeFromTransactionId(PartitionName partitionName, int limit, IReadable in, IWriteable out) throws Exception {
         try {
             takeFromLatency.startTimer();
-            client.takeFromTransactionId(partitionName, in, out);
+            client.takeFromTransactionId(partitionName, limit, in, out);
         } finally {
             takeFromLatency.stopTimer("Ensure", "Check cluster health.");
         }
@@ -368,10 +368,10 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
     private static final HealthTimer takeFromWithPrefixLatency = HealthFactory.getHealthTimer(TakeFromLatency.class, TimerHealthChecker.FACTORY);
 
     @Override
-    public void takePrefixFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
+    public void takePrefixFromTransactionId(PartitionName partitionName, int limit, IReadable in, IWriteable out) throws Exception {
         try {
             takeFromWithPrefixLatency.startTimer();
-            client.takePrefixFromTransactionId(partitionName, in, out);
+            client.takePrefixFromTransactionId(partitionName, limit, in, out);
         } finally {
             takeFromWithPrefixLatency.stopTimer("Ensure", "Check cluster health.");
         }

@@ -84,6 +84,7 @@ public interface PartitionClient {
 
     TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,
@@ -94,6 +95,7 @@ public interface PartitionClient {
     TakeResult takePrefixFromTransactionId(List<RingMember> membersInOrder,
         byte[] prefix,
         Map<RingMember, Long> memberTxIds,
+        int limit,
         Highwaters highwaters,
         TxKeyValueStream stream,
         long additionalSolverAfterNMillis,

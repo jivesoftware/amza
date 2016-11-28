@@ -143,7 +143,7 @@ public class AmzaSyncSenderTest {
             Optional.empty());
 
         long[] txId = { -1 };
-        partition.takeFromTransactionId(null, null,
+        partition.takeFromTransactionId(null, null, -1,
             highwater -> {
             },
             (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {

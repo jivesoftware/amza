@@ -315,7 +315,7 @@ public class AmzaSyncSender {
             }
 
             savePartitionCursor(fromPartitionName, toPartitionName, cursor);
-            if (takeResult.tookToEnd != null) {
+            if (rows.isEmpty()) {
                 break;
             }
         }

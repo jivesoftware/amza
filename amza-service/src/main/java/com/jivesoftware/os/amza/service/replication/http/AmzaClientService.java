@@ -259,10 +259,14 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     private void writeHighwaters(IWriteable out, WALHighwater highwater, byte[] lengthBuffer) throws IOException {
-        UIO.writeInt(out, highwater.ringMemberHighwater.size(), "length", lengthBuffer);
-        for (WALHighwater.RingMemberHighwater ringMemberHighwater : highwater.ringMemberHighwater) {
-            UIO.writeByteArray(out, ringMemberHighwater.ringMember.toBytes(), "ringMember", lengthBuffer);
-            UIO.writeLong(out, ringMemberHighwater.transactionId, "txId");
+        if (highwater == null) {
+            UIO.writeInt(out, 0, "length", lengthBuffer);
+        } else {
+            UIO.writeInt(out, highwater.ringMemberHighwater.size(), "length", lengthBuffer);
+            for (WALHighwater.RingMemberHighwater ringMemberHighwater : highwater.ringMemberHighwater) {
+                UIO.writeByteArray(out, ringMemberHighwater.ringMember.toBytes(), "ringMember", lengthBuffer);
+                UIO.writeLong(out, ringMemberHighwater.transactionId, "txId");
+            }
         }
     }
 

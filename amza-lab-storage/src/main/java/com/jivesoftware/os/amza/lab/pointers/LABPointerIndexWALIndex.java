@@ -287,6 +287,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception {
+        init();
         lock.acquire();
         try {
             byte[] fromFpPk = WALKey.compose(prefix, new byte[0]);
@@ -405,6 +406,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public long deltaCount(WALKeyPointers keyPointers) throws Exception {
+        init();
         lock.acquire();
         try {
             long[] delta = new long[1];
@@ -436,6 +438,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public void commit(boolean fsync) throws Exception {
+        init();
         lock.acquire();
         try {
             // TODO is this the right thing to do?

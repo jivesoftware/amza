@@ -164,7 +164,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                         PartitionName partitionName = iter.next();
                         iter.remove();
                         try {
-                            if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+                            if (ringStoreReader.isMemberOfRing(partitionName.getRingName(), 0)) {
 
                                 StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
                                 if (storageVersion != null) {
@@ -270,7 +270,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
     @Override
     public boolean isColdstart(VersionedPartitionName versionedPartitionName) throws Exception {
-        RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName());
+        RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName(), 0);
         int quorumCount = (ring.entries.size() + 1) / 2;
 
         Aquarium aquarium = getAquarium(versionedPartitionName);
@@ -314,7 +314,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         AmzaMemberLifecycle amzaMemberLifecycle = new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName, rootAquariumMember);
         AmzaAtQuorum atQuorum = new AmzaAtQuorum(versionedPartitionProvider, ringStoreReader, versionedPartitionName);
         IsCurrentMember isCurrentMember = member -> {
-            return ringStoreReader.getRing(partitionName.getRingName()).aquariumMembers.contains(member);
+            return ringStoreReader.getRing(partitionName.getRingName(), 0).aquariumMembers.contains(member);
         };
         return new ReadWaterline<>(aquariumStats.getMyCurrentWaterline, aquariumStats.getOthersCurrentWaterline, aquariumStats.acknowledgeCurrentOther,
             amzaStateStorage, amzaMemberLifecycle, atQuorum, isCurrentMember, Long.class).get(remoteRingMember.asAquariumMember());
@@ -328,7 +328,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         TransitionQuorum currentTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
             PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
             if (existing.getState() == State.nominated && nextState == State.leader) {
-                int ringSize = ringStoreReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
+                int ringSize = ringStoreReader.getRingSize(versionedPartitionName.getPartitionName().getRingName(), 0);
                 int quorum;
                 boolean needsRepair;
                 if (properties.consistency == Consistency.leader) {
@@ -378,7 +378,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyInCurrentState =
                     existing.getState() == State.inactive ? tookFullyWhileInactive : tookFullyWhileBootstrap;
 
-                int ringSize = ringStoreReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
+                int ringSize = ringStoreReader.getRingSize(versionedPartitionName.getPartitionName().getRingName(), 0);
                 int quorum;
                 boolean needsRepair;
                 if (properties.consistency == Consistency.leader) {
@@ -442,7 +442,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             return writeDesired.put(rootAquariumMember, nextState, nextTimestamp);
         };
         IsCurrentMember isCurrentMember = member -> {
-            return ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName()).aquariumMembers.contains(member);
+            return ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName(), 0).aquariumMembers.contains(member);
         };
 
         return new Aquarium(aquariumStats,
@@ -505,7 +505,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         if (livelyEndState.getCurrentState() == State.expunged) {
             throw new PartitionIsExpungedException("Partition " + versionedPartitionName + " is expunged");
         } else if ((!livelyEndState.isOnline() || !isOnline(livelyEndState.getLeaderWaterline()))
-            && ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName())) {
+            && ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName(), 0)) {
             getAquarium(versionedPartitionName).tapTheGlass();
         }
     }
@@ -524,7 +524,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         Aquarium aquarium = getAquarium(versionedPartitionName);
         LivelyEndState livelyEndState = aquarium.livelyEndState();
         if (!livelyEndState.isOnline()) {
-            if (ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName())) {
+            if (ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName(), 0)) {
                 Waterline leader = livelyEndState.getLeaderWaterline();
                 if (leader == null || !leader.getMember().equals(rootAquariumMember)) {
 
@@ -839,7 +839,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         public boolean is(int count) throws Exception {
             PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
             if (properties.replicated) {
-                return count > amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName()) / 2;
+                return count > amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName(), 0) / 2;
             } else {
                 return true;
             }

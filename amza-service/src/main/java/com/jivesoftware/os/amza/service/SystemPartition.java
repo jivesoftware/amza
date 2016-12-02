@@ -90,7 +90,7 @@ public class SystemPartition implements Partition {
         ClientUpdates updates,
         long timeoutInMillis) throws Exception {
 
-        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
+        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING, -1);
 
         int takeQuorum = consistency.quorum(neighbors.size());
         if (takeQuorum > 0 && neighbors.size() < takeQuorum) {

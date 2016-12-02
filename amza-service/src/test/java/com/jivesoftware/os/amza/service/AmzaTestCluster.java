@@ -278,8 +278,10 @@ public class AmzaTestCluster {
         AquariumStats aquariumStats = new AquariumStats();
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
-            interner, aquariumStats,
+            interner,
+            aquariumStats,
             amzaStats,
+            cluster::size,
             sickThreads,
             sickPartitions,
             primaryRowMarshaller,
@@ -524,7 +526,7 @@ public class AmzaTestCluster {
 
         public void printRings() {
             try {
-                RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
+                RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, 10_000);
                 System.out.println("RING:"
                     + " me:" + amzaService.getRingReader().getRingMember()
                     + " ring:" + Lists.transform(systemRing.entries, input -> input.ringMember));
@@ -582,8 +584,8 @@ public class AmzaTestCluster {
             partitionNames.addAll(allAPartitions);
             partitionNames.addAll(allBPartitions);
 
-            RingTopology aRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
-            RingTopology bRing = service.amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
+            RingTopology aRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1);
+            RingTopology bRing = service.amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1);
 
             if (!aRing.entries.equals(bRing.entries)) {
                 System.out.println(aRing + "-vs-" + bRing);

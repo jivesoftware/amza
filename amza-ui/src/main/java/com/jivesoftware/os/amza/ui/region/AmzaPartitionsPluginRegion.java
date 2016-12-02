@@ -99,7 +99,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             byte[] partitionNameBytes = input.partitionName.getBytes();
             if (input.action.equals("add")) {
                 if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
-                    amzaService.getRingWriter().ensureMaximalRing(ringNameBytes);
+                    amzaService.getRingWriter().ensureMaximalRing(ringNameBytes, 0);
 
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
                     amzaService.createPartitionIfAbsent(partitionName,
@@ -169,7 +169,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         row.put("name", pn);
                         row.put("ringName", prn);
 
-                        RingTopology ring = ringReader.getRing(partitionName.getRingName());
+                        RingTopology ring = ringReader.getRing(partitionName.getRingName(), -1);
                         List<Map<String, Object>> ringHosts = new ArrayList<>();
                         for (RingMemberAndHost entry : ring.entries) {
                             Map<String, Object> ringHost = new HashMap<>();

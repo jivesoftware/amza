@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AckWaters;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.TakeFullySystemReady;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
@@ -225,7 +226,8 @@ public class DeltaStripeWALStorageNGTest {
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
 
-        ringStoreReader = new AmzaRingStoreReader(interner,
+        ringStoreReader = new AmzaRingStoreReader(timeoutInMillis -> {},
+            interner,
             member,
             new ConcurrentBAHash<>(13, true, 4),
             new ConcurrentBAHash<>(13, true, 4),

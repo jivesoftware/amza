@@ -165,7 +165,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     if (!versionedPartitionProvider.hasPartition(partitionName)) {
                         throw new PropertiesNotPresentException("Properties missing for " + partitionName);
                     }
-                    if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                    if (!ringMembership.isMemberOfRing(partitionName.getRingName(), 0)) {
                         throw new NotARingMemberException("Not a member of ring for " + partitionName);
                     }
 

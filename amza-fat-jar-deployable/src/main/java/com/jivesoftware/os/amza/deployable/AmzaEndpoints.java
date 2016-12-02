@@ -196,7 +196,7 @@ public class AmzaEndpoints {
     Partition createPartitionIfAbsent(String ringName, String indexClassName,
         String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
-        amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes(StandardCharsets.UTF_8));
+        amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes(StandardCharsets.UTF_8), 10_000); //TODO config
 
         PartitionName partitionName = new PartitionName(false,
             ringName.getBytes(StandardCharsets.UTF_8),

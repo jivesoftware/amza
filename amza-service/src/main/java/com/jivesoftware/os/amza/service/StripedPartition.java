@@ -56,7 +56,7 @@ public class StripedPartition implements Partition {
     private final PartitionStripeProvider partitionStripeProvider;
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
-    private final AmzaSystemReady systemReady;
+    private final TakeFullySystemReady systemReady;
     private final TakeCoordinator takeCoordinator;
 
     public StripedPartition(AmzaStats amzaStats,
@@ -68,7 +68,7 @@ public class StripedPartition implements Partition {
         PartitionStripeProvider partitionStripeProvider,
         AckWaters ackWaters,
         AmzaRingStoreReader ringReader,
-        AmzaSystemReady systemReady,
+        TakeFullySystemReady systemReady,
         TakeCoordinator takeCoordinator) {
 
         this.amzaStats = amzaStats;
@@ -106,7 +106,7 @@ public class StripedPartition implements Partition {
                 + " which does not support writes at consistency " + consistency);
         }
 
-        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName());
+        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName(), 0);
         int takeQuorum = consistency.quorum(neighbors.size());
         if (neighbors.size() < takeQuorum) {
             throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);

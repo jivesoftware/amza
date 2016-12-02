@@ -70,7 +70,7 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
                 }
 
                 List<Map<String, String>> rows = new ArrayList<>();
-                RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+                RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING, -1);
                 for (RingMemberAndHost entry : ring.entries) {
                     Map<String, String> row = new HashMap<>();
                     row.put("member", entry.ringMember.getMember());

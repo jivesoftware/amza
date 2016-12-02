@@ -83,6 +83,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.merlin.config.BindInterfaceToConfiguration;
 
@@ -111,6 +112,7 @@ public class Main {
                 System.out.println("");
                 System.out.println("    -Damza.id=<writerId>");
                 System.out.println("    -Damza.working.dirs=<workingDirs>");
+                System.out.println("    -Damza.system.ring.size=<systemRingSize>");
                 System.out.println("    -Damza.leap.cache.max.capacity=1000000");
                 System.out.println("");
                 System.out.println("     Only applicable if you have specified a <clusterName>.");
@@ -164,8 +166,13 @@ public class Main {
         final SickThreads sickThreads = new SickThreads();
         final SickPartitions sickPartitions = new SickPartitions();
 
+        AtomicInteger systemRingSize = new AtomicInteger(-1);
         amzaServiceConfig.workingDirectories = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
             .split(",");
+        amzaServiceConfig.systemRingSize = Integer.parseInt(System.getProperty("amza.system.ring.size", "-1"));
+        if (amzaServiceConfig.systemRingSize > 0) {
+            systemRingSize.set(amzaServiceConfig.systemRingSize);
+        }
 
         BAInterner interner = new BAInterner();
 
@@ -239,6 +246,7 @@ public class Main {
             interner,
             aquariumStats,
             amzaStats,
+            () -> amzaServiceConfig.systemRingSize,
             sickThreads,
             sickPartitions,
             primaryRowMarshaller,
@@ -267,7 +275,7 @@ public class Main {
             (RowsChanged changes) -> {
             });
 
-        topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING));
+        topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
             new HttpPartitionClientFactory(interner),
@@ -345,13 +353,15 @@ public class Main {
                         amzaService.getRingWriter().register(peerRingMember, peerRingHost, writerId, false);
                     }
                 }
+                systemRingSize.set(1 + peers.length);
                 System.out.println("-----------------------------------------------------------------------");
             } else {
                 AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getRingReader(),
                     amzaService.getRingWriter(),
                     clusterName,
                     multicastGroup,
-                    multicastPort);
+                    multicastPort,
+                    systemRingSize);
                 amzaDiscovery.start();
                 System.out.println("-----------------------------------------------------------------------");
                 System.out.println("|      Amza Service Discovery Online: Cluster Name:" + clusterName);

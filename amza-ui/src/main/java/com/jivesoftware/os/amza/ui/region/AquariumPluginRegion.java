@@ -175,7 +175,7 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
 
             long now = System.currentTimeMillis();
             List<Map<String, Object>> live = new ArrayList<>();
-            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING, -1);
             for (RingMemberAndHost entry : ring.entries) {
                 long aliveUntilTimestamp = liveliness.aliveUntilTimestamp(entry.ringMember.asAquariumMember());
 

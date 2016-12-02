@@ -47,7 +47,7 @@ public class AmzaClientService implements AmzaRestClient {
 
     @Override
     public RingPartitionProperties getProperties(PartitionName partitionName) throws Exception {
-        RingTopology ringTopology = ringReader.getRing(partitionName.getRingName());
+        RingTopology ringTopology = ringReader.getRing(partitionName.getRingName(), 0);
         return new RingPartitionProperties(ringTopology.entries.size(), partitionProvider.getProperties(partitionName));
     }
 
@@ -55,9 +55,9 @@ public class AmzaClientService implements AmzaRestClient {
     public RingTopology configPartition(PartitionName partitionName, PartitionProperties partitionProperties, int ringSize) throws
         Exception {
         byte[] ringNameBytes = partitionName.getRingName();
-        ringWriter.ensureSubRing(ringNameBytes, ringSize);
+        ringWriter.ensureSubRing(ringNameBytes, ringSize, 0);
         partitionProvider.createPartitionIfAbsent(partitionName, partitionProperties);
-        return ringReader.getRing(partitionName.getRingName());
+        return ringReader.getRing(partitionName.getRingName(), 0);
     }
 
     @Override
@@ -80,13 +80,13 @@ public class AmzaClientService implements AmzaRestClient {
 
     @Override
     public RingLeader ring(PartitionName partitionName) throws Exception {
-        return new RingLeader(ringReader.getRing(partitionName.getRingName()), null);
+        return new RingLeader(ringReader.getRing(partitionName.getRingName(), 0), null);
     }
 
     @Override
     public RingLeader ringLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception {
         RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
-        return new RingLeader(ringReader.getRing(partitionName.getRingName()), leader);
+        return new RingLeader(ringReader.getRing(partitionName.getRingName(), 0), leader);
     }
 
     @Override

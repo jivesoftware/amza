@@ -15,13 +15,13 @@ public interface AmzaRingReader {
 
     /*List<Entry<RingMember, RingHost>> getNeighbors(byte[] ringName) throws Exception;*/
 
-    RingTopology getRing(byte[] ringName) throws Exception;
+    RingTopology getRing(byte[] ringName, long timeoutInMillis) throws Exception;
 
-    RingSet getRingSet(RingMember ringMember);
+    RingSet getRingSet(RingMember ringMember, long timeoutInMillis) throws Exception;
 
-    int getRingSize(byte[] ringName) throws Exception;
+    int getRingSize(byte[] ringName, long timeoutInMillis) throws Exception;
 
-    int getTakeFromFactor(byte[] ringName) throws Exception;
+    int getTakeFromFactor(byte[] ringName, long timeoutInMillis) throws Exception;
 
     void allRings(RingStream ringStream) throws Exception;
 
@@ -30,7 +30,7 @@ public interface AmzaRingReader {
         boolean stream(byte[] ringName, RingMember ringMember, RingHost ringHost) throws Exception;
     }
 
-    void streamRingNames(RingMember ringMember, RingNameStream ringNameStream) throws Exception;
+    void streamRingNames(RingMember ringMember, long timeoutInMillis, RingNameStream ringNameStream) throws Exception;
 
     interface RingNameStream {
 

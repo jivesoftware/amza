@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.RingMembership;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -36,6 +35,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaSystemReady systemReady;
     private final BAInterner interner;
     private final RingMember rootRingMember;
     private PartitionStore ringIndex;
@@ -45,12 +45,14 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     private final AtomicLong nodeCacheId;
     private final Set<RingMember> blacklistRingMembers;
 
-    public AmzaRingStoreReader(BAInterner interner,
+    public AmzaRingStoreReader(AmzaSystemReady systemReady,
+        BAInterner interner,
         RingMember rootRingMember,
         ConcurrentBAHash<CacheId<RingTopology>> ringsCache,
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache,
         AtomicLong nodeCacheId,
         Set<RingMember> blacklistRingMembers) {
+        this.systemReady = systemReady;
         this.interner = interner;
         this.rootRingMember = rootRingMember;
         this.ringsCache = ringsCache;
@@ -120,14 +122,17 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     @Override
-    public boolean isMemberOfRing(byte[] ringName) throws Exception {
-        return getRing(ringName).rootMemberIndex >= 0;
+    public boolean isMemberOfRing(byte[] ringName, long timeoutInMillis) throws Exception {
+        return getRing(ringName, timeoutInMillis).rootMemberIndex >= 0;
     }
 
     @Override
-    public RingTopology getRing(byte[] ringName) throws Exception {
+    public RingTopology getRing(byte[] ringName, long timeoutInMillis) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
+        }
+        if (timeoutInMillis >= 0) {
+            systemReady.await(timeoutInMillis);
         }
 
         CacheId<RingTopology> cacheIdRingTopology = ringsCache.computeIfAbsent(ringName, key -> new CacheId<>(null));
@@ -214,9 +219,12 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         return rawRingHost == null ? null : RingHost.fromBytes(rawRingHost.getValue());
     }
 
-    public Set<RingMember> getNeighboringRingMembers(byte[] ringName) throws Exception {
+    public Set<RingMember> getNeighboringRingMembers(byte[] ringName, long timeoutInMillis) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
+        }
+        if (timeoutInMillis >= 0) {
+            systemReady.await(timeoutInMillis);
         }
 
         byte[] from = key(ringName, null);
@@ -238,18 +246,21 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     @Override
-    public void streamRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
-        RingSet ringSet = getRingSet(desiredRingMember);
+    public void streamRingNames(RingMember desiredRingMember, long timeoutInMillis, RingNameStream ringNameStream) throws Exception {
+        RingSet ringSet = getRingSet(desiredRingMember, timeoutInMillis);
         ringSet.ringNames.stream(ringNameStream::stream);
     }
 
     @Override
-    public RingSet getRingSet(RingMember desiredRingMember) {
+    public RingSet getRingSet(RingMember desiredRingMember, long timeoutInMillis) throws Exception {
         if (ringIndex == null || nodeIndex == null) {
             throw new IllegalStateException("Ring store reader wasn't opened or has already been closed.");
         }
         if (blacklistRingMembers.contains(desiredRingMember)) {
             throw new IllegalArgumentException("Requested ring member is blacklisted");
+        }
+        if (timeoutInMillis >= 0) {
+            systemReady.await(timeoutInMillis);
         }
 
         CacheId<RingSet> cacheIdRingSet = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember.leakBytes(), key -> new CacheId<>(null));
@@ -290,13 +301,13 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     @Override
-    public int getRingSize(byte[] ringName) throws Exception {
-        return getRing(ringName).entries.size();
+    public int getRingSize(byte[] ringName, long timeoutInMillis) throws Exception {
+        return getRing(ringName, timeoutInMillis).entries.size();
     }
 
     @Override
-    public int getTakeFromFactor(byte[] ringName) throws Exception {
-        return getRing(ringName).getTakeFromFactor();
+    public int getTakeFromFactor(byte[] ringName, long timeoutInMillis) throws Exception {
+        return getRing(ringName, timeoutInMillis).getTakeFromFactor();
     }
 
     @Override

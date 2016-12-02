@@ -293,7 +293,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             map.put("type", name.isSystemPartition() ? "SYSTEM" : "USER");
             map.put("name", new String(name.getName()));
             map.put("ringName", new String(name.getRingName()));
-            RingTopology ring = ringReader.getRing(name.getRingName());
+            RingTopology ring = ringReader.getRing(name.getRingName(), -1);
             List<Map<String, String>> ringMaps = new ArrayList<>();
             for (RingMemberAndHost entry : ring.entries) {
                 ringMaps.add(ImmutableMap.of("member", entry.ringMember.getMember(),
@@ -407,7 +407,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 });
 
                 List<Map<String, Object>> neighborStates = new ArrayList<>();
-                Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
+                Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName(), -1);
                 for (RingMember ringMember : neighboringRingMembers) {
 
                     RemoteVersionedState neighborState = partitionStripeProvider.getRemoteVersionedState(ringMember, name);

@@ -352,9 +352,9 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         RowType rowType) throws Exception {
 
         if (ringSize < 1) {
-            amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes());
+            amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes(), 0);
         } else {
-            amzaService.getRingWriter().ensureSubRing(ringName.getBytes(), ringSize);
+            amzaService.getRingWriter().ensureSubRing(ringName.getBytes(), ringSize, 0);
         }
 
         PartitionProperties partitionProperties = new PartitionProperties(Durability.fsync_never,

@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author jonathan.colt
@@ -34,17 +35,20 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
     private final AmzaService amzaService;
     private final long discoveryIntervalMillis;
     private final Set<RingMember> blacklistRingMembers;
+    private final AtomicInteger systemRingSize;
 
     public RoutingBirdAmzaDiscovery(Deployable deployable,
         String serviceName,
         AmzaService amzaService,
         long discoveryIntervalMillis,
-        Set<RingMember> blacklistRingMembers) {
+        Set<RingMember> blacklistRingMembers,
+        AtomicInteger systemRingSize) {
         this.deployable = deployable;
         this.serviceName = serviceName;
         this.amzaService = amzaService;
         this.discoveryIntervalMillis = discoveryIntervalMillis;
         this.blacklistRingMembers = blacklistRingMembers;
+        this.systemRingSize = systemRingSize;
     }
 
     public void start() {
@@ -80,6 +84,7 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
                         false);
                 }
             }
+            systemRingSize.set(selfConnections.getConnectionDescriptors().size());
         } catch (Exception x) {
             LOG.warn("Failed while calling routing bird discovery.", x);
         }

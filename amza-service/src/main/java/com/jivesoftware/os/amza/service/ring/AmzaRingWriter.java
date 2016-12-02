@@ -8,9 +8,9 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  */
 public interface AmzaRingWriter {
 
-    void ensureMaximalRing(byte[] ringName) throws Exception;
+    void ensureMaximalRing(byte[] ringName, long timeoutInMillis) throws Exception;
 
-    void ensureSubRing(byte[] ringName, int desiredRingSize) throws Exception;
+    void ensureSubRing(byte[] ringName, int desiredRingSize, long timeoutInMillis) throws Exception;
 
     void deregister(RingMember ringMember) throws Exception;
 

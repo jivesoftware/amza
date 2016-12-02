@@ -94,7 +94,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final AmzaPartitionWatcher amzaSystemPartitionWatcher;
     private final AmzaPartitionWatcher amzaStripedPartitionWatcher;
     private final AmzaAquariumProvider aquariumProvider;
-    private final AmzaSystemReady systemReady;
+    private final TakeFullySystemReady systemReady;
     private final Liveliness liveliness;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
@@ -118,7 +118,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         AmzaPartitionWatcher amzaSystemPartitionWatcher,
         AmzaPartitionWatcher amzaStripedPartitionWatcher,
         AmzaAquariumProvider aquariumProvider,
-        AmzaSystemReady systemReady,
+        TakeFullySystemReady systemReady,
         Liveliness liveliness) {
 
         this.amzaStats = amzaStats;
@@ -254,7 +254,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void createPartitionIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception {
         if (partitionCreator.createPartitionIfAbsent(partitionName, partitionProperties)) {
-            if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+            if (ringStoreReader.isMemberOfRing(partitionName.getRingName(), 0)) {
                 partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
                     takeCoordinator.stateChanged(ringStoreReader, versionedAquarium.getVersionedPartitionName());
                     return null;
@@ -265,7 +265,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     @Override
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
-        if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
+        if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName(), 0)) {
             throw new NotARingMemberException("Not a member of the ring for partition: " + partitionName);
         }
 
@@ -308,12 +308,12 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName, long waitForLeaderInMillis) throws Exception {
-        RingTopology ring = ringStoreReader.getRing(partitionName.getRingName());
+        RingTopology ring = ringStoreReader.getRing(partitionName.getRingName(), 0);
 
         long endAfterTimestamp = System.currentTimeMillis() + waitForLeaderInMillis;
         List<RingMemberAndHost> orderedPartitionHosts = new ArrayList<>();
         boolean disposed = false;
-        if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
+        if (ringStoreWriter.isMemberOfRing(partitionName.getRingName(), 0)) {
             do {
                 try {
                     partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
@@ -661,7 +661,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         dos.writeLong(versionedPartitionName.getPartitionVersion());
         dos.writeByte(1); // fully online
         bytes.increment();
-        RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName());
+        RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName(), -1);
         for (int i = 0; i < ring.entries.size(); i++) {
             if (ring.rootMemberIndex != i) {
                 RingMemberAndHost entry = ring.entries.get(i);

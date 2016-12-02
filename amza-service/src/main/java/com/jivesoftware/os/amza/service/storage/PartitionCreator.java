@@ -293,7 +293,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         systemWALStorage.rowScan(REGION_INDEX, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned && valueTimestamp != -1 && value != null) {
                 PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
-                if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName(), 0)) {
                     partitionNames.add(partitionName);
                 }
             }

@@ -133,21 +133,21 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         LOG.info("deregister ringMember:{}");
     }
 
-    public boolean isMemberOfRing(byte[] ringName) throws Exception {
-        return ringStoreReader.isMemberOfRing(ringName);
+    public boolean isMemberOfRing(byte[] ringName, long timeoutInMillis) throws Exception {
+        return ringStoreReader.isMemberOfRing(ringName, timeoutInMillis);
     }
 
     @Override
-    public void ensureMaximalRing(byte[] ringName) throws Exception {
-        ensureSubRing(ringName, ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING));
+    public void ensureMaximalRing(byte[] ringName, long timeoutInMillis) throws Exception {
+        ensureSubRing(ringName, ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING, timeoutInMillis), timeoutInMillis);
     }
 
     @Override
-    public void ensureSubRing(byte[] ringName, int desiredRingSize) throws Exception {
+    public void ensureSubRing(byte[] ringName, int desiredRingSize, long timeoutInMillis) throws Exception {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
-        int ringSize = ringStoreReader.getRingSize(ringName);
+        int ringSize = ringStoreReader.getRingSize(ringName, timeoutInMillis);
         if (ringSize < desiredRingSize) {
             LOG.info("Ring {} will grow, has {} desires {}", ringName, ringSize, desiredRingSize);
             buildRandomSubRing(ringName, desiredRingSize);
@@ -158,13 +158,13 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
-        RingTopology systemRing = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
+        RingTopology systemRing = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING, 0);
         if (systemRing.entries.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
 
         SetMultimap<String, RingMemberAndHost> subRackMembers = HashMultimap.create();
-        RingTopology subRing = ringStoreReader.getRing(ringName);
+        RingTopology subRing = ringStoreReader.getRing(ringName, 0);
         for (RingMemberAndHost entry : subRing.entries) {
             String rack = rackDistributionEnabled ? entry.ringHost.getRack() : "";
             subRackMembers.put(rack, entry);
@@ -202,14 +202,6 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         setInternal(ringName, Iterables.transform(subRackMembers.values(), input -> input.ringMember));
     }
 
-    private static long hash(byte[] bytes) {
-        long hashed = (long) Arrays.hashCode(bytes) << 32;
-        for (int i = 0; i < bytes.length; i++) {
-            hashed ^= (bytes[i] & 0xFF) << i;
-        }
-        return hashed;
-    }
-
     @Override
     public void addRingMember(byte[] ringName, RingMember ringMember) throws Exception {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
@@ -217,7 +209,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         byte[] key = ringStoreReader.key(ringName, ringMember);
         TimestampedValue had = systemWALStorage.getTimestampedValue(PartitionCreator.RING_INDEX, null, key);
         if (had == null) {
-            RingTopology ring = ringStoreReader.getRing(ringName);
+            RingTopology ring = ringStoreReader.getRing(ringName, -1);
             setInternal(ringName, Iterables.concat(Iterables.transform(ring.entries, input -> input.ringMember), Collections.singleton(ringMember)));
         }
     }

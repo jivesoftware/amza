@@ -305,14 +305,14 @@ public class AmzaServiceTest {
                 public Void call() throws Exception {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     if (node != null) {
-                        node.create(writeConsistency, partitionName, indexClassType, maxValueSizeInIndex, rowType);
-                        boolean tombstone = random.nextBoolean();
-                        String prefix = "a";
-                        String key = String.valueOf(random.nextInt(maxFields));
-                        byte[] indexPrefix = prefix.getBytes();
-                        byte[] indexKey = key.getBytes();
                         while (true) {
                             try {
+                                node.create(writeConsistency, partitionName, indexClassType, maxValueSizeInIndex, rowType);
+                                boolean tombstone = random.nextBoolean();
+                                String prefix = "a";
+                                String key = String.valueOf(random.nextInt(maxFields));
+                                byte[] indexPrefix = prefix.getBytes();
+                                byte[] indexKey = key.getBytes();
                                 node.update(writeConsistency, partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                                 Thread.sleep(delayBetweenUpdates);
                                 node.get(readConsistency, partitionName, indexPrefix, indexKey);

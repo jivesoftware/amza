@@ -93,7 +93,7 @@ public class AmzaUIEndpoints {
     @Path("/chord")
     public Response chord() {
         try {
-            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING, -1);
             List<List<Integer>> matrix = new ArrayList<>();
             for (RingMemberAndHost e1 : ring.entries) {
                 List<Integer> weights = new ArrayList<>();
@@ -146,7 +146,7 @@ public class AmzaUIEndpoints {
     @Path("/arc")
     public Response arc() {
         try {
-            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING, -1);
 
             Map<String, Integer> index = new HashMap<>();
             Map<String, Object> arcData = new HashMap<>();

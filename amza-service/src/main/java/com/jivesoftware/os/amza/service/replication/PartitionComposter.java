@@ -187,7 +187,7 @@ public class PartitionComposter implements RowChanges {
                 || !storageVersionProvider.isCurrentVersion(versionedPartitionName)) { // Partition Version
                 deletePartition(versionedPartitionName);
                 return true;
-            } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
+            } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName(), 0)) {
                 if (currentState == State.bootstrap || currentState == null) {
                     LOG.info("Composting {} state:{} because we are not a member of the ring",
                         versionedPartitionName, currentState);

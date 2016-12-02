@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.TakeFullySystemReady.SystemRingSizeProvider;
 import com.jivesoftware.os.amza.service.filer.DirectByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
@@ -39,7 +40,6 @@ import com.jivesoftware.os.amza.service.replication.StorageVersionProvider;
 import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.CacheId;
 import com.jivesoftware.os.amza.service.ring.RingSet;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -100,6 +100,7 @@ public class AmzaServiceInitializer {
 
         public int numberOfTakerThreads = 8;
 
+        public int systemRingSize = -1;
         public int systemReadyInitConcurrencyLevel = 8;
 
         public int corruptionParanoiaFactor = 10;
@@ -160,6 +161,7 @@ public class AmzaServiceInitializer {
         BAInterner interner,
         AquariumStats aquariumStats,
         AmzaStats amzaStats,
+        SystemRingSizeProvider systemRingSizeProvider,
         SickThreads sickThreads,
         SickPartitions sickPartitions,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
@@ -264,8 +266,26 @@ public class AmzaServiceInitializer {
         ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, numProc);
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, numProc);
 
+        List<WALUpdated> walUpdateDelegates = Lists.newCopyOnWriteArrayList();
+        WALUpdated walUpdated = (versionedPartitionName, txId) -> {
+            for (WALUpdated delegate : walUpdateDelegates) {
+                delegate.updated(versionedPartitionName, txId);
+            }
+        };
+
+        PartitionCreator partitionCreator = new PartitionCreator(
+            orderIdProvider,
+            partitionPropertyMarshaller,
+            partitionIndex,
+            systemWALStorage,
+            walUpdated,
+            allRowChanges,
+            interner);
+
+        TakeFullySystemReady systemReady = new TakeFullySystemReady(systemRingSizeProvider, partitionCreator, sickPartitions, sickThreads);
+
         AtomicLong nodeCacheId = new AtomicLong(0);
-        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(interner,
+        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(systemReady, interner,
             ringMember,
             ringsCache,
             ringMemberRingNamesCache,
@@ -308,22 +328,6 @@ public class AmzaServiceInitializer {
                 deltaMergeThreads);
         }
 
-        List<WALUpdated> walUpdateDelegates = Lists.newCopyOnWriteArrayList();
-        WALUpdated walUpdated = (versionedPartitionName, txId) -> {
-            for (WALUpdated delegate : walUpdateDelegates) {
-                delegate.updated(versionedPartitionName, txId);
-            }
-        };
-
-        PartitionCreator partitionCreator = new PartitionCreator(
-            orderIdProvider,
-            partitionPropertyMarshaller,
-            partitionIndex,
-            systemWALStorage,
-            walUpdated,
-            allRowChanges,
-            interner);
-
         long stripeMaxFreeWithinNBytes = config.rebalanceIfImbalanceGreaterThanNBytes / 2; //TODO config separately
         StorageVersionProvider storageVersionProvider = new StorageVersionProvider(interner,
             orderIdProvider,
@@ -361,7 +365,10 @@ public class AmzaServiceInitializer {
         long startupVersion = orderIdProvider.nextId();
         Member rootAquariumMember = ringMember.asAquariumMember();
         AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, orderIdProvider, walUpdated, rootAquariumMember, startupVersion);
-        AtQuorum livelinessAtQuorm = count -> count > ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
+        AtQuorum livelinessAtQuorm = count -> {
+            int ringSize = systemRingSizeProvider.get();
+            return ringSize > 0 && count > ringSize / 2;
+        };
         Liveliness liveliness = new Liveliness(aquariumStats,
             System::currentTimeMillis,
             livelinessStorage,
@@ -382,7 +389,8 @@ public class AmzaServiceInitializer {
             walUpdated,
             liveliness,
             config.aquariumLivelinessFeedEveryMillis,
-            awaitOnline, sickThreads);
+            awaitOnline,
+            sickThreads);
         amzaSystemPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
@@ -430,7 +438,6 @@ public class AmzaServiceInitializer {
         amzaSystemPartitionWatcher.watch(PartitionCreator.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaSystemPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
 
-        AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionCreator, sickPartitions, sickThreads);
         int systemReadyInitConcurrencyLevel = config.systemReadyInitConcurrencyLevel;
         for (int i = 0; i < systemReadyInitConcurrencyLevel; i++) {
             int index = i;

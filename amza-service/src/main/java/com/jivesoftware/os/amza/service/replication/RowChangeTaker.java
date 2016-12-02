@@ -19,7 +19,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALRow;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.AmzaSystemReady;
+import com.jivesoftware.os.amza.service.TakeFullySystemReady;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
@@ -66,7 +66,7 @@ public class RowChangeTaker implements RowChanges {
     private final int numberOfStripes;
     private final StorageVersionProvider storageVersionProvider;
     private final AmzaRingStoreReader amzaRingReader;
-    private final AmzaSystemReady systemReady;
+    private final TakeFullySystemReady systemReady;
     private final RingHost ringHost;
     private final RowsTaker systemRowsTaker;
     private final PartitionStripeProvider partitionStripeProvider;
@@ -99,7 +99,7 @@ public class RowChangeTaker implements RowChanges {
         int numberOfStripes,
         StorageVersionProvider storageVersionProvider,
         AmzaRingStoreReader amzaRingReader,
-        AmzaSystemReady systemReady,
+        TakeFullySystemReady systemReady,
         RingHost ringHost,
         RowsTaker systemRowsTaker,
         PartitionStripeProvider partitionStripeProvider,
@@ -169,7 +169,7 @@ public class RowChangeTaker implements RowChanges {
         cyaThreadPool.submit(() -> {
             while (true) {
                 try {
-                    Set<RingMember> desireRingMembers = amzaRingReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
+                    Set<RingMember> desireRingMembers = amzaRingReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING, -1);
                     for (RingMember ringMember : Sets.difference(desireRingMembers, stripedAvailableRowsReceivers.keySet())) {
                         systemAvailableRowsReceivers.compute(ringMember, (key, taker) -> {
                             if (taker == null) {
@@ -351,7 +351,7 @@ public class RowChangeTaker implements RowChanges {
                             }
 
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
-                            if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
+                            if (!amzaRingReader.isMemberOfRing(partitionName.getRingName(), system ? -1 : 0)) {
                                 RowsTaker rowsTaker = system ? systemRowsTaker : stripedRowsTaker;
                                 boolean invalidated = rowsTaker.invalidate(amzaRingReader.getRingMember(),
                                     remoteRingMember,

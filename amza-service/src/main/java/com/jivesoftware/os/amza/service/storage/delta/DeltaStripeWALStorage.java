@@ -619,7 +619,7 @@ public class DeltaStripeWALStorage {
 
         if (directApply && mergeDebt > 0) {
             long highestTxId = partitionStore.mergedTxId();
-            int takeFromFactor = ringReader.getTakeFromFactor(versionedPartitionName.getPartitionName().getRingName());
+            int takeFromFactor = ringReader.getTakeFromFactor(versionedPartitionName.getPartitionName().getRingName(), 0);
             int[] taken = { 0 };
             ackWaters.streamPartitionTxIds(versionedPartitionName, (member, txId) -> {
                 if (txId >= highestTxId) {

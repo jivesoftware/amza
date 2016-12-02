@@ -27,7 +27,7 @@ public class AmzaSyncOAuthValidatorInitializer {
         @BooleanDefault(true)
         boolean getOauthValidatorIsEnabled();
 
-        @BooleanDefault(true)
+        @BooleanDefault(false)
         boolean getOauthValidatorIsDryRun();
 
         @BooleanDefault(true)

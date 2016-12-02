@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This is still a work in progress.
@@ -53,19 +54,22 @@ public class AmzaDiscovery {
     private final String clusterName;
     private final InetAddress multicastGroup;
     private final int multicastPort;
+    private final AtomicInteger systemRingSize;
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2, new ThreadFactoryBuilder().setNameFormat("discovery-%d").build());
 
     public AmzaDiscovery(AmzaRingStoreReader ringStoreReader,
         AmzaRingStoreWriter ringStoreWriter,
         String clusterName,
         String multicastGroup,
-        int multicastPort) throws UnknownHostException {
+        int multicastPort,
+        AtomicInteger systemRingSize) throws UnknownHostException {
 
         this.ringStoreReader = ringStoreReader;
         this.ringStoreWriter = ringStoreWriter;
         this.clusterName = clusterName;
         this.multicastGroup = InetAddress.getByName(multicastGroup);
         this.multicastPort = multicastPort;
+        this.systemRingSize = systemRingSize;
     }
 
     public void start() throws IOException {
@@ -111,9 +115,10 @@ public class AmzaDiscovery {
 
                                 RingMember ringMember = new RingMember(member);
                                 allMemberSeen.add(ringMember);
+                                systemRingSize.set(allMemberSeen.size());
 
                                 RingMemberAndHost entry = null;
-                                RingTopology systemRing = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
+                                RingTopology systemRing = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING, -1);
                                 for (RingMemberAndHost iter : systemRing.entries) {
                                     if (iter.ringMember.equals(ringMember)) {
                                         entry = iter;

@@ -252,7 +252,7 @@ public class PartitionStripeProvider {
             return null;
         }
 
-        if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+        if (ringStoreReader.isMemberOfRing(partitionName.getRingName(), 0)) {
             return txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
                 Waterline leaderWaterline = versionedAquarium.awaitOnline(timeoutMillis).getLeaderWaterline();
                 if (!aquariumProvider.isOnline(leaderWaterline)) {

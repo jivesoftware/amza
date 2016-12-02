@@ -125,7 +125,7 @@ public class TakeCoordinator {
                     long updates = cyaLock.get();
                     try {
                         takeRingCoordinators.stream((ringName, takeRingCoordinator) -> {
-                            RingTopology ring = ringReader.getRing(ringName);
+                            RingTopology ring = ringReader.getRing(ringName, 0);
                             if (takeRingCoordinator.cya(ring)) {
                                 // whatever
                                 awakeRemoteTakers(ring, true);
@@ -205,7 +205,7 @@ public class TakeCoordinator {
             stripedUpdates.incrementAndGet();
         }
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
-        RingTopology ring = ringReader.getRing(ringName);
+        RingTopology ring = ringReader.getRing(ringName, system ? -1 : 0);
         ensureRingCoordinator(ringName, null, -1, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         for (Session session : takeSessions.values()) {
@@ -359,7 +359,7 @@ public class TakeCoordinator {
                     return true;
                 }
 
-                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName));
+                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, system ? -1 : 0));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
                         ring.allAvailableRowsStream(partitionStripeProvider,
@@ -387,7 +387,7 @@ public class TakeCoordinator {
                     if (system) {
                         ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
                     } else {
-                        ringReader.streamRingNames(remoteRingMember, ringNameStream);
+                        ringReader.streamRingNames(remoteRingMember, 0, ringNameStream);
                     }
                     lastScan = System.currentTimeMillis();
                 } else {
@@ -414,12 +414,12 @@ public class TakeCoordinator {
                         dirtyRings.stream((ringName, versionedPartitionNames) -> {
                             TakeRingCoordinator ringCoordinator = null;
                             if (system) {
-                                ringCoordinator = ensureRingCoordinator(ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName));
+                                ringCoordinator = ensureRingCoordinator(ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName, -1));
                             } else {
-                                RingSet ringSet = ringReader.getRingSet(remoteRingMember);
+                                RingSet ringSet = ringReader.getRingSet(remoteRingMember, 0);
                                 Integer ringHash = ringSet.ringNames.get(ringName, 0, ringName.length);
                                 if (ringHash != null) {
-                                    ringCoordinator = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName));
+                                    ringCoordinator = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, 0));
                                 }
                             }
                             if (ringCoordinator != null) {
@@ -537,7 +537,8 @@ public class TakeCoordinator {
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ringCoordinator = takeRingCoordinators.get(ringName);
         if (ringCoordinator != null) {
-            RingTopology ring = ringReader.getRing(ringName);
+            boolean system = versionedPartitionName.getPartitionName().isSystemPartition();
+            RingTopology ring = ringReader.getRing(ringName, system ? -1 : 0);
             ringCoordinator.cya(ring);
         }
     }

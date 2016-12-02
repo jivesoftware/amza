@@ -226,6 +226,8 @@ public class AmzaSyncMain {
 
             AmzaSyncUIService amzaSyncUIService = new AmzaSyncUIServiceInitializer().initialize(renderer,
                 syncSender,
+                syncConfig.getSyncSenderEnabled(),
+                syncConfig.getSyncReceiverEnabled(),
                 mapper);
 
             deployable.addEndpoints(LoadBalancerHealthCheckEndpoints.class);

@@ -58,6 +58,7 @@ import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.StringDefault;
 
@@ -156,10 +157,12 @@ public class EmbedAmzaServiceInitializer {
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner);
         AquariumStats aquariumStats = new AquariumStats();
 
+        AtomicInteger systemRingSize = new AtomicInteger(0);
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             baInterner,
             aquariumStats,
             amzaStats,
+            systemRingSize::get,
             sickThreads,
             sickPartitions,
             primaryRowMarshaller,
@@ -199,7 +202,10 @@ public class EmbedAmzaServiceInitializer {
                 serviceName,
                 amzaService,
                 amzaServiceConfig.discoveryIntervalMillis,
-                blacklistRingMembers);
+                blacklistRingMembers,
+                systemRingSize);
+        } else {
+            systemRingSize.set(amzaServiceConfig.systemRingSize);
         }
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(

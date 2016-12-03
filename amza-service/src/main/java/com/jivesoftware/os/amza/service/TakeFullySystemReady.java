@@ -149,6 +149,7 @@ public class TakeFullySystemReady implements AmzaSystemReady {
         if (ready.get()) {
             return;
         }
+        checkReady();
         if (timeoutInMillis == 0) {
             throw new FailedToAchieveQuorumException("System has not reached ready state");
         }

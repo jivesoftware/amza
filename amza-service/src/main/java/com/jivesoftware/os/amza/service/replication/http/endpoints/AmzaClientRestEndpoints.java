@@ -110,7 +110,7 @@ public class AmzaClientRestEndpoints {
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
                 } finally {
-                    closeStreams("configPartition", null, out);
+                    closeStreams(partitionName, "configPartition", null, out);
                 }
             });
             return chunkedOutput;
@@ -230,7 +230,7 @@ public class AmzaClientRestEndpoints {
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
-            closeStreams("commit", in, null);
+            closeStreams(partitionName, "commit", in, null);
         }
     }
 
@@ -264,7 +264,7 @@ public class AmzaClientRestEndpoints {
             } catch (Exception x) {
                 LOG.warn("Failed to stream gets", x);
             } finally {
-                closeStreams("get", in, out);
+                closeStreams(partitionName, "get", in, out);
             }
         });
         return chunkedOutput;
@@ -310,7 +310,7 @@ public class AmzaClientRestEndpoints {
             LOG.error("Failed to get ranges for stream scan", e);
             return Response.serverError().build();
         } finally {
-            closeStreams("scan", in, null);
+            closeStreams(partitionName, "scan", in, null);
         }
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
@@ -324,7 +324,7 @@ public class AmzaClientRestEndpoints {
             } catch (Exception x) {
                 LOG.warn("Failed to stream scan", x);
             } finally {
-                closeStreams("scan", null, out);
+                closeStreams(partitionName, "scan", null, out);
             }
         });
         return chunkedOutput;
@@ -370,7 +370,7 @@ public class AmzaClientRestEndpoints {
             LOG.error("Failed to get ranges for compressed stream scan", e);
             return Response.serverError().build();
         } finally {
-            closeStreams("scanCompressed", in, null);
+            closeStreams(partitionName, "scanCompressed", in, null);
         }
 
         try {
@@ -401,6 +401,7 @@ public class AmzaClientRestEndpoints {
         @PathParam("limit") int limit,
         InputStream inputStream) {
 
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
             FilerInputStream in = null;
@@ -408,12 +409,12 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), limit, in, out);
+                client.takeFromTransactionId(partitionName, limit, in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takeFromTransactionId", x);
             } finally {
-                closeStreams("takeFromTransactionId", in, out);
+                closeStreams(partitionName, "takeFromTransactionId", in, out);
             }
         });
         return chunkedOutput;
@@ -427,6 +428,7 @@ public class AmzaClientRestEndpoints {
         @PathParam("limit") int limit,
         InputStream inputStream) {
 
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
 
@@ -435,30 +437,30 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName, interner), limit, in, out);
+                client.takePrefixFromTransactionId(partitionName, limit, in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takePrefixFromTransactionId", x);
             } finally {
-                closeStreams("takePrefixFromTransactionId", in, out);
+                closeStreams(partitionName, "takePrefixFromTransactionId", in, out);
             }
         });
         return chunkedOutput;
     }
 
-    private void closeStreams(String context, ICloseable in, ICloseable out) {
+    private void closeStreams(PartitionName partitionName, String context, ICloseable in, ICloseable out) {
         if (in != null) {
             try {
                 in.close();
             } catch (Exception x) {
-                LOG.error("Failed to close input stream for {}", new Object[] { context }, x);
+                LOG.error("Failed to close input stream for {} {}", new Object[] { partitionName, context }, x);
             }
         }
         if (out != null) {
             try {
                 out.close();
             } catch (Exception x) {
-                LOG.error("Failed to close output stream for {}", new Object[] { context }, x);
+                LOG.error("Failed to close output stream for {} {}", new Object[] { partitionName, context }, x);
             }
         }
     }

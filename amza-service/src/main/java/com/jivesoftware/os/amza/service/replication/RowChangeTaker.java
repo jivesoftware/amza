@@ -148,11 +148,12 @@ public class RowChangeTaker implements RowChanges {
 
     public void start() throws Exception {
 
-        scheduleConsumer(systemConsumerLock, consumerThreadPool, systemAvailableRowsReceivers, versionedPartitionName -> true);
+        scheduleConsumer(systemConsumerLock, consumerThreadPool, true, systemAvailableRowsReceivers, versionedPartitionName -> true);
         for (int i = 0; i < numberOfStripes; i++) {
             int consumerForStripe = i;
             scheduleConsumer(stripedConsumerLocks[i],
                 consumerThreadPool,
+                false,
                 stripedAvailableRowsReceivers,
                 versionedPartitionName -> {
 
@@ -239,6 +240,7 @@ public class RowChangeTaker implements RowChanges {
 
     private void scheduleConsumer(Object consumerLock,
         ExecutorService consumerThreadPool,
+        boolean system,
         ConcurrentHashMap<RingMember, AvailableRowsReceiver> availableRowsReceivers,
         Predicate<VersionedPartitionName> partitionNamePredicate) throws InterruptedException {
 
@@ -246,6 +248,9 @@ public class RowChangeTaker implements RowChanges {
             while (true) {
                 boolean consumed = false;
                 try {
+                    if (!system) {
+                        systemReady.await(10_000L); //TODO config
+                    }
 
                     for (RowChangeTaker.AvailableRowsReceiver availableRowsReceiver : availableRowsReceivers.values()) {
                         consumed |= availableRowsReceiver.consume(partitionNamePredicate);
@@ -332,6 +337,9 @@ public class RowChangeTaker implements RowChanges {
         public void run() {
             while (!disposed.get()) {
                 try {
+                    if (!system) {
+                        systemReady.await(10_000L); //TODO config
+                    }
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
                     amzaStats.longPolled(remoteRingMember);
                     availableRowsTaker.availableRowsStream(amzaRingReader.getRingMember(),

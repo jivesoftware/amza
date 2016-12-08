@@ -192,7 +192,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         }
     }
 
-    private static File convertBase64toPartitionVersion(File file, BAInterner interner) throws IOException {
+    private static File convertBase64toPartitionVersion(File file, BAInterner interner) throws Exception {
 
         String filename = file.getName();
         int firstHyphen = filename.indexOf('-');
@@ -212,7 +212,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         return null;
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
         System.out.println(convertBase64toPartitionVersion(
             new File("/example/prefix-active-" + new VersionedPartitionName(new PartitionName(false, "abc".getBytes(), "def".getBytes()), 123L).toBase64()),
             new BAInterner()));

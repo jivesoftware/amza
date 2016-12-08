@@ -209,7 +209,7 @@ class PartitionDelta {
         byte[] value,
         long valueTimestamp,
         boolean valueTombstone,
-        long valueVersion) {
+        long valueVersion) throws InterruptedException {
 
         WALPointer pointer;
         int valueLength = (value == null) ? 0 : value.length;

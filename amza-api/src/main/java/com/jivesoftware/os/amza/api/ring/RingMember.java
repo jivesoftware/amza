@@ -44,7 +44,7 @@ public class RingMember implements Comparable<RingMember> {
         return 1 + memberAsBytes.length;
     }
 
-    public static RingMember fromBytes(byte[] bytes, int offset, int length, BAInterner interner) {
+    public static RingMember fromBytes(byte[] bytes, int offset, int length, BAInterner interner) throws InterruptedException {
         if (bytes != null && bytes[offset] == 0) {
             byte[] interned = interner.intern(bytes, offset + 1, length - 1);
             String member = new String(interned, StandardCharsets.UTF_8);
@@ -58,7 +58,7 @@ public class RingMember implements Comparable<RingMember> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static RingMember fromBase64(String base64, BAInterner interner) {
+    public static RingMember fromBase64(String base64, BAInterner interner) throws InterruptedException {
         byte[] bytes = BaseEncoding.base64Url().decode(base64);
         return fromBytes(bytes, 0, bytes.length, interner);
     }

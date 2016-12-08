@@ -372,7 +372,7 @@ public class AmzaSyncSender {
         }
     }
 
-    private PartitionName cursorToPartitionName(byte[] key) {
+    private PartitionName cursorToPartitionName(byte[] key) throws InterruptedException {
         int fromPartitionLength = UIO.bytesUnsignedShort(key, 0);
         int toPartitionLength = UIO.bytesUnsignedShort(key, 2 + fromPartitionLength);
         byte[] toPartitionBytes = new byte[toPartitionLength];

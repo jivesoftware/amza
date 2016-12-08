@@ -37,6 +37,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -182,7 +183,7 @@ public class TakeCoordinator {
         }
     }
 
-    public void expunged(VersionedPartitionName versionedPartitionName) {
+    public void expunged(VersionedPartitionName versionedPartitionName) throws InterruptedException {
         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(versionedPartitionName.getPartitionName().getRingName());
         if (takeRingCoordinator != null) {
             takeRingCoordinator.expunged(versionedPartitionName);
@@ -225,7 +226,7 @@ public class TakeCoordinator {
         updateInternal(ringReader, versionedPartitionName, 0, true);
     }
 
-    public long getRingCallCount(byte[] ringName) {
+    public long getRingCallCount(byte[] ringName) throws InterruptedException {
         TakeRingCoordinator ringCoordinator = takeRingCoordinators.get(ringName);
         if (ringCoordinator != null) {
             return ringCoordinator.getCallCount();
@@ -234,7 +235,7 @@ public class TakeCoordinator {
         }
     }
 
-    public long getPartitionCallCount(VersionedPartitionName versionedPartitionName) {
+    public long getPartitionCallCount(VersionedPartitionName versionedPartitionName) throws InterruptedException {
         TakeRingCoordinator ringCoordinator = takeRingCoordinators.get(versionedPartitionName.getPartitionName().getRingName());
         if (ringCoordinator != null) {
             return ringCoordinator.getPartitionCallCount(versionedPartitionName);
@@ -281,7 +282,11 @@ public class TakeCoordinator {
         RingTopology get() throws Exception;
     }
 
-    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, BAHash<TakeRingCoordinator> stackCache, int ringHash, RingSupplier ringSupplier) {
+    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName,
+        BAHash<TakeRingCoordinator> stackCache,
+        int ringHash,
+        RingSupplier ringSupplier) throws InterruptedException {
+
         TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringHash, ringName, 0, ringName.length);
         if (ringCoordinator == null) {
             ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
@@ -396,6 +401,7 @@ public class TakeCoordinator {
                         dirtySet = session.dirtySet.getAndSet(null);
                     }
                     if (dirtySet != null && !dirtySet.isEmpty()) {
+                        Semaphore dirtyRingsSemaphore = new Semaphore(Short.MAX_VALUE, true);
                         BAHash<List<VersionedPartitionName>> dirtyRings = new BAHash<>(
                             new BAHMapState<>(10, true, BAHMapState.NIL),
                             BAHasher.SINGLETON,
@@ -411,7 +417,7 @@ public class TakeCoordinator {
                             dirty.add(versionedPartitionName);
                         }
 
-                        dirtyRings.stream((ringName, versionedPartitionNames) -> {
+                        dirtyRings.stream(dirtyRingsSemaphore, (ringName, versionedPartitionNames) -> {
                             TakeRingCoordinator ringCoordinator = null;
                             if (system) {
                                 ringCoordinator = ensureRingCoordinator(ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName, -1));

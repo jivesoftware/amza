@@ -10,7 +10,7 @@ public class BAInterner {
 
     private final ConcurrentBAHash<byte[]> interned = new ConcurrentBAHash<>(3, false, 1024);
 
-    public byte[] intern(byte[] bytes, int offset, int length) {
+    public byte[] intern(byte[] bytes, int offset, int length) throws InterruptedException {
         if (bytes == null || length == -1) {
             return null;
         }

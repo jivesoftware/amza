@@ -35,7 +35,7 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         return 1 + 4 + partitionName.sizeInBytes() + 8;
     }
 
-    public static VersionedPartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) throws IOException {
+    public static VersionedPartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) throws Exception {
         int o = offset;
         if (bytes[o] == 0) { // version
             o++;
@@ -60,7 +60,7 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static VersionedPartitionName fromBase64(String base64, BAInterner interner) throws IOException {
+    public static VersionedPartitionName fromBase64(String base64, BAInterner interner) throws Exception {
         return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
     }
 

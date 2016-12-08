@@ -45,7 +45,7 @@ public class PartitionName implements Comparable<PartitionName> {
         return 1 + 1 + 4 + ringName.length + 4 + name.length;
     }
 
-    public static PartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) {
+    public static PartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) throws InterruptedException {
         int o = offset;
         if (bytes[o] == 0) { // version
             o++;
@@ -76,7 +76,7 @@ public class PartitionName implements Comparable<PartitionName> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static PartitionName fromBase64(String base64, BAInterner interner) {
+    public static PartitionName fromBase64(String base64, BAInterner interner) throws InterruptedException {
         return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
     }
 

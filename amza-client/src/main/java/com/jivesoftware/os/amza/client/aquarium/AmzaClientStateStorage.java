@@ -9,15 +9,20 @@ import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.client.http.AmzaClientCommitable;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  *
@@ -37,12 +42,16 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
     private final long abandonLeaderSolutionAfterNMillis;
     private final long abandonSolutionAfterNMillis;
 
+    private final ConcurrentSkipListMap<byte[], WALValue> cache = new ConcurrentSkipListMap<>(KeyUtil::compare);
+    private final AtomicBoolean cacheInitialized = new AtomicBoolean(false);
+
     public AmzaClientStateStorage(PartitionClientProvider partitionClientProvider,
         String serviceName,
         byte[] context,
         int aquariumStateStripes,
         long additionalSolverAfterNMillis,
-        long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis) {
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis) {
         this.partitionClientProvider = partitionClientProvider;
         this.serviceName = serviceName;
         this.context = context;
@@ -52,22 +61,52 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
         this.abandonSolutionAfterNMillis = abandonSolutionAfterNMillis;
     }
 
+    public void init() throws Exception {
+        if (cacheInitialized.compareAndSet(false, true)) {
+            byte[] fromKey = stateKey(null, null, null);
+            stateClient().scan(Consistency.quorum, false,
+                keyRangeStream -> keyRangeStream.stream(null, fromKey, null, WALKey.prefixUpperExclusive(fromKey)),
+                (prefix, key, value, timestamp, version) -> {
+                    cache.put(key, new WALValue(RowType.primary, value, timestamp, false, version));
+                    return true;
+                },
+                additionalSolverAfterNMillis,
+                abandonLeaderSolutionAfterNMillis,
+                abandonSolutionAfterNMillis,
+                Optional.empty());
+        } else {
+            throw new IllegalStateException("Already initialized, please reset first");
+        }
+    }
+
+    public void reset() {
+        if (cacheInitialized.compareAndSet(true, false)) {
+            cache.clear();
+        }
+    }
+
     @Override
     public boolean scan(Member rootMember, Member otherMember, Long lifecycle, StateStream<Long> stream) throws Exception {
+        if (!cacheInitialized.get()) {
+            throw new IllegalStateException("Not initialized yet");
+        }
+
         byte[] fromKey = stateKey(rootMember, lifecycle, otherMember);
-        return stateClient().scan(Consistency.quorum, false,
-            keyRangeStream -> keyRangeStream.stream(null, fromKey, null, WALKey.prefixUpperExclusive(fromKey)),
-            (prefix, key, value, timestamp, version) -> {
-                return streamStateKey(key,
-                    (rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
-                        State state = State.fromSerializedForm(value[0]);
-                        return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, timestamp, version);
-                    });
-            },
-            additionalSolverAfterNMillis,
-            abandonLeaderSolutionAfterNMillis,
-            abandonSolutionAfterNMillis,
-            Optional.empty());
+        byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
+        for (Entry<byte[], WALValue> entry : cache.subMap(fromKey, toKey).entrySet()) {
+            byte[] key = entry.getKey();
+            WALValue walValue = entry.getValue();
+            byte[] value = walValue.getValue();
+            boolean result = streamStateKey(key,
+                (rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
+                    State state = State.fromSerializedForm(value[0]);
+                    return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, walValue.getTimestampId(), walValue.getVersion());
+                });
+            if (!result) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -81,11 +120,14 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
                 return true;
             });
         if (result && commitables.size() > 0) {
+            boolean[] dirty = { false };
             stateClient().commit(Consistency.quorum,
                 null,
                 commitKeyValueStream -> {
                     for (AmzaClientCommitable commitable : commitables) {
-                        if (!commitKeyValueStream.commit(commitable.key, commitable.value, commitable.timestamp, false)) {
+                        if (commitKeyValueStream.commit(commitable.key, commitable.value, commitable.timestamp, false)) {
+                            dirty[0] = true;
+                        } else {
                             return false;
                         }
                     }
@@ -94,6 +136,10 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
                 additionalSolverAfterNMillis,
                 abandonSolutionAfterNMillis,
                 Optional.empty());
+            if (dirty[0]) {
+                reset();
+                init();
+            }
             return true;
         } else {
             return false;

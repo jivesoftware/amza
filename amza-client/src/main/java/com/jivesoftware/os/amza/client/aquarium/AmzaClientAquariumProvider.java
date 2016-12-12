@@ -13,7 +13,6 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
-import com.jivesoftware.os.aquarium.interfaces.StateStorage;
 import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -37,27 +36,15 @@ public class AmzaClientAquariumProvider {
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
 
-    /*
-    AtQuorum atQuorum = count -> {
-        ConnectionDescriptors descriptors = connectionDescriptorProvider.getConnections("");
-        int ringSize = 1 + descriptors.getConnectionDescriptors().size();
-        return count > ringSize / 2;
-    };
+    private static final TransitionQuorum CURRENT_TRANSITION_QUORUM =
+        (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
+            return writeCurrent.put(existing.getMember(), nextState, nextTimestamp);
+        };
+    private static final TransitionQuorum DESIRED_TRANSITION_QUORUM =
+        (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
+            return writeDesired.put(existing.getMember(), nextState, nextTimestamp);
+        };
 
-    AmzaClientLivelinessStorage livelinessStorage = new AmzaClientLivelinessStorage(stateClient(name),
-        stateContext(name, LIVELINESS),
-        member,
-        startupVersion,
-        additionalSolverAfterNMillis,
-        abandonLeaderSolutionAfterNMillis,
-        abandonSolutionAfterNMillis);
-    Liveliness liveliness = new Liveliness(System::currentTimeMillis,
-        livelinessStorage,
-        member,
-        atQuorum,
-        deadAfterMillis,
-        firstLivelinessTimestamp);
-     */
     private final AquariumStats aquariumStats;
     private final String serviceName;
     private final PartitionClientProvider partitionClientProvider;
@@ -77,7 +64,7 @@ public class AmzaClientAquariumProvider {
     private final long abandonSolutionAfterNMillis;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private final Map<String, Aquarium> aquariums = Maps.newConcurrentMap();
+    private final Map<String, ClientAquarium> aquariums = Maps.newConcurrentMap();
     private final Map<String, TimestampedLivelyEndState> livelyEndStates = Maps.newConcurrentMap();
     private final Set<String> names = new CopyOnWriteArraySet<>();
 
@@ -160,10 +147,7 @@ public class AmzaClientAquariumProvider {
                                 allOnline = false;
                             }
 
-                            Aquarium aquarium = getAquarium(name);
-                            aquarium.acknowledgeOther();
-                            aquarium.tapTheGlass();
-                            LivelyEndState livelyEndState = aquarium.livelyEndState();
+                            LivelyEndState livelyEndState = updateAndFetchLivelyEndState(name);
                             timestampedLivelyEndState = new TimestampedLivelyEndState(livelyEndState, System.currentTimeMillis());
                             livelyEndStates.put(name, timestampedLivelyEndState);
                         }
@@ -225,35 +209,43 @@ public class AmzaClientAquariumProvider {
         }
     }
 
-    private Aquarium getAquarium(String name) throws Exception {
-        return aquariums.computeIfAbsent(name, s -> {
+    private LivelyEndState updateAndFetchLivelyEndState(String name) throws Exception {
+        ClientAquarium clientAquarium = aquariums.computeIfAbsent(name, s -> {
             try {
-                TransitionQuorum currentTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
-                    return writeCurrent.put(existing.getMember(), nextState, nextTimestamp);
-                };
-                TransitionQuorum desiredTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
-                    return writeDesired.put(existing.getMember(), nextState, nextTimestamp);
-                };
-                return new Aquarium(aquariumStats,
-                    orderIdProvider,
-                    currentStateStorage(name),
-                    desiredStateStorage(name),
-                    currentTransitionQuorum,
-                    desiredTransitionQuorum,
-                    liveliness,
-                    member1 -> 0L,
-                    Long.class,
-                    atQuorum,
-                    isCurrentMember,
-                    member,
-                    awaitLivelyEndState);
+                AmzaClientStateStorage currentStateStorage = currentStateStorage(name);
+                AmzaClientStateStorage desiredStateStorage = desiredStateStorage(name);
+                return new ClientAquarium(
+                    new Aquarium(aquariumStats,
+                        orderIdProvider,
+                        currentStateStorage,
+                        desiredStateStorage,
+                        CURRENT_TRANSITION_QUORUM,
+                        DESIRED_TRANSITION_QUORUM,
+                        liveliness,
+                        member1 -> 0L,
+                        Long.class,
+                        atQuorum,
+                        isCurrentMember,
+                        member,
+                        awaitLivelyEndState),
+                    currentStateStorage,
+                    desiredStateStorage);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         });
+
+        clientAquarium.init();
+        try {
+            clientAquarium.aquarium.acknowledgeOther();
+            clientAquarium.aquarium.tapTheGlass();
+            return clientAquarium.aquarium.livelyEndState();
+        } finally {
+            clientAquarium.reset();
+        }
     }
 
-    private StateStorage<Long> currentStateStorage(String name) throws Exception {
+    private AmzaClientStateStorage currentStateStorage(String name) throws Exception {
         return new AmzaClientStateStorage(partitionClientProvider,
             serviceName,
             stateContext(serviceName, name, CURRENT),
@@ -262,7 +254,7 @@ public class AmzaClientAquariumProvider {
             abandonSolutionAfterNMillis);
     }
 
-    private StateStorage<Long> desiredStateStorage(String name) throws Exception {
+    private AmzaClientStateStorage desiredStateStorage(String name) throws Exception {
         return new AmzaClientStateStorage(partitionClientProvider,
             serviceName,
             stateContext(serviceName, name, DESIRED),
@@ -288,6 +280,30 @@ public class AmzaClientAquariumProvider {
         UIO.unsignedShortBytes(nameBytes.length, context, 0);
         System.arraycopy(nameBytes, 0, context, 2, nameBytes.length);
         return context;
+    }
+
+    private static class ClientAquarium {
+        private final Aquarium aquarium;
+        private final AmzaClientStateStorage currentStateStorage;
+        private final AmzaClientStateStorage desiredStateStorage;
+
+        private ClientAquarium(Aquarium aquarium,
+            AmzaClientStateStorage currentStateStorage,
+            AmzaClientStateStorage desiredStateStorage) {
+            this.aquarium = aquarium;
+            this.currentStateStorage = currentStateStorage;
+            this.desiredStateStorage = desiredStateStorage;
+        }
+
+        private void reset() {
+            currentStateStorage.reset();
+            desiredStateStorage.reset();
+        }
+
+        public void init() throws Exception {
+            currentStateStorage.init();
+            desiredStateStorage.init();
+        }
     }
 
 }

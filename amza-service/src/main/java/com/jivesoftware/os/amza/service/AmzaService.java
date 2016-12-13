@@ -252,7 +252,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public void createPartitionIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception {
+    public boolean createPartitionIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception {
         if (partitionCreator.createPartitionIfAbsent(partitionName, partitionProperties)) {
             if (ringStoreReader.isMemberOfRing(partitionName.getRingName(), 0)) {
                 partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
@@ -260,6 +260,9 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     return null;
                 });
             }
+            return true;
+        } else {
+            return false;
         }
     }
 
@@ -418,6 +421,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
         return partitionCreator.getProperties(partitionName);
+    }
+
+    @Override
+    public void updateProperties(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception {
+        partitionCreator.updatePartitionPropertiesIfNecessary(partitionName, partitionProperties);
     }
 
     @Override

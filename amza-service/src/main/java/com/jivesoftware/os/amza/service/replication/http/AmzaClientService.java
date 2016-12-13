@@ -52,11 +52,12 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public RingTopology configPartition(PartitionName partitionName, PartitionProperties partitionProperties, int ringSize) throws
-        Exception {
+    public RingTopology configPartition(PartitionName partitionName, PartitionProperties partitionProperties, int ringSize) throws Exception {
         byte[] ringNameBytes = partitionName.getRingName();
         ringWriter.ensureSubRing(ringNameBytes, ringSize, 0);
-        partitionProvider.createPartitionIfAbsent(partitionName, partitionProperties);
+        if (!partitionProvider.createPartitionIfAbsent(partitionName, partitionProperties)) {
+            partitionProvider.updateProperties(partitionName, partitionProperties);
+        }
         return ringReader.getRing(partitionName.getRingName(), 0);
     }
 

@@ -10,11 +10,13 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  */
 public interface PartitionProvider {
 
-    void createPartitionIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
+    boolean createPartitionIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
 
     Partition getPartition(PartitionName partitionName) throws Exception;
 
     PartitionProperties getProperties(PartitionName partitionName) throws Exception;
+
+    void updateProperties(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
 
     RingMember awaitLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception;
 

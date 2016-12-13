@@ -10,6 +10,7 @@ import com.jivesoftware.os.mlogger.core.AtomicCounter;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
+
 import java.util.AbstractMap;
 import java.util.Map.Entry;
 import java.util.Random;
@@ -245,6 +246,8 @@ public class AmzaBotRandomOpService {
         LOG.info("Snapshot frequency: {}", config.getSnapshotFrequency());
         LOG.info("Client ordering: {}", config.getClientOrdering());
         LOG.info("Batch factor: {}", config.getBatchFactor());
+        LOG.info("Tombstone timestamp age: {}ms", config.getTombstoneTimestampAgeInMillis());
+        LOG.info("Tombstone timestamp interval: {}ms", config.getTombstoneTimestampIntervalMillis());
 
         if (!config.getEnabled()) {
             LOG.warn("Not starting random operations; not enabled.");

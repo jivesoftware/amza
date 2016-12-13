@@ -52,4 +52,12 @@ public interface AmzaBotRandomOpConfig extends Config {
     int getBatchFactor();
     void setBatchFactor(int value);
 
+    @IntDefault(24 * 60 * 60 * 1_000)
+    int getTombstoneTimestampAgeInMillis();
+    void setTombstoneTimestampAgeInMillis(int value);
+
+    @IntDefault(12 * 60 * 60 * 1_000)
+    int getTombstoneTimestampIntervalMillis();
+    void setTombstoneTimestampIntervalMillis(int value);
+
 }

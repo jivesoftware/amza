@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,8 @@ public class AmzaBotService {
     private final Consistency consistency;
     private final String partitionNameName;
     private final int ringSize;
+    private final long tombstoneTimestampAgeInMillis;
+    private final long tombstoneTimestampIntervalMillis;
 
     private PartitionClient partitionClient;
 
@@ -41,7 +44,9 @@ public class AmzaBotService {
         Durability durability,
         Consistency consistency,
         String partitionNameName,
-        int ringSize) {
+        int ringSize,
+        long tombstoneTimestampAgeInMillis,
+        long tombstoneTimestampIntervalMillis) {
         this.config = config;
         this.partitionClientProvider = partitionClientProvider;
         this.orderIdProvider = orderIdProvider;
@@ -49,13 +54,15 @@ public class AmzaBotService {
         this.consistency = consistency;
         this.partitionNameName = partitionNameName;
         this.ringSize = ringSize;
+        this.tombstoneTimestampAgeInMillis = tombstoneTimestampAgeInMillis;
+        this.tombstoneTimestampIntervalMillis = tombstoneTimestampIntervalMillis;
     }
 
     private void initialize() throws Exception {
         PartitionProperties partitionProperties = new PartitionProperties(
             durability,
-            0,
-            0,
+            tombstoneTimestampAgeInMillis,
+            tombstoneTimestampIntervalMillis,
             0,
             0,
             0,

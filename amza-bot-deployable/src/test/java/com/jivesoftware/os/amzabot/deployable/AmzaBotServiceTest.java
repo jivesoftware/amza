@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Map;
@@ -21,6 +22,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+
 import org.merlin.config.BindInterfaceToConfiguration;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -67,7 +69,9 @@ public class AmzaBotServiceTest {
             Durability.fsync_async,
             Consistency.leader_quorum,
             "amzabot-service-test",
-            config.getRingSize());
+            config.getRingSize(),
+            0,
+            0);
     }
 
     @Test

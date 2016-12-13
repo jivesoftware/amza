@@ -17,10 +17,12 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.mlogger.core.AtomicCounter;
 import com.jivesoftware.os.mlogger.core.ValueType;
+
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+
 import org.merlin.config.BindInterfaceToConfiguration;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
@@ -74,6 +76,8 @@ public class AmzaBotRandomOpTest {
         config.setSnapshotFrequency(10);
         config.setClientOrdering(false);
         config.setBatchFactor(100);
+        config.setTombstoneTimestampAgeInMillis(60 * 60 * 1_000);
+        config.setTombstoneTimestampIntervalMillis(30 * 60 * 1_000);
 
         amzaKeyClearingHouse = new AmzaKeyClearingHouse();
         service = new AmzaBotRandomOpService(
@@ -84,7 +88,9 @@ public class AmzaBotRandomOpTest {
                 Durability.valueOf(config.getDurability()),
                 Consistency.valueOf(config.getConsistency()),
                 "amzabot-randomop-test",
-                config.getRingSize()),
+                config.getRingSize(),
+                config.getTombstoneTimestampAgeInMillis(),
+                config.getTombstoneTimestampIntervalMillis()),
             amzaKeyClearingHouse);
         service.start();
     }

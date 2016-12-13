@@ -48,6 +48,7 @@ import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProv
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
+
 import java.io.File;
 import java.util.Arrays;
 import java.util.UUID;
@@ -124,7 +125,9 @@ public class AmzaBotMain {
                 Durability.fsync_async,
                 Consistency.leader_quorum,
                 "amzabot-rest",
-                amzaBotConfig.getRingSize());
+                amzaBotConfig.getRingSize(),
+                0,
+                0);
 
             OrderIdProvider orderIdProviderRandomOp = () -> -1L;
             if (amzaBotRandomOpConfig.getClientOrdering()) {
@@ -141,7 +144,9 @@ public class AmzaBotMain {
                     Durability.valueOf(amzaBotRandomOpConfig.getDurability()),
                     Consistency.valueOf(amzaBotRandomOpConfig.getConsistency()),
                     "amzabot-randomops-" + UUID.randomUUID().toString(),
-                    amzaBotRandomOpConfig.getRingSize()),
+                    amzaBotRandomOpConfig.getRingSize(),
+                    amzaBotRandomOpConfig.getTombstoneTimestampAgeInMillis(),
+                    amzaBotRandomOpConfig.getTombstoneTimestampIntervalMillis()),
                 amzaKeyClearingHousePool.genAmzaKeyClearingHouse());
             amzaBotRandomOpService.start();
 

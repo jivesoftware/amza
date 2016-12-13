@@ -13,6 +13,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
+
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -70,7 +71,9 @@ public class AmzaBotCoalmineService {
                 Durability.valueOf(config.getDurability()),
                 Consistency.valueOf(config.getConsistency()),
                 "amzabot-coalmine-" + UUID.randomUUID().toString(),
-                config.getRingSize()),
+                config.getRingSize(),
+                0,
+                0),
             amzaKeyClearingHousePool);
     }
 

@@ -46,7 +46,7 @@ public class PartitionStore implements RangeScannable {
     private final WALStorage walStorage;
     private final AtomicLong loadedAtDeltaWALId = new AtomicLong(Integer.MIN_VALUE);
 
-    private PartitionProperties properties;
+    private volatile PartitionProperties properties;
 
     public PartitionStore(AmzaStats amzaStats,
         TimestampedOrderIdProvider orderIdProvider,
@@ -84,10 +84,11 @@ public class PartitionStore implements RangeScannable {
                 } else if (loaded != Integer.MIN_VALUE) {
                     return true;
                 }
+                PartitionProperties stackProperties = this.properties;
                 boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
-                boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.replicated;
-                walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, properties.maxValueSizeInIndex, stripe);
-                if (properties.forceCompactionOnStartup) {
+                boolean truncateToEndOfMergeMarker = deltaWALId != -1 && stackProperties.replicated;
+                walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stackProperties.maxValueSizeInIndex, stripe);
+                if (stackProperties.forceCompactionOnStartup) {
                     compactTombstone(amzaStats,
                         true,
                         baseKey,
@@ -145,22 +146,23 @@ public class PartitionStore implements RangeScannable {
         long ttlCompactTimestamp = 0;
         long ttlCheckVersion = 0;
         long ttlCompactVersion = 0;
-        if (properties != null) {
-            if (properties.tombstoneTimestampAgeInMillis > 0) {
-                tombstoneCheckTimestamp = getTimestampId(properties.tombstoneTimestampAgeInMillis + properties.tombstoneTimestampIntervalMillis);
-                tombstoneCompactTimestamp = getTimestampId(properties.tombstoneTimestampAgeInMillis);
+        PartitionProperties stackProperties = this.properties;
+        if (stackProperties != null) {
+            if (stackProperties.tombstoneTimestampAgeInMillis > 0) {
+                tombstoneCheckTimestamp = getTimestampId(stackProperties.tombstoneTimestampAgeInMillis + stackProperties.tombstoneTimestampIntervalMillis);
+                tombstoneCompactTimestamp = getTimestampId(stackProperties.tombstoneTimestampAgeInMillis);
             }
-            if (properties.tombstoneVersionAgeInMillis > 0) {
-                tombstoneCheckVersion = getVersion(properties.tombstoneVersionAgeInMillis + properties.tombstoneVersionIntervalMillis);
-                tombstoneCompactVersion = getVersion(properties.tombstoneVersionAgeInMillis);
+            if (stackProperties.tombstoneVersionAgeInMillis > 0) {
+                tombstoneCheckVersion = getVersion(stackProperties.tombstoneVersionAgeInMillis + stackProperties.tombstoneVersionIntervalMillis);
+                tombstoneCompactVersion = getVersion(stackProperties.tombstoneVersionAgeInMillis);
             }
-            if (properties.ttlTimestampAgeInMillis > 0) {
-                ttlCheckTimestamp = getTimestampId(properties.ttlTimestampAgeInMillis + properties.ttlTimestampIntervalMillis);
-                ttlCompactTimestamp = getTimestampId(properties.ttlTimestampAgeInMillis);
+            if (stackProperties.ttlTimestampAgeInMillis > 0) {
+                ttlCheckTimestamp = getTimestampId(stackProperties.ttlTimestampAgeInMillis + stackProperties.ttlTimestampIntervalMillis);
+                ttlCompactTimestamp = getTimestampId(stackProperties.ttlTimestampAgeInMillis);
             }
-            if (properties.ttlVersionAgeInMillis > 0) {
-                ttlCheckVersion = getVersion(properties.ttlVersionAgeInMillis + properties.ttlVersionIntervalMillis);
-                ttlCompactVersion = getVersion(properties.ttlVersionAgeInMillis);
+            if (stackProperties.ttlVersionAgeInMillis > 0) {
+                ttlCheckVersion = getVersion(stackProperties.ttlVersionAgeInMillis + stackProperties.ttlVersionIntervalMillis);
+                ttlCompactVersion = getVersion(stackProperties.ttlVersionAgeInMillis);
             }
         }
 
@@ -179,13 +181,13 @@ public class PartitionStore implements RangeScannable {
                     walStorage.compactTombstone(compactionStats,
                         fromBaseKey,
                         toBaseKey,
-                        properties.rowType,
+                        stackProperties.rowType,
                         tombstoneCompactTimestamp,
                         tombstoneCompactVersion,
                         ttlCompactTimestamp,
                         ttlCompactVersion,
                         disposalVersion,
-                        properties.maxValueSizeInIndex,
+                        stackProperties.maxValueSizeInIndex,
                         stripe,
                         expectedEndOfMerge,
                         transitionToCompacted);

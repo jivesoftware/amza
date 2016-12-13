@@ -98,6 +98,83 @@ public class PartitionProperties {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        PartitionProperties that = (PartitionProperties) o;
+
+        if (tombstoneTimestampAgeInMillis != that.tombstoneTimestampAgeInMillis) {
+            return false;
+        }
+        if (tombstoneTimestampIntervalMillis != that.tombstoneTimestampIntervalMillis) {
+            return false;
+        }
+        if (tombstoneVersionAgeInMillis != that.tombstoneVersionAgeInMillis) {
+            return false;
+        }
+        if (tombstoneVersionIntervalMillis != that.tombstoneVersionIntervalMillis) {
+            return false;
+        }
+        if (ttlTimestampAgeInMillis != that.ttlTimestampAgeInMillis) {
+            return false;
+        }
+        if (ttlTimestampIntervalMillis != that.ttlTimestampIntervalMillis) {
+            return false;
+        }
+        if (ttlVersionAgeInMillis != that.ttlVersionAgeInMillis) {
+            return false;
+        }
+        if (ttlVersionIntervalMillis != that.ttlVersionIntervalMillis) {
+            return false;
+        }
+        if (forceCompactionOnStartup != that.forceCompactionOnStartup) {
+            return false;
+        }
+        if (requireConsistency != that.requireConsistency) {
+            return false;
+        }
+        if (replicated != that.replicated) {
+            return false;
+        }
+        if (disabled != that.disabled) {
+            return false;
+        }
+        if (maxValueSizeInIndex != that.maxValueSizeInIndex) {
+            return false;
+        }
+        if (updatesBetweenLeaps != that.updatesBetweenLeaps) {
+            return false;
+        }
+        if (maxLeaps != that.maxLeaps) {
+            return false;
+        }
+        if (durability != that.durability) {
+            return false;
+        }
+        if (consistency != that.consistency) {
+            return false;
+        }
+        if (rowType != that.rowType) {
+            return false;
+        }
+        if (indexClassName != null ? !indexClassName.equals(that.indexClassName) : that.indexClassName != null) {
+            return false;
+        }
+        return indexProperties != null ? indexProperties.equals(that.indexProperties) : that.indexProperties == null;
+
+    }
+
+    @Override
+    public int hashCode() {
+        throw new UnsupportedOperationException("NOPE");
+    }
+
+    @Override
     public String toString() {
         return "PartitionProperties{"
             + "durability=" + durability

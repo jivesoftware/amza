@@ -223,6 +223,24 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         }
     }
 
+    public void updatePartitionPropertiesIfNecessary(PartitionName partitionName, PartitionProperties properties) throws Exception {
+        PartitionProperties got = getProperties(partitionName);
+        if (got.equals(properties)) {
+            return;
+        }
+
+        LOG.info("Updating partition properties for {}", partitionName);
+
+        byte[] rawPartitionName = partitionName.toBytes();
+        TimestampedValue regionIndexValue = systemWALStorage.getTimestampedValue(REGION_INDEX, null, rawPartitionName);
+        if (regionIndexValue == null) {
+            throw new IllegalArgumentException("Partition has not been initialized: " + partitionName);
+        }
+
+        long timestampAndVersion = orderIdProvider.nextId();
+        setPartitionProperties(partitionName, properties, timestampAndVersion);
+    }
+
     public void updatePartitionProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {
         byte[] rawPartitionName = partitionName.toBytes();
         TimestampedValue regionIndexValue = systemWALStorage.getTimestampedValue(REGION_INDEX, null, rawPartitionName);

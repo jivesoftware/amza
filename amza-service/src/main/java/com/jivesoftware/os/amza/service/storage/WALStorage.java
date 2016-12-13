@@ -1137,6 +1137,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public void updatedProperties(PartitionProperties partitionProperties) throws Exception {
         acquireOne();
         try {
+            //TODO indexClassName transition?
             WALIndex wali = walIndex.get();
             if (wali != null) {
                 wali.updatedProperties(partitionProperties.indexProperties);

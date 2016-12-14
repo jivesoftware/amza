@@ -235,8 +235,8 @@ public class AmzaClientAquariumProvider {
             }
         });
 
-        clientAquarium.init();
         try {
+            clientAquarium.init();
             clientAquarium.aquarium.acknowledgeOther();
             clientAquarium.aquarium.tapTheGlass();
             return clientAquarium.aquarium.livelyEndState();

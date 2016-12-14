@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map.Entry;
@@ -22,12 +23,14 @@ public class AckWaters {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaStats amzaStats;
+    private final HealthTimer quorumLatency;
     private final AwaitNotify<VersionedPartitionName> awaitNotify;
     private final boolean verboseLogTimeouts;
     private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId>> ackWaters = new ConcurrentHashMap<>();
 
-    public AckWaters(AmzaStats amzaStats, int stripingLevel, boolean verboseLogTimeouts) {
+    public AckWaters(AmzaStats amzaStats, HealthTimer quorumLatency, int stripingLevel, boolean verboseLogTimeouts) {
         this.amzaStats = amzaStats;
+        this.quorumLatency = quorumLatency;
         this.awaitNotify = new AwaitNotify<>(stripingLevel);
         this.verboseLogTimeouts = verboseLogTimeouts;
     }
@@ -84,6 +87,7 @@ public class AckWaters {
         int[] passed = new int[1];
         long[] tookToTxId = new long[ringMembers.length];
         Arrays.fill(tookToTxId, -1);
+        quorumLatency.startTimer();
         try {
             long start = System.currentTimeMillis();
             Integer quorum = awaitNotify.awaitChange(versionedPartitionName, () -> {
@@ -128,6 +132,8 @@ public class AckWaters {
             }
             amzaStats.quorumTimeouts(versionedPartitionName.getPartitionName(), 1);
             throw e;
+        } finally {
+            quorumLatency.stopTimer("Commit Quorum Latency", "Check network connectivity and neighbor health.");
         }
     }
 

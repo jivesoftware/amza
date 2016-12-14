@@ -71,7 +71,11 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
+import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
+import com.jivesoftware.os.routing.bird.health.api.TimerHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -87,6 +91,8 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.merlin.config.defaults.DoubleDefault;
+import org.merlin.config.defaults.StringDefault;
 
 public class AmzaServiceInitializer {
 
@@ -161,6 +167,7 @@ public class AmzaServiceInitializer {
         BAInterner interner,
         AquariumStats aquariumStats,
         AmzaStats amzaStats,
+        HealthTimer quorumLatency,
         SystemRingSizeProvider systemRingSizeProvider,
         SickThreads sickThreads,
         SickPartitions sickPartitions,
@@ -296,7 +303,7 @@ public class AmzaServiceInitializer {
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        AckWaters ackWaters = new AckWaters(amzaStats, config.ackWatersStripingLevel, config.ackWatersVerboseLogTimeouts);
+        AckWaters ackWaters = new AckWaters(amzaStats, quorumLatency, config.ackWatersStripingLevel, config.ackWatersVerboseLogTimeouts);
 
         DeltaStripeWALStorage[] deltaStripeWALStorages = new DeltaStripeWALStorage[numberOfStripes];
 

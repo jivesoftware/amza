@@ -46,9 +46,15 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
+import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
+import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
+import com.jivesoftware.os.routing.bird.health.api.TimerHealthCheckConfig;
+import com.jivesoftware.os.routing.bird.health.api.TriggerTimeoutHealthCheck;
+import com.jivesoftware.os.routing.bird.health.api.TriggerTimeoutHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
+import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.ClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
@@ -80,6 +86,34 @@ public class EmbedAmzaServiceInitializer {
         @Override
         @DoubleDefault(0.2)
         Double getSickHealth();
+    }
+
+    public interface QuorumLatency extends TimerHealthCheckConfig {
+
+        @StringDefault("ack>quorum>latency")
+        @Override
+        String getName();
+
+        @StringDefault("How long its taking to achieve quorum.")
+        @Override
+        String getDescription();
+
+        @DoubleDefault(30000d)
+        @Override
+        Double get95ThPecentileMax();
+    }
+
+    private final HealthTimer quorumLatency = HealthFactory.getHealthTimer(QuorumLatency.class, TimerHealthChecker.FACTORY);
+
+    public interface QuorumTimeouts extends TriggerTimeoutHealthCheckConfig {
+
+        @StringDefault("ack>quorum>timeouts")
+        @Override
+        String getName();
+
+        @StringDefault("Recent quorum timeouts.")
+        @Override
+        String getDescription();
     }
 
     public Lifecycle initialize(Deployable deployable,
@@ -157,11 +191,16 @@ public class EmbedAmzaServiceInitializer {
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner);
         AquariumStats aquariumStats = new AquariumStats();
 
+        TriggerTimeoutHealthCheck quorumTimeoutHealthCheck = new TriggerTimeoutHealthCheck(() -> amzaStats.getGrandTotal().quorumTimeouts.longValue(),
+            deployable.config(QuorumTimeouts.class));
+        deployable.addHealthCheck(quorumTimeoutHealthCheck);
+
         AtomicInteger systemRingSize = new AtomicInteger(0);
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             baInterner,
             aquariumStats,
             amzaStats,
+            quorumLatency,
             systemRingSize::get,
             sickThreads,
             sickPartitions,

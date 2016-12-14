@@ -167,7 +167,8 @@ public class AmzaSyncMain {
                 Executors.newSingleThreadExecutor(),
                 100L, //TODO config
                 1_000L, //TODO config
-                10_000L);//TODO config
+                10_000L,//TODO config
+                syncConfig.getUseClientSolutionLog());
 
             AmzaSyncSender syncSender = null;
             AmzaSyncReceiver syncReceiver = null;

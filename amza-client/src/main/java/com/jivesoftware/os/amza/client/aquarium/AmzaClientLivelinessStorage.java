@@ -13,7 +13,10 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.client.http.AmzaClientCommitable;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +25,8 @@ import java.util.concurrent.TimeUnit;
  *
  */
 public class AmzaClientLivelinessStorage implements LivelinessStorage {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final PartitionProperties LIVELINESS_PROPERTIES = new PartitionProperties(Durability.fsync_async,
         0, 0, 0, 0, TimeUnit.DAYS.toMillis(30), TimeUnit.DAYS.toMillis(10), 0, 0,
@@ -37,6 +42,7 @@ public class AmzaClientLivelinessStorage implements LivelinessStorage {
     private final long additionalSolverAfterNMillis;
     private final long abandonLeaderSolutionAfterNMillis;
     private final long abandonSolutionAfterNMillis;
+    private final boolean useSolutionLog;
 
     public AmzaClientLivelinessStorage(PartitionClientProvider partitionClientProvider,
         String serviceName,
@@ -46,7 +52,8 @@ public class AmzaClientLivelinessStorage implements LivelinessStorage {
         int aquariumLivelinessStripes,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
-        long abandonSolutionAfterNMillis) {
+        long abandonSolutionAfterNMillis,
+        boolean useSolutionLog) {
         this.partitionClientProvider = partitionClientProvider;
         this.serviceName = serviceName;
         this.context = context;
@@ -56,28 +63,37 @@ public class AmzaClientLivelinessStorage implements LivelinessStorage {
         this.additionalSolverAfterNMillis = additionalSolverAfterNMillis;
         this.abandonLeaderSolutionAfterNMillis = abandonLeaderSolutionAfterNMillis;
         this.abandonSolutionAfterNMillis = abandonSolutionAfterNMillis;
+        this.useSolutionLog = useSolutionLog;
     }
 
     @Override
     public boolean scan(Member rootMember, Member otherMember, LivelinessStream stream) throws Exception {
         byte[] from = livelinessKey(rootMember, otherMember);
         byte[] to = WALKey.prefixUpperExclusive(from);
-        return livelinessClient().scanKeys(Consistency.quorum,
-            false,
-            keyRangeStream -> keyRangeStream.stream(null, from, null, to),
-            (prefix, key, value, valueTimestamp, valueVersion) -> {
-                return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
-                    if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
-                        return stream.stream(rootRingMember, isSelf, ackRingMember, valueTimestamp, valueVersion);
-                    } else {
-                        return true;
-                    }
-                });
-            },
-            additionalSolverAfterNMillis,
-            abandonLeaderSolutionAfterNMillis,
-            abandonSolutionAfterNMillis,
-            Optional.empty());
+        List<String> solutionLog = useSolutionLog ? Collections.synchronizedList(Lists.newArrayList()) : null;
+        try {
+            return livelinessClient().scanKeys(Consistency.quorum,
+                false,
+                keyRangeStream -> keyRangeStream.stream(null, from, null, to),
+                (prefix, key, value, valueTimestamp, valueVersion) -> {
+                    return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
+                        if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
+                            return stream.stream(rootRingMember, isSelf, ackRingMember, valueTimestamp, valueVersion);
+                        } else {
+                            return true;
+                        }
+                    });
+                },
+                additionalSolverAfterNMillis,
+                abandonLeaderSolutionAfterNMillis,
+                abandonSolutionAfterNMillis,
+                Optional.ofNullable(solutionLog));
+        } catch (Throwable t) {
+            if (solutionLog != null) {
+                LOG.info("Failure during scan, solution log: {}", solutionLog);
+            }
+            throw t;
+        }
     }
 
     @Override
@@ -89,19 +105,27 @@ public class AmzaClientLivelinessStorage implements LivelinessStorage {
             return true;
         });
         if (result && commitables.size() > 0) {
-            livelinessClient().commit(Consistency.quorum,
-                null,
-                commitKeyValueStream -> {
-                    for (AmzaClientCommitable commitable : commitables) {
-                        if (!commitKeyValueStream.commit(commitable.key, commitable.value, commitable.timestamp, false)) {
-                            return false;
+            List<String> solutionLog = useSolutionLog ? Collections.synchronizedList(Lists.newArrayList()) : null;
+            try {
+                livelinessClient().commit(Consistency.quorum,
+                    null,
+                    commitKeyValueStream -> {
+                        for (AmzaClientCommitable commitable : commitables) {
+                            if (!commitKeyValueStream.commit(commitable.key, commitable.value, commitable.timestamp, false)) {
+                                return false;
+                            }
                         }
-                    }
-                    return true;
-                },
-                additionalSolverAfterNMillis,
-                abandonSolutionAfterNMillis,
-                Optional.empty());
+                        return true;
+                    },
+                    additionalSolverAfterNMillis,
+                    abandonSolutionAfterNMillis,
+                    Optional.ofNullable(solutionLog));
+            } catch (Throwable t) {
+                if (solutionLog != null) {
+                    LOG.info("Failure during update, solution log: {}", solutionLog);
+                }
+                throw t;
+            }
             return true;
         } else {
             return false;
@@ -111,17 +135,25 @@ public class AmzaClientLivelinessStorage implements LivelinessStorage {
     @Override
     public long get(Member rootMember, Member otherMember) throws Exception {
         long[] timestamp = { -1 };
-        livelinessClient().get(Consistency.quorum,
-            null,
-            keyStream -> keyStream.stream(livelinessKey(rootMember, otherMember)),
-            (prefix, key, value, valueTimestamp, valueVersion) -> {
-                timestamp[0] = valueTimestamp;
-                return true;
-            },
-            additionalSolverAfterNMillis,
-            abandonLeaderSolutionAfterNMillis,
-            abandonSolutionAfterNMillis,
-            Optional.empty());
+        List<String> solutionLog = useSolutionLog ? Collections.synchronizedList(Lists.newArrayList()) : null;
+        try {
+            livelinessClient().get(Consistency.quorum,
+                null,
+                keyStream -> keyStream.stream(livelinessKey(rootMember, otherMember)),
+                (prefix, key, value, valueTimestamp, valueVersion) -> {
+                    timestamp[0] = valueTimestamp;
+                    return true;
+                },
+                additionalSolverAfterNMillis,
+                abandonLeaderSolutionAfterNMillis,
+                abandonSolutionAfterNMillis,
+                Optional.ofNullable(solutionLog));
+        } catch (Throwable t) {
+            if (solutionLog != null) {
+                LOG.info("Failure during get, solution log: {}", solutionLog);
+            }
+            throw t;
+        }
         return timestamp[0];
     }
 

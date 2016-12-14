@@ -52,4 +52,7 @@ public interface AmzaSyncConfig extends Config {
 
     @BooleanDefault(false)
     boolean getSyncSenderAllowSelfSignedCerts();
+
+    @BooleanDefault(false)
+    boolean getUseClientSolutionLog();
 }

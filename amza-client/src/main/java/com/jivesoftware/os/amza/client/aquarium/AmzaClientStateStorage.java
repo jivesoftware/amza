@@ -16,7 +16,10 @@ import com.jivesoftware.os.amza.client.http.AmzaClientCommitable;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.interfaces.StateStorage;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -28,6 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  */
 public class AmzaClientStateStorage implements StateStorage<Long> {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final PartitionProperties STATE_PROPERTIES = new PartitionProperties(Durability.fsync_async,
         0, 0, 0, 0, TimeUnit.DAYS.toMillis(30), TimeUnit.DAYS.toMillis(10), 0, 0,
@@ -41,6 +46,7 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
     private final long additionalSolverAfterNMillis;
     private final long abandonLeaderSolutionAfterNMillis;
     private final long abandonSolutionAfterNMillis;
+    private final boolean useSolutionLog;
 
     private final ConcurrentSkipListMap<byte[], WALValue> cache = new ConcurrentSkipListMap<>(KeyUtil::compare);
     private final AtomicBoolean cacheInitialized = new AtomicBoolean(false);
@@ -51,7 +57,8 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
         int aquariumStateStripes,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
-        long abandonSolutionAfterNMillis) {
+        long abandonSolutionAfterNMillis,
+        boolean useSolutionLog) {
         this.partitionClientProvider = partitionClientProvider;
         this.serviceName = serviceName;
         this.context = context;
@@ -59,21 +66,30 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
         this.additionalSolverAfterNMillis = additionalSolverAfterNMillis;
         this.abandonLeaderSolutionAfterNMillis = abandonLeaderSolutionAfterNMillis;
         this.abandonSolutionAfterNMillis = abandonSolutionAfterNMillis;
+        this.useSolutionLog = useSolutionLog;
     }
 
     public void init() throws Exception {
         if (cacheInitialized.compareAndSet(false, true)) {
             byte[] fromKey = stateKey(null, null, null);
-            stateClient().scan(Consistency.quorum, false,
-                keyRangeStream -> keyRangeStream.stream(null, fromKey, null, WALKey.prefixUpperExclusive(fromKey)),
-                (prefix, key, value, timestamp, version) -> {
-                    cache.put(key, new WALValue(RowType.primary, value, timestamp, false, version));
-                    return true;
-                },
-                additionalSolverAfterNMillis,
-                abandonLeaderSolutionAfterNMillis,
-                abandonSolutionAfterNMillis,
-                Optional.empty());
+            List<String> solutionLog = useSolutionLog ? Collections.synchronizedList(Lists.newArrayList()) : null;
+            try {
+                stateClient().scan(Consistency.quorum, false,
+                    keyRangeStream -> keyRangeStream.stream(null, fromKey, null, WALKey.prefixUpperExclusive(fromKey)),
+                    (prefix, key, value, timestamp, version) -> {
+                        cache.put(key, new WALValue(RowType.primary, value, timestamp, false, version));
+                        return true;
+                    },
+                    additionalSolverAfterNMillis,
+                    abandonLeaderSolutionAfterNMillis,
+                    abandonSolutionAfterNMillis,
+                    Optional.ofNullable(solutionLog));
+            } catch (Throwable t) {
+                if (solutionLog != null) {
+                    LOG.info("Failure during init, solution log: {}", solutionLog);
+                }
+                throw t;
+            }
         } else {
             throw new IllegalStateException("Already initialized, please reset first");
         }
@@ -121,21 +137,29 @@ public class AmzaClientStateStorage implements StateStorage<Long> {
             });
         if (result && commitables.size() > 0) {
             boolean[] dirty = { false };
-            stateClient().commit(Consistency.quorum,
-                null,
-                commitKeyValueStream -> {
-                    for (AmzaClientCommitable commitable : commitables) {
-                        if (commitKeyValueStream.commit(commitable.key, commitable.value, commitable.timestamp, false)) {
-                            dirty[0] = true;
-                        } else {
-                            return false;
+            List<String> solutionLog = useSolutionLog ? Collections.synchronizedList(Lists.newArrayList()) : null;
+            try {
+                stateClient().commit(Consistency.quorum,
+                    null,
+                    commitKeyValueStream -> {
+                        for (AmzaClientCommitable commitable : commitables) {
+                            if (commitKeyValueStream.commit(commitable.key, commitable.value, commitable.timestamp, false)) {
+                                dirty[0] = true;
+                            } else {
+                                return false;
+                            }
                         }
-                    }
-                    return true;
-                },
-                additionalSolverAfterNMillis,
-                abandonSolutionAfterNMillis,
-                Optional.empty());
+                        return true;
+                    },
+                    additionalSolverAfterNMillis,
+                    abandonSolutionAfterNMillis,
+                    Optional.ofNullable(solutionLog));
+            } catch (Throwable t) {
+                if (solutionLog != null) {
+                    LOG.info("Failure during update, solution log: {}", solutionLog);
+                }
+                throw t;
+            }
             if (dirty[0]) {
                 reset();
                 init();

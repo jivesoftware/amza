@@ -60,6 +60,10 @@ import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import com.jivesoftware.os.mlogger.core.CountersAndTimers;
+import com.jivesoftware.os.mlogger.core.Timer;
+import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
+import com.jivesoftware.os.routing.bird.health.api.NoOpHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
@@ -246,6 +250,7 @@ public class Main {
             interner,
             aquariumStats,
             amzaStats,
+            new HealthTimer(CountersAndTimers.getOrCreate("quorumLatency"), "quorumLatency", new NoOpHealthChecker<>("quorumLatency")),
             () -> amzaServiceConfig.systemRingSize,
             sickThreads,
             sickPartitions,

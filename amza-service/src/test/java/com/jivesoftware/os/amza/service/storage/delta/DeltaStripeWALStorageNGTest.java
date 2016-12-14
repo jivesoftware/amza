@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AckWaters;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.TakeFullySystemReady;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
@@ -53,6 +52,11 @@ import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import com.jivesoftware.os.mlogger.core.CountersAndTimers;
+import com.jivesoftware.os.mlogger.core.Timer;
+import com.jivesoftware.os.routing.bird.health.HealthCheckResponse;
+import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
+import com.jivesoftware.os.routing.bird.health.api.NoOpHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
 import java.util.concurrent.Executors;
@@ -237,11 +241,11 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
-
+        HealthTimer quorumLatency = new HealthTimer(CountersAndTimers.getOrCreate("test"), "test", new NoOpHealthChecker<>("test"));
         DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner,
             1,
             new AmzaStats(),
-            new AckWaters(amzaStats, 2, false),
+            new AckWaters(amzaStats, quorumLatency, 2, false),
             new SickThreads(),
             ringStoreReader,
             deltaWALFactory,

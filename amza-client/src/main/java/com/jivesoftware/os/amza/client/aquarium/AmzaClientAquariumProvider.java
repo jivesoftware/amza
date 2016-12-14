@@ -62,6 +62,7 @@ public class AmzaClientAquariumProvider {
     private final long additionalSolverAfterNMillis;
     private final long abandonLeaderSolutionAfterNMillis;
     private final long abandonSolutionAfterNMillis;
+    private final boolean useSolutionLog;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Map<String, ClientAquarium> aquariums = Maps.newConcurrentMap();
@@ -96,7 +97,8 @@ public class AmzaClientAquariumProvider {
         ExecutorService executorService,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
-        long abandonSolutionAfterNMillis) throws Exception {
+        long abandonSolutionAfterNMillis,
+        boolean useSolutionLog) throws Exception {
 
         this.aquariumStats = aquariumStats;
         this.serviceName = serviceName;
@@ -113,6 +115,7 @@ public class AmzaClientAquariumProvider {
         this.additionalSolverAfterNMillis = additionalSolverAfterNMillis;
         this.abandonLeaderSolutionAfterNMillis = abandonLeaderSolutionAfterNMillis;
         this.abandonSolutionAfterNMillis = abandonSolutionAfterNMillis;
+        this.useSolutionLog = useSolutionLog;
 
         AmzaClientLivelinessStorage livelinessStorage = new AmzaClientLivelinessStorage(partitionClientProvider,
             serviceName,
@@ -122,7 +125,8 @@ public class AmzaClientAquariumProvider {
             aquariumLivelinessStripes,
             additionalSolverAfterNMillis,
             abandonLeaderSolutionAfterNMillis,
-            abandonSolutionAfterNMillis);
+            abandonSolutionAfterNMillis,
+            useSolutionLog);
         this.liveliness = new Liveliness(aquariumStats,
             System::currentTimeMillis,
             livelinessStorage,
@@ -249,18 +253,22 @@ public class AmzaClientAquariumProvider {
         return new AmzaClientStateStorage(partitionClientProvider,
             serviceName,
             stateContext(serviceName, name, CURRENT),
-            aquariumStateStripes, additionalSolverAfterNMillis,
+            aquariumStateStripes,
+            additionalSolverAfterNMillis,
             abandonLeaderSolutionAfterNMillis,
-            abandonSolutionAfterNMillis);
+            abandonSolutionAfterNMillis,
+            useSolutionLog);
     }
 
     private AmzaClientStateStorage desiredStateStorage(String name) throws Exception {
         return new AmzaClientStateStorage(partitionClientProvider,
             serviceName,
             stateContext(serviceName, name, DESIRED),
-            aquariumStateStripes, additionalSolverAfterNMillis,
+            aquariumStateStripes,
+            additionalSolverAfterNMillis,
             abandonLeaderSolutionAfterNMillis,
-            abandonSolutionAfterNMillis);
+            abandonSolutionAfterNMillis,
+            useSolutionLog);
     }
 
     private static byte[] stateContext(String serviceName, String name, byte contextType) {

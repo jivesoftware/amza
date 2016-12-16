@@ -2,6 +2,10 @@ window.$ = window.jQuery;
 
 window.amza = {};
 
+amza.resetButton = function ($button, value) {
+    $button.val(value);
+    $button.removeAttr('disabled');
+};
 
 amza.metrics = {
     input: {},
@@ -38,6 +42,32 @@ amza.metrics = {
             //amza.metrics.update();
         }
         setTimeout(amza.metrics.poll, 1000);
+    },
+    abandon: function (ele, ringName, partitionName) {
+        var $button = $(ele);
+        $button.attr('disabled', 'disabled');
+        var value = $button.val();
+        $.ajax({
+            type: "POST",
+            url: "/amza/ui/metrics/abandon",
+            data: {
+                partitionName: partitionName,
+                ringName: ringName
+            },
+            //contentType: "application/json",
+            success: function (data) {
+                $button.val('Success');
+                setTimeout(function () {
+                    amza.resetButton($button, value);
+                }, 2000);
+            },
+            error: function () {
+                $button.val('Failure');
+                setTimeout(function () {
+                    amza.resetButton($button, value);
+                }, 2000);
+            }
+        });
     }
 };
 

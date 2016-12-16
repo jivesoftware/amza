@@ -105,6 +105,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
     }
 
+    public boolean abandonPartition(PartitionName partitionName) throws Exception {
+        LOG.info("Abandoning {}", partitionName);
+        return amzaService.abandonPartition(partitionName);
+    }
+
     public static class MetricsPluginRegionInput {
 
         final String ringName;

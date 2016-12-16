@@ -489,6 +489,22 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         partitionCreator.markForDisposal(partitionName);
     }
 
+    public boolean abandonPartition(PartitionName partitionName) throws Exception {
+        VersionedPartitionName versionedPartitionName = partitionStripeProvider.txPartition(partitionName,
+            (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
+                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                if (livelyEndState.getCurrentState() != State.leader) {
+                    return versionedAquarium.getVersionedPartitionName();
+                }
+                return null;
+            });
+        if (versionedPartitionName != null) {
+            storageVersionProvider.abandonVersion(versionedPartitionName);
+            return true;
+        }
+        return false;
+    }
+
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
         if (partitionName.isSystemPartition()) {
             amzaSystemPartitionWatcher.watch(partitionName, rowChanges);
@@ -692,7 +708,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         bytes.increment();
 
         long[] limited = new long[1];
-        long[] lastRowTxId = {-1};
+        long[] lastRowTxId = { -1 };
         boolean streamedToEnd = streamer.stream((rowFP, rowTxId, rowType, row) -> {
             if (limited[0] >= limit && lastRowTxId[0] < rowTxId) {
                 return false;

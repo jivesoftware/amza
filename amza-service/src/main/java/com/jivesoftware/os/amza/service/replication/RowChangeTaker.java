@@ -469,6 +469,7 @@ public class RowChangeTaker implements RowChanges {
             }
 
             long[] highwater = { -1 };
+            boolean[] validPartition = { true };
 
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStripeProvider.txPartition(partitionName,
                 (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
@@ -480,10 +481,12 @@ public class RowChangeTaker implements RowChanges {
                     });
                     if (!exists) {
                         // no stripe storage
+                        validPartition[0] = false;
                         return null;
                     }
                     if (livelyEndState.getCurrentState() == State.expunged) {
                         // ignore expunged
+                        validPartition[0] = false;
                         return null;
                     }
                     highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
@@ -503,7 +506,7 @@ public class RowChangeTaker implements RowChanges {
                 });
 
             if (currentLocalVersionedPartitionName == null) {
-                if (highwater[0] != -1) {
+                if (validPartition[0]) {
                     partitionStripeProvider.txPartition(partitionName,
                         (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                             Waterline leader = versionedAquarium.getLeader();

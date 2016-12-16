@@ -52,7 +52,7 @@ public class StreamingTakesConsumer {
         long partitionVersion;
         boolean isOnline;
         long bytes = 0;
-
+        boolean streamedToEnd = false;
         try (DataInputStream dis = is) {
             leadershipToken = dis.readLong();
             partitionVersion = dis.readLong();
@@ -76,8 +76,10 @@ public class StreamingTakesConsumer {
                     }
                 }
             }
+            streamedToEnd = dis.readByte() == 1;
+
         }
-        return new StreamingTakeConsumed(leadershipToken, partitionVersion, isOnline, neighborsHighwaterMarks, bytes);
+        return new StreamingTakeConsumed(leadershipToken, partitionVersion, isOnline, neighborsHighwaterMarks, bytes, streamedToEnd);
 
     }
 
@@ -88,13 +90,20 @@ public class StreamingTakesConsumer {
         public final boolean isOnline;
         public final Map<RingMember, Long> neighborsHighwaterMarks;
         public final long bytes;
+        public final boolean streamedToEnd;
 
-        public StreamingTakeConsumed(long leadershipToken, long partitionVersion, boolean isOnline, Map<RingMember, Long> neighborsHighwaterMarks, long bytes) {
+        public StreamingTakeConsumed(long leadershipToken,
+            long partitionVersion,
+            boolean isOnline,
+            Map<RingMember, Long> neighborsHighwaterMarks,
+            long bytes,
+            boolean streamedToEnd) {
             this.leadershipToken = leadershipToken;
             this.partitionVersion = partitionVersion;
             this.isOnline = isOnline;
             this.neighborsHighwaterMarks = neighborsHighwaterMarks;
             this.bytes = bytes;
+            this.streamedToEnd = streamedToEnd;
         }
     }
 }

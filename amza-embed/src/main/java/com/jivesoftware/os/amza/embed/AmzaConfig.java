@@ -23,6 +23,9 @@ public interface AmzaConfig extends Config {
     @LongDefault(10_000L)
     long getPongIntervalMillis();
 
+    @LongDefault(65_536L)
+    long getRowsTakerLimit();
+
     @IntDefault(8)
     int getNumberOfTakerThreads();
 

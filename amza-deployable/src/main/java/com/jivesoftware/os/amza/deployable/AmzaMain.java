@@ -120,6 +120,7 @@ public class AmzaMain {
             amzaServiceConfig.rackDistributionEnabled = amzaConfig.getRackDistributionEnabled();
             amzaServiceConfig.hangupAvailableRowsAfterUnresponsiveMillis = amzaConfig.getHangupAvailableRowsAfterUnresponsiveMillis();
             amzaServiceConfig.pongIntervalMillis = amzaConfig.getPongIntervalMillis();
+            amzaServiceConfig.rowsTakerLimit = amzaConfig.getRowsTakerLimit();
 
             AmzaStats amzaStats = new AmzaStats();
             BAInterner interner = new BAInterner();

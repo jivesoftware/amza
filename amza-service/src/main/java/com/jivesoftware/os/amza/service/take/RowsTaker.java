@@ -29,6 +29,7 @@ public interface RowsTaker {
         VersionedPartitionName remoteVersionedPartitionName,
         long remoteTxId,
         long localLeadershipToken,
+        long limit,
         RowStream rowStream);
 
     class StreamingRowsResult {

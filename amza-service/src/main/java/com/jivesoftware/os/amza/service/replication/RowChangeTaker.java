@@ -77,6 +77,7 @@ public class RowChangeTaker implements RowChanges {
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long longPollTimeoutMillis;
     private final long pongIntervalMillis;
+    private final long rowsTakerLimit;
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
     private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
 
@@ -112,6 +113,7 @@ public class RowChangeTaker implements RowChanges {
         Optional<TakeFailureListener> takeFailureListener,
         long longPollTimeoutMillis,
         long pongIntervalMillis,
+        long rowsTakerLimit,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller) {
 
@@ -132,6 +134,7 @@ public class RowChangeTaker implements RowChanges {
         this.takeFailureListener = takeFailureListener;
         this.longPollTimeoutMillis = longPollTimeoutMillis;
         this.pongIntervalMillis = pongIntervalMillis;
+        this.rowsTakerLimit = rowsTakerLimit;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
 
@@ -681,6 +684,7 @@ public class RowChangeTaker implements RowChanges {
                                     remoteVersionedPartitionName,
                                     highwaterMark,
                                     leadershipToken,
+                                    rowsTakerLimit,
                                     takeRowStream);
 
                                 if (rowsResult.error != null) {

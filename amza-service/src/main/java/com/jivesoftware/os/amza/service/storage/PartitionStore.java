@@ -233,8 +233,8 @@ public class PartitionStore implements RangeScannable {
         return walStorage.containsKeys(prefix, keys, stream);
     }
 
-    public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        walStorage.takeRowUpdatesSince(transactionId, rowStream);
+    public boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
+        return walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
     public RowsChanged merge(boolean generateRowsChanged,

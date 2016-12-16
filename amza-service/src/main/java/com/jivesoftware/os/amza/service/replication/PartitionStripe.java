@@ -254,7 +254,7 @@ public class PartitionStripe {
 
     public interface RowStreamer {
 
-        void stream(RowStream rowStream) throws Exception;
+        boolean stream(RowStream rowStream) throws Exception;
     }
 
     public void takeAllRows(VersionedAquarium versionedAquarium, RowStream rowStream) throws Exception {

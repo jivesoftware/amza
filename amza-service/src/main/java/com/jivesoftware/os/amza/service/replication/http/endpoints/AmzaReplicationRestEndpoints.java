@@ -64,11 +64,12 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}/{leadershipToken}")
+    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}/{leadershipToken}/{limit}")
     public Response rowsStream(@PathParam("ringMemberString") String ringMemberString,
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId,
-        @PathParam("leadershipToken") long leadershipToken) {
+        @PathParam("leadershipToken") long leadershipToken,
+        @PathParam("limit") long limit) {
 
         try {
             amzaStats.rowsStream.increment();
@@ -82,7 +83,8 @@ public class AmzaReplicationRestEndpoints {
                         new RingMember(ringMemberString),
                         VersionedPartitionName.fromBase64(versionedPartitionName, interner),
                         txId,
-                        leadershipToken);
+                        leadershipToken,
+                        limit);
                 } catch (IOException x) {
                     if (x.getCause() instanceof TimeoutException) {
                         LOG.error("Timed out while streaming takes");

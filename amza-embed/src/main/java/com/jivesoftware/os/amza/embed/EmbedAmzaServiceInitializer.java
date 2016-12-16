@@ -178,6 +178,18 @@ public class EmbedAmzaServiceInitializer {
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
 
         TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
+        TenantAwareHttpClient<String> systemRingClient = tenantRoutingHttpClientInitializer.builder(
+            deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
+            clientHealthProvider)
+            .deadAfterNErrors(10)
+            .checkDeadEveryNMillis(10_000)
+            .maxConnections(1_000)
+            .socketTimeoutInMillis(60_000)
+            .build(); // TODO expose to conf
+
+        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemRingClient, mapper, baInterner);
+
+
         TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
             clientHealthProvider)
@@ -231,6 +243,7 @@ public class EmbedAmzaServiceInitializer {
                     persistentRowIOProvider);
             },
             availableRowsTaker,
+            systemRowsTakerFactory,
             rowsTakerFactory,
             Optional.<TakeFailureListener>absent(),
             allRowChanges);

@@ -570,7 +570,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
-        long remoteLeadershipToken) throws Exception {
+        long remoteLeadershipToken,
+        long limit) throws Exception {
 
         partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(), (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
@@ -594,6 +595,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                             versionedPartitionName,
                             localTxId,
                             localLeadershipToken,
+                            limit,
                             dos,
                             bytes,
                             this.highwaterStorage,
@@ -608,6 +610,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                                     versionedPartitionName,
                                     localTxId,
                                     localLeadershipToken,
+                                    limit,
                                     dos,
                                     bytes,
                                     highwaterStorage,
@@ -644,7 +647,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         dos.writeByte(0); // not online
         dos.writeByte(0); // last entry marker
         dos.writeByte(0); // last entry marker
-        bytes.add(3);
+        dos.writeByte(0); // streamedToEnd marker
+        bytes.add(4);
         if (versionedPartitionName == null || livelyEndState == null) {
             // someone thinks we're a member for this partition
             return true;
@@ -659,6 +663,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         VersionedPartitionName versionedPartitionName,
         long highestTransactionId,
         long leadershipToken,
+        long limit,
         DataOutputStream dos,
         MutableLong bytes,
         HighwaterStorage highwaterStorage,
@@ -686,17 +691,26 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         dos.writeByte(0); // last entry marker
         bytes.increment();
 
-        streamer.stream((rowFP, rowTxId, rowType, row) -> {
+        long[] limited = new long[1];
+        long[] lastRowTxId = {-1};
+        boolean streamedToEnd = streamer.stream((rowFP, rowTxId, rowType, row) -> {
+            if (limited[0] >= limit && lastRowTxId[0] < rowTxId) {
+                return false;
+            }
+            lastRowTxId[0] = rowTxId;
             dos.writeByte(1);
             dos.writeLong(rowTxId);
             dos.writeByte(rowType.toByte());
             dos.writeInt(row.length);
             dos.write(row);
             bytes.add(1 + 8 + 1 + 4 + row.length);
+            limited[0]++;
             return true;
         });
 
         dos.writeByte(0); // last entry marker
+        bytes.increment();
+        dos.writeByte(streamedToEnd ? 1 : 0); // streamedToEnd marker
         bytes.increment();
         return false;
     }

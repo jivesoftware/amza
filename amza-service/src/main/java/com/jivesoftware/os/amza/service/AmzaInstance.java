@@ -44,7 +44,8 @@ public interface AmzaInstance {
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
-        long leadershipToken) throws Exception;
+        long leadershipToken,
+        long limit) throws Exception;
 
     void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,

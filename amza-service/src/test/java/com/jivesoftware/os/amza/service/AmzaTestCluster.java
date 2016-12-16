@@ -62,8 +62,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.CountersAndTimers;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.mlogger.core.Timer;
-import com.jivesoftware.os.routing.bird.health.HealthCheckResponse;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.NoOpHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
@@ -188,6 +186,7 @@ public class AmzaTestCluster {
                 VersionedPartitionName remoteVersionedPartitionName,
                 long remoteTxId,
                 long localLeadershipToken,
+                long limit,
                 RowStream rowStream) {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
@@ -198,6 +197,7 @@ public class AmzaTestCluster {
                         remoteVersionedPartitionName,
                         remoteTxId,
                         localLeadershipToken,
+                        limit,
                         rowStream);
                     HashMap<RingMember, Long> otherHighwaterMarks = consumed.isOnline ? new HashMap<>() : null;
                     return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.partitionVersion, otherHighwaterMarks);
@@ -314,6 +314,7 @@ public class AmzaTestCluster {
 
             },
             availableRowsTaker,
+            () -> updateTaker,
             () -> updateTaker,
             absent,
             (RowsChanged changes) -> {
@@ -491,6 +492,7 @@ public class AmzaTestCluster {
             VersionedPartitionName localVersionedPartitionName,
             long localTxId,
             long leadershipToken,
+            long limit,
             RowStream rowStream) {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -507,7 +509,8 @@ public class AmzaTestCluster {
                         remoteRingMember,
                         localVersionedPartitionName,
                         localTxId,
-                        leadershipToken);
+                        leadershipToken,
+                        limit);
                     dos.flush();
                     return null;
                 });

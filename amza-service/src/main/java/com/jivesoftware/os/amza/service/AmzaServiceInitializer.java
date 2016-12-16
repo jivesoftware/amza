@@ -71,11 +71,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
-import com.jivesoftware.os.routing.bird.health.api.TimerHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
-import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -91,8 +88,6 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import org.merlin.config.defaults.DoubleDefault;
-import org.merlin.config.defaults.StringDefault;
 
 public class AmzaServiceInitializer {
 
@@ -138,6 +133,7 @@ public class AmzaServiceInitializer {
         public long takeReofferMaxElectionsPerHeartbeat = 1_000;
         public long hangupAvailableRowsAfterUnresponsiveMillis = 60_000;
         public long pongIntervalMillis = 10_000;
+        public long rowsTakerLimit = 65_536L;
 
         public long aquariumLeaderDeadAfterMillis = 60_000;
         public long aquariumLivelinessFeedEveryMillis = 500;
@@ -181,6 +177,7 @@ public class AmzaServiceInitializer {
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         IndexProviderRegistryCallback indexProviderRegistryCallback,
         AvailableRowsTaker availableRowsTaker,
+        RowsTakerFactory systemRowsTakerFactory,
         RowsTakerFactory rowsTakerFactory,
         Optional<TakeFailureListener> takeFailureListener,
         RowChanges allRowChanges) throws Exception {
@@ -499,6 +496,7 @@ public class AmzaServiceInitializer {
             takeFailureListener,
             config.takeLongPollTimeoutMillis,
             config.pongIntervalMillis,
+            config.rowsTakerLimit,
             primaryRowMarshaller,
             highwaterRowMarshaller);
 

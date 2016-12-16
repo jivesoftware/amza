@@ -468,14 +468,13 @@ public class RowChangeTaker implements RowChanges {
                 rowsTaker = stripedRowsTaker;
             }
 
-            long[] highwater = new long[1];
+            long[] highwater = { -1 };
 
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStripeProvider.txPartition(partitionName,
                 (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
 
                     VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                     LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-                    highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
                     boolean exists = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                         return partitionStripe == null || partitionStripe.exists(localVersionedPartitionName);
                     });
@@ -487,6 +486,7 @@ public class RowChangeTaker implements RowChanges {
                         // ignore expunged
                         return null;
                     }
+                    highwater[0] = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
                     if (partitionName.isSystemPartition()) {
                         if (highwater[0] >= sessionedTxId.txId) {
                             // nothing to take
@@ -503,21 +503,23 @@ public class RowChangeTaker implements RowChanges {
                 });
 
             if (currentLocalVersionedPartitionName == null) {
-                partitionStripeProvider.txPartition(partitionName,
-                    (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-                        Waterline leader = versionedAquarium.getLeader();
-                        long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
-                        tookFully(versionedAquarium, remoteRingMember, leadershipToken);
-                        return null;
-                    });
+                if (highwater[0] != -1) {
+                    partitionStripeProvider.txPartition(partitionName,
+                        (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+                            Waterline leader = versionedAquarium.getLeader();
+                            long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
+                            tookFully(versionedAquarium, remoteRingMember, leadershipToken);
+                            return null;
+                        });
 
-                rowsTaker.rowsTaken(amzaRingReader.getRingMember(),
-                    remoteRingMember,
-                    remoteRingHost,
-                    sessionedTxId.sessionId,
-                    remoteVersionedPartitionName,
-                    highwater[0],
-                    -1);
+                    rowsTaker.rowsTaken(amzaRingReader.getRingMember(),
+                        remoteRingMember,
+                        remoteRingHost,
+                        sessionedTxId.sessionId,
+                        remoteVersionedPartitionName,
+                        highwater[0],
+                        -1);
+                }
                 return false;
             }
 

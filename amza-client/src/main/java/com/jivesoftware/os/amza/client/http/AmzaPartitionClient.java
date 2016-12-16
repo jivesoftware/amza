@@ -94,7 +94,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         return partitionCallRouter.read(solutionLog.orElse(null),
             partitionName,
             consistency,
-            "appriximateCount",
+            "approximateCount",
             remotePartitionCaller::getApproximateCount,
             (answers) -> {
                 long maxApproximateCount = -1;

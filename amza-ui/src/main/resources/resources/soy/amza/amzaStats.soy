@@ -32,6 +32,7 @@
         <tr>
             <td>
                 <a href="/amza/ui/inspect?regionType={$r.type}&amp;ringName={$r.ringName}&amp;regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search"></span>Inspect</a>
+                <a href="#" onclick="if (window.confirm('Are you sure you want to abandon this partition data? This will delete a replica!')) amza.metrics.abandon(this, '{$r.ringName}', '{$r.name}')" class="btn btn-default"><span class="glyphicon glyphicon-scissors"></span>Abandon</a>
             </td>
             <td>
                 {if $r.localState}

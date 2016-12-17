@@ -25,7 +25,7 @@ import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDuration
 // soy.page.compactionsPluginRegion
 public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegion.CompactionsPluginRegionInput> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private final String template;
@@ -133,7 +133,7 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
             data.put("totalCompactions", numberFormat.format(compactionTotal));
 
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
         }
 
         return renderer.render(template, data);

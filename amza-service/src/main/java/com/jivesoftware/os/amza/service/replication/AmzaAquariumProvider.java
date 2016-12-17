@@ -143,6 +143,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             while (running.get()) {
                 try {
                     liveliness.feedTheFish();
+                    sickThreads.recovered();
                     Thread.sleep(feedEveryMillis);
                 } catch (InterruptedException e) {
                     break;

@@ -17,6 +17,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -139,6 +140,7 @@ public class AmzaStats {
         public volatile long acksLag = 0;
         public final LongAdder quorums = new LongAdder();
         public volatile long quorumsLatency = 0;
+        public final Map<RingMember, AtomicLong> memberQuorumsLatency = Maps.newConcurrentMap();
         public final LongAdder quorumTimeouts = new LongAdder();
     }
 
@@ -313,12 +315,16 @@ public class AmzaStats {
         grandTotals.acksLag = (grandTotals.acksLag + lag) / 2;
     }
 
-    public void quorums(PartitionName partitionName, int count, long lag) {
+    public void quorums(PartitionName partitionName, int count, long lag, List<RingMember> tookFrom) {
         grandTotals.quorums.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.quorums.add(count);
         totals.quorumsLatency = lag;
         grandTotals.quorumsLatency = (grandTotals.quorumsLatency + lag) / 2;
+        for (RingMember ringMember : tookFrom) {
+            grandTotals.memberQuorumsLatency.computeIfAbsent(ringMember, ringMember1 -> new AtomicLong())
+                .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
+        }
     }
 
     public void quorumTimeouts(PartitionName partitionName, int count) {

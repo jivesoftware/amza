@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -569,6 +570,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
             (int) ((grandTotal.quorumsLatency / 10000d) * 100),
             getDurationBreakdown(grandTotal.quorumsLatency) + " lag"));
+
+        for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
+            long latency = entry.getValue().get();
+            sb.append(progress("Quorums " + entry.getKey(),
+                (int) ((latency / 10000d) * 100),
+                getDurationBreakdown(latency) + " lag"));
+        }
 
         sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.longValue()) + ")",
             (int) ((amzaStats.availableRowsStream.longValue() / 100d) * 100), ""));

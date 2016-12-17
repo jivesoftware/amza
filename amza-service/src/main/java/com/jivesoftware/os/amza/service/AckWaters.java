@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -11,6 +12,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -87,6 +89,7 @@ public class AckWaters {
         int[] passed = new int[1];
         long[] tookToTxId = new long[ringMembers.length];
         Arrays.fill(tookToTxId, -1);
+        List<RingMember> tookFrom = Lists.newArrayList();
         quorumLatency.startTimer();
         try {
             long start = System.currentTimeMillis();
@@ -104,6 +107,7 @@ public class AckWaters {
                     if (leadershipTokenAndTxId != null && leadershipTokenAndTxId.txId >= desiredTxId) {
                         passed[0]++;
                         ringMembers[i] = null;
+                        tookFrom.add(ringMember);
                     }
                     tookToTxId[i] = leadershipTokenAndTxId != null ? leadershipTokenAndTxId.txId : -1;
                     if (passed[0] >= desiredTakeQuorum) {
@@ -112,7 +116,7 @@ public class AckWaters {
                 }
                 return null;
             }, toMillis);
-            amzaStats.quorums(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            amzaStats.quorums(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start, tookFrom);
             return quorum;
         } catch (TimeoutException e) {
             if (verboseLogTimeouts) {

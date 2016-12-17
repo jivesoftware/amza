@@ -23,9 +23,8 @@ import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartiti
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.text.NumberFormat;
+
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,14 +33,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
-/**
- *
- */
 // soy.page.amzaPartitionsPluginRegion
 public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPluginRegionInput> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
-    private final NumberFormat numberFormat = NumberFormat.getInstance();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final String template;
     private final SoyRenderer renderer;
@@ -62,29 +57,101 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
         final String action;
         final String ringName;
-        final String indexClassName;
         final String partitionName;
-        final String consistency;
+        final Durability durability;
+        final long tombstoneTimestampAgeInMillis;
+        final long tombstoneTimestampIntervalMillis;
+        final long tombstoneVersionAgeInMillis;
+        final long tombstoneVersionIntervalMillis;
+        final long ttlTimestampAgeInMillis;
+        final long ttlTimestampIntervalMillis;
+        final long ttlVersionAgeInMillis;
+        final long ttlVersionIntervalMillis;
+        final boolean forceCompactionOnStartup;
+        final Consistency consistency;
         final boolean requireConsistency;
         final boolean replicated;
+        final boolean disabled;
         final RowType rowType;
+        final String indexClassName;
+        final int maxValueSizeInIndex;
+        final Map<String, String> indexProperties;
+        final int updatesBetweenLeaps;
+        final int maxLeaps;
 
-        public AmzaPartitionsPluginRegionInput(String action,
+        public AmzaPartitionsPluginRegionInput() {
+            this.action = "";
+            this.ringName = "";
+            this.partitionName = "";
+            durability = Durability.fsync_async;
+            tombstoneTimestampAgeInMillis = 0;
+            tombstoneTimestampIntervalMillis = 0;
+            tombstoneVersionAgeInMillis = 0;
+            tombstoneVersionIntervalMillis = 0;
+            ttlTimestampAgeInMillis = 0;
+            ttlTimestampIntervalMillis = 0;
+            ttlVersionAgeInMillis = 0;
+            ttlVersionIntervalMillis = 0;
+            forceCompactionOnStartup = false;
+            consistency = Consistency.leader_quorum;
+            requireConsistency = true;
+            replicated = true;
+            disabled = false;
+            rowType = RowType.snappy_primary;
+            indexClassName = "lab";
+            maxValueSizeInIndex = -1;
+            indexProperties = null;
+            updatesBetweenLeaps = -1;
+            maxLeaps = -1;
+        }
+
+        public AmzaPartitionsPluginRegionInput(
+            String action,
             String ringName,
-            String indexClassName,
             String partitionName,
+            String durability,
+            long tombstoneTimestampAgeInMillis,
+            long tombstoneTimestampIntervalMillis,
+            long tombstoneVersionAgeInMillis,
+            long tombstoneVersionIntervalMillis,
+            long ttlTimestampAgeInMillis,
+            long ttlTimestampIntervalMillis,
+            long ttlVersionAgeInMillis,
+            long ttlVersionIntervalMillis,
+            boolean forceCompactionOnStartup,
             String consistency,
             boolean requireConsistency,
             boolean replicated,
-            RowType rowType) {
+            boolean disabled,
+            String rowType,
+            String indexClassName,
+            int maxValueSizeInIndex,
+            Map<String, String> indexProperties,
+            int updatesBetweenLeaps,
+            int maxLeaps) {
             this.action = action;
             this.ringName = ringName;
-            this.indexClassName = indexClassName;
             this.partitionName = partitionName;
-            this.consistency = consistency;
+            this.durability = Durability.valueOf(durability);
+            this.tombstoneTimestampAgeInMillis = tombstoneTimestampAgeInMillis;
+            this.tombstoneTimestampIntervalMillis = tombstoneTimestampIntervalMillis;
+            this.tombstoneVersionAgeInMillis = tombstoneVersionAgeInMillis;
+            this.tombstoneVersionIntervalMillis = tombstoneVersionIntervalMillis;
+            this.ttlTimestampAgeInMillis = ttlTimestampAgeInMillis;
+            this.ttlTimestampIntervalMillis = ttlTimestampIntervalMillis;
+            this.ttlVersionAgeInMillis = ttlVersionAgeInMillis;
+            this.ttlVersionIntervalMillis = ttlVersionIntervalMillis;
+            this.forceCompactionOnStartup = forceCompactionOnStartup;
+            this.consistency = Consistency.valueOf(consistency);
             this.requireConsistency = requireConsistency;
             this.replicated = replicated;
-            this.rowType = rowType;
+            this.disabled = disabled;
+            this.rowType = RowType.valueOf(rowType);
+            this.indexClassName = indexClassName;
+            this.maxValueSizeInIndex = maxValueSizeInIndex;
+            this.indexProperties = indexProperties;
+            this.updatesBetweenLeaps = updatesBetweenLeaps;
+            this.maxLeaps = maxLeaps;
         }
 
     }
@@ -94,48 +161,84 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-
             byte[] ringNameBytes = input.ringName.getBytes();
             byte[] partitionNameBytes = input.partitionName.getBytes();
-            if (input.action.equals("add")) {
-                if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
-                    amzaService.getRingWriter().ensureMaximalRing(ringNameBytes, 0);
 
-                    PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
-                    amzaService.createPartitionIfAbsent(partitionName,
-                        new PartitionProperties(Durability.fsync_never,
-                            0, 0, 0, 0, 0, 0, 0, 0,
-                            false,
-                            Consistency.valueOf(input.consistency),
-                            input.requireConsistency,
-                            input.replicated,
-                            false,
-                            input.rowType,
-                            input.indexClassName,
-                            -1,
-                            null,
-                            -1,
-                            -1));
-                    amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
-                }
-            } else if (input.action.equals("promote")) {
-                if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
-                    PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
-                    log.info("Promoting {}", partitionName);
-                    amzaService.promotePartition(partitionName);
-                }
-            } else if (input.action.equals("remove")) {
-                if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
-                    PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
-                    log.info("Removing {}", partitionName);
-                    amzaService.destroyPartition(partitionName);
+            if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
+                PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
+
+                switch (input.action) {
+                    case "add":
+                        LOG.info("Adding {}", partitionName);
+                        amzaService.getRingWriter().ensureMaximalRing(ringNameBytes, 0);
+                        amzaService.createPartitionIfAbsent(
+                            partitionName,
+                            new PartitionProperties(
+                                input.durability,
+                                input.tombstoneTimestampAgeInMillis,
+                                input.tombstoneTimestampIntervalMillis,
+                                input.tombstoneVersionAgeInMillis,
+                                input.tombstoneVersionIntervalMillis,
+                                input.ttlTimestampAgeInMillis,
+                                input.ttlTimestampIntervalMillis,
+                                input.ttlVersionAgeInMillis,
+                                input.ttlVersionIntervalMillis,
+                                input.forceCompactionOnStartup,
+                                input.consistency,
+                                input.requireConsistency,
+                                input.replicated,
+                                input.disabled,
+                                input.rowType,
+                                input.indexClassName,
+                                input.maxValueSizeInIndex,
+                                input.indexProperties,
+                                input.updatesBetweenLeaps,
+                                input.maxLeaps));
+                        amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
+                        break;
+
+                    case "promote":
+                        LOG.info("Promoting {}", partitionName);
+                        amzaService.promotePartition(partitionName);
+                        break;
+
+                    case "remove":
+                        LOG.info("Removing {}", partitionName);
+                        amzaService.destroyPartition(partitionName);
+                        break;
+
+                    case "update":
+                        amzaService.updateProperties(
+                            partitionName,
+                            new PartitionProperties(
+                                input.durability,
+                                input.tombstoneTimestampAgeInMillis,
+                                input.tombstoneTimestampIntervalMillis,
+                                input.tombstoneVersionAgeInMillis,
+                                input.tombstoneVersionIntervalMillis,
+                                input.ttlTimestampAgeInMillis,
+                                input.ttlTimestampIntervalMillis,
+                                input.ttlVersionAgeInMillis,
+                                input.ttlVersionIntervalMillis,
+                                input.forceCompactionOnStartup,
+                                input.consistency,
+                                input.requireConsistency,
+                                input.replicated,
+                                input.disabled,
+                                input.rowType,
+                                input.indexClassName,
+                                input.maxValueSizeInIndex,
+                                input.indexProperties,
+                                input.updatesBetweenLeaps,
+                                input.maxLeaps));
+                        break;
                 }
             }
-            List<Map<String, Object>> rows = new ArrayList<>();
+
             List<PartitionName> partitionNames = Lists.newArrayList();
             Iterables.addAll(partitionNames, amzaService.getSystemPartitionNames());
             Iterables.addAll(partitionNames, amzaService.getMemberPartitionNames());
-            Collections.sort(partitionNames, (o1, o2) -> {
+            partitionNames.sort((o1, o2) -> {
                 int i = -Boolean.compare(o1.isSystemPartition(), o2.isSystemPartition());
                 if (i != 0) {
                     return i;
@@ -151,16 +254,20 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 return i;
             });
 
+            List<Map<String, Object>> rows = new ArrayList<>();
+
             if (!input.ringName.isEmpty() || !input.partitionName.isEmpty()) {
                 long start = System.currentTimeMillis();
                 AtomicLong hits = new AtomicLong();
                 AtomicLong missed = new AtomicLong();
                 PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+
                 for (PartitionName partitionName : partitionNames) {
                     String pn = new String(partitionName.getName());
                     String prn = new String(partitionName.getRingName());
-                    if ((input.partitionName.isEmpty() || pn.contains(input.partitionName))
-                        && (input.ringName.isEmpty() || prn.contains(input.ringName))) {
+
+                    if ((input.partitionName.isEmpty() || pn.contains(input.partitionName) || input.partitionName.equals("*"))
+                        && (input.ringName.isEmpty() || prn.contains(input.ringName) || input.ringName.equals("*"))) {
 
                         hits.incrementAndGet();
 
@@ -182,19 +289,45 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                         PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
                         if (partitionProperties == null) {
-                            row.put("disabled", "?");
-                            row.put("consistency", "none");
-                            row.put("requireConsistency", "true");
-                            row.put("takeFromFactor", "?");
-
-                            row.put("partitionProperties", "none");
-
+                            row.put("durability", Durability.fsync_async);
+                            row.put("tombstoneTimestampAgeInMillis", 0);
+                            row.put("tombstoneTimestampIntervalMillis", 0);
+                            row.put("tombstoneVersionAgeInMillis", 0);
+                            row.put("tombstoneVersionIntervalMillis", 0);
+                            row.put("ttlTimestampAgeInMillis", 0);
+                            row.put("ttlTimestampIntervalMillis", 0);
+                            row.put("ttlVersionAgeInMillis", 0);
+                            row.put("ttlVersionIntervalMillis", 0);
+                            row.put("forceCompactionOnStartup", false);
+                            row.put("consistency", Consistency.leader_quorum);
+                            row.put("requireConsistency", true);
+                            row.put("replicated", true);
+                            row.put("disabled", false);
+                            row.put("rowType", partitionProperties.rowType);
+                            row.put("indexClassName", "lab");
+                            row.put("maxValueSizeInIndex", -1);
+                            row.put("updatesBetweenLeaps", -1);
+                            row.put("maxLeaps", -1);
                         } else {
-                            row.put("disabled", partitionProperties.disabled);
-                            row.put("replicated", partitionProperties.replicated);
-                            row.put("consistency", partitionProperties.consistency.name());
+                            row.put("durability", partitionProperties.durability);
+                            row.put("tombstoneTimestampAgeInMillis", (int) partitionProperties.tombstoneTimestampAgeInMillis);
+                            row.put("tombstoneTimestampIntervalMillis", (int) partitionProperties.tombstoneTimestampIntervalMillis);
+                            row.put("tombstoneVersionAgeInMillis", (int) partitionProperties.tombstoneVersionAgeInMillis);
+                            row.put("tombstoneVersionIntervalMillis", (int) partitionProperties.tombstoneVersionIntervalMillis);
+                            row.put("ttlTimestampAgeInMillis", (int) partitionProperties.ttlTimestampAgeInMillis);
+                            row.put("ttlTimestampIntervalMillis", (int) partitionProperties.ttlTimestampIntervalMillis);
+                            row.put("ttlVersionAgeInMillis", (int) partitionProperties.ttlVersionAgeInMillis);
+                            row.put("ttlVersionIntervalMillis", (int) partitionProperties.ttlVersionIntervalMillis);
+                            row.put("forceCompactionOnStartup", partitionProperties.forceCompactionOnStartup);
+                            row.put("consistency", partitionProperties.consistency);
                             row.put("requireConsistency", partitionProperties.requireConsistency);
-                            row.put("partitionProperties", partitionProperties.toString());
+                            row.put("replicated", partitionProperties.replicated);
+                            row.put("disabled", partitionProperties.disabled);
+                            row.put("rowType", partitionProperties.rowType);
+                            row.put("indexClassName", partitionProperties.indexClassName);
+                            row.put("maxValueSizeInIndex", partitionProperties.maxValueSizeInIndex);
+                            row.put("updatesBetweenLeaps", partitionProperties.updatesBetweenLeaps);
+                            row.put("maxLeaps", partitionProperties.maxLeaps);
                         }
 
                         try {
@@ -210,16 +343,16 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                                 }
                                 return null;
                             });
-                        } catch (PartitionIsDisposedException e) {
+                        } catch (PartitionIsDisposedException | PropertiesNotPresentException e) {
                             row.put("highwaters", "partition-disposed");
-                        } catch (PropertiesNotPresentException e) {
-                            row.put("highwaters", "properties-disposed");
                         }
+
                         rows.add(row);
                     } else {
                         missed.incrementAndGet();
                     }
                 }
+
                 data.put("message", "Found " + hits + "/" + missed + " in " + getDurationBreakdown(System.currentTimeMillis() - start));
                 data.put("messageType", "info");
             } else {
@@ -228,15 +361,17 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             }
 
             data.put("partitions", rows);
-
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            data.put("partitions", new ArrayList<>());
+            data.put("message", e.getLocalizedMessage());
+            data.put("messageType", "warning");
+            LOG.error("Unable to retrieve data", e);
         }
 
         return renderer.render(template, data);
     }
 
-    public String renderHighwaters(WALHighwater walHighwater) {
+    private String renderHighwaters(WALHighwater walHighwater) {
         StringBuilder sb = new StringBuilder();
         for (WALHighwater.RingMemberHighwater e : walHighwater.ringMemberHighwater) {
             sb.append("<p>");

@@ -22,7 +22,7 @@ import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDuration
 // soy.page.amzaRingPluginRegion
 public class AmzaRingsPluginRegion implements PageRegion<AmzaRingsPluginRegion.AmzaRingsPluginRegionInput> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final String template;
     private final SoyRenderer renderer;
@@ -96,7 +96,7 @@ public class AmzaRingsPluginRegion implements PageRegion<AmzaRingsPluginRegion.A
             }
             data.put("rings", rows);
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
         }
 
         return renderer.render(template, data);

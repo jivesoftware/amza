@@ -1,7 +1,6 @@
 {namespace soy.page}
 
 /**
- * 
  * @param? partitions
  * @param? message
  * @param? messageType
@@ -10,7 +9,7 @@
     {if $partitions}
         <div class="panel panel-default">
             <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Partitions</div>
-                <div class="panel-body">                    
+                <div class="panel-body">
                     <table class="table table-condensed table-responsive">
                         <thead>
                             <tr class="active">
@@ -18,11 +17,7 @@
                                 <th>Type</th>
                                 <th>Name</th>
                                 <th>RingName</th>
-                                <th>Disabled</th>
                                 <th>Properties</th>
-                                <th>Consistency</th>
-                                <th>Require Consistency</th>
-                                <th>Replicated</th>
                                 <th>Highwaters</th>
                             </tr>
                         </thead>
@@ -35,54 +30,213 @@
                                     </td>
                                     <td></td>
                                     <td>
-                                        <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                        <input form="add-ring-host" type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
                                         class="form-control" placeholder="Name" value=""
-                                        name="name" id="namePicker"  title="">
+                                        name="name" title="">
                                     </td>
                                     <td>
-                                        <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                        <input form="add-ring-host" type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
                                         class="form-control" placeholder="RingName" value=""
-                                        name="ringName" id="ringNamePicker" title="">
+                                        name="ringName" title="">
                                     </td>
                                     <td>
-                                        <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                        class="form-control" placeholder="Disabled" value=""
-                                        name="disabled" id="disabledPicker"  title="">
-                                    </td>
-                                    <td>TODO</td>
-                                    <td>
-                                        <select style="width:120px; padding-left:10px;" class="form-control"
-                                            placeholder="Consistency" name="consistency">
-                                            <option value="none" selected="selected">None</option>
-                                            <option value="leader">Leader</option>
-                                            <option value="leader_plus_one">Leader Plus One</option>
-                                            <option value="leader_quorum">Leader Quorum</option>
-                                            <option value="quorum">Quorum</option>
-                                            <option value="write_all_read_one">Write All Read One</option>
-                                            <option value="write_one_read_all">Write One Read All</option>
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                        class="form-control" placeholder="Require Consistency" value=""
-                                        name="requireConsistency" id="requireConsistencyPicker" title="">
-                                    </td>
-                                    <td>
-                                        <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                        class="form-control" placeholder="Replicated" value=""
-                                        name="replicated" id="replicated" title="">
+                                        <a href="#" rel="popover" id="propertyPopoverAnchor-config-add" data-popover-content="#propertyPopover-config-add" data-placement="left" class="btn btn-primary" title="Config">
+                                            <span class="glyphicon glyphicon-menu-down"></span>Config
+                                        </a>
+                                        <div id="propertyPopover-config-add" class="hide" style="overflow:auto; width:400px; height:400px;">
+                                            <table>
+                                                <tr>
+                                                    <td>Durability</td>
+                                                    <td>
+                                                        <select form="add-ring-host" style="width:160px; padding-left:10px;"
+                                                            class="form-control"
+                                                            placeholder="Durability" name="durability">
+                                                            <option value="ephemeral">Ephemeral</option>
+                                                            <option value="fsync_never">Fsync Never</option>
+                                                            <option value="fsync_async" selected="selected">Fsync Async</option>
+                                                            <option value="fsync_always">Fsync Always</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Tombstone Age</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="tombstoneTimestampAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="tombstoneTimestampAgeInMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Tombstone Interval</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="tombstoneTimestampIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="tombstoneTimestampIntervalMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Tombstone Version Age</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="tombstoneVersionAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="tombstoneVersionAgeInMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Tombstone Version Interval</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="tombstoneVersionIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="tombstoneVersionIntervalMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>TTL Age</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="ttlTimestampAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="ttlTimestampAgeInMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>TTL Interval</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="ttlTimestampIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="ttlTimestampIntervalMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>TTL Version Age</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="ttlVersionAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="ttlVersionAgeInMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>TTL Version Interval</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="ttlVersionIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="ttlVersionIntervalMillis" value="0"
+                                                            data-original-title="" title="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Force Compaction On Startup</td>
+                                                    <td>
+                                                        <input form="add-ring-host" class="form-control" type="checkbox" name="forceCompactionOnStartup" value="true">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Consistency</td>
+                                                    <td>
+                                                        <select form="add-ring-host" style="width:160px; padding-left:10px;"
+                                                            class="form-control"
+                                                            placeholder="Consistency" name="consistency">
+                                                            <option value="none">None</option>
+                                                            <option value="leader">Leader</option>
+                                                            <option value="leader_plus_one">Leader Plus One</option>
+                                                            <option value="leader_quorum" selected="selected">Leader Quorum</option>
+                                                            <option value="quorum">Quorum</option>
+                                                            <option value="write_all_read_one">Write All Read One</option>
+                                                            <option value="write_one_read_all">Write One Read All</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Require Consistency</td>
+                                                    <td>
+                                                        <input form="add-ring-host" class="form-control" type="checkbox" name="requireConsistency" value="true" checked="checked">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Replicated</td>
+                                                    <td>
+                                                        <input form="add-ring-host" class="form-control" type="checkbox" name="replicated" value="true" checked="checked">
+                                                    </td>
+                                                 </tr>
+                                                <tr>
+                                                    <td>Disabled</td>
+                                                    <td>
+                                                        <input form="add-ring-host" class="form-control" type="checkbox" name="disabled" value="true">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Row Type</td>
+                                                    <td>
+                                                        <select form="add-ring-host" style="width:160px; padding-left:10px;" class="form-control"
+                                                            placeholder="Row Type" name="rowType">
+                                                            <option value="end_of_merge">End of Merge</option>
+                                                            <option value="system">System</option>
+                                                            <option value="highwater">Highwater</option>
+                                                            <option value="primary">Primary</option>
+                                                            <option value="snappy_primary" selected="selected">Snappy Primary</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Index Class Name</td>
+                                                    <td>
+                                                        <select form="add-ring-host" style="width:160px; padding-left:10px;" class="form-control"
+                                                            placeholder="indexClassName" name="indexClassName">
+                                                            <option value="berkeleydb">Berkeley DB</option>
+                                                            <option value="lab" selected="selected">LAB</option>
+                                                            <option value="memory_ephemeral">Memory Ephemeral</option>
+                                                            <option value="memory_persistent">Memory Persistent</option>
+                                                            <option value="noop_persistent">Noop Persistent</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Max Value Size In Index</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="maxValueSizeInIndex" min="-1" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="maxValueSizeInIndex" value="-1"
+                                                            data-original-title="" title="-1">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Updates Between Leaps</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="updatesBetweenLeaps" min="-1" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="updatesBetweenLeaps" value="-1"
+                                                            data-original-title="" title="-1">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Max Leaps</td>
+                                                    <td>
+                                                        <input form="add-ring-host" type="number" name="maxLeaps" min="-1" autocomplete="off" role="combobox"
+                                                            style="width:160px; padding-left:10px;"
+                                                            class="form-control" placeholder="maxLeaps" value="-1"
+                                                            data-original-title="" title="-1">
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </div>
                                     </td>
                                     <td></td>
                                 </tr>
                             </form>
 
                             {foreach $r in $partitions}
-                                <form class="j-form" data-active-class="btn-default" method="post">
-                                    <tr>    
+                                <form id="edit-ring-host-{$r.name}" class="j-form" data-active-class="btn-default" method="post">
+                                    <tr>
                                         <td>
                                             <a href="/amza/ui/inspect?regionType={$r.type}&amp;ringName={$r.ringName}&amp;regionName={$r.name}" class="btn btn-default" title="Inspect"><span class="glyphicon glyphicon-search"></a>
-                                            <input type="hidden" name="ringName" value="{$r.ringName}">
-                                            <input type="hidden" name="partitionName" value="{$r.name}">
+                                            <input form="edit-ring-host-{$r.name}" type="hidden" name="ringName" value="{$r.ringName}">
+                                            <input form="edit-ring-host-{$r.name}" type="hidden" name="partitionName" value="{$r.name}">
                                             {if $r.type != 'SYSTEM'}
                                                 <div class="btn-group" role="group" aria-label="...">
                                                     <button title="Promote" type="submit" name="action" value="promote" class="btn btn-default"><span class="glyphicon glyphicon-king"></span></button>
@@ -97,61 +251,297 @@
                                             {if $r.type == 'SYSTEM'}
                                                 {$r.name}
                                             {else}
-                                                <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
-                                                placeholder="name" value="{$r.name}" name="name"  class="form-control">
+                                                <input form="edit-ring-host-{$r.name}" type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                                placeholder="name" value="{$r.name}" name="name" class="form-control">
                                             {/if}
                                         </td>
                                         <td>
                                             {if $r.type == 'SYSTEM'}
                                                 {$r.ringName}
                                             {else}
-                                                <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
-                                                placeholder="ringName" value="{$r.ringName}" name="ringName"  class="form-control">
+                                                <input form="edit-ring-host-{$r.name}" type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                                placeholder="ringName" value="{$r.ringName}" name="ringName" class="form-control">
                                             {/if}
                                         </td>
                                         <td>
-                                            {if $r.type == 'SYSTEM'}
-                                                {$r.disabled}
-                                            {else}
-                                                <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                                class="form-control" placeholder="Name" value="true"
-                                                name="name" id="hostPicker"  title="{$r.disabled}" {if $r.disabled}checked="checked"{/if}>
-                                            {/if}
-                                        </td>
-                                        <td>{$r.partitionProperties}</td>
-                                        <td>
-                                            {if $r.type == 'SYSTEM'}
-                                                {$r.consistency}
-                                            {else}
-                                                <select style="width:120px; padding-left:10px;" class="form-control"
-                                                    placeholder="Consistency" name="consistency">
-                                                    <option value="none" {if $r.consistency == 'none'}selected="selected"{/if}>None</option>
-                                                    <option value="leader" {if $r.consistency == 'leader'}selected="selected"{/if}>Leader</option>
-                                                    <option value="leader_plus_one" {if $r.consistency == 'leader_plus_one'}selected="selected"{/if}>Leader Plus One</option>
-                                                    <option value="leader_quorum" {if $r.consistency == 'leader_quorum'}selected="selected"{/if}>Leader Quorum</option>
-                                                    <option value="quorum" {if $r.consistency == 'quorum'}selected="quorum"{/if}>Quorum</option>
-                                                    <option value="write_all_read_one" {if $r.consistency == 'write_all_read_one'}selected="selected"{/if}>Write All Read One</option>
-                                                    <option value="write_one_read_all" {if $r.consistency == 'write_one_read_all'}selected="selected"{/if}>Write One Read All</option>
-                                                </select>
-                                            {/if}
-                                        </td>
-                                        <td>
-                                            {if $r.type == 'SYSTEM'}
-                                                {$r.requireConsistency}
-                                            {else}
-                                                <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                                class="form-control" placeholder="Require Consistency" value="true"
-                                                name="requireConsistency" id="requireConsistencyPicker"  title="" {if $r.requireConsistency}checked="checked"{/if}>
-                                            {/if}
-                                        </td>
-                                        <td>
-                                            {if $r.type == 'SYSTEM'}
-                                                {$r.replicated}
-                                            {else}
-                                                <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                                class="form-control" placeholder="Replicated" value="true"
-                                                name="replicated" id="replicated" title="" {if $r.replicated}checked="checked"{/if}>
-                                            {/if}
+                                            <a href="#" rel="popover" id="propertyPopoverAnchor-config-{$r.name}" data-popover-content="#propertyPopover-config-{$r.name}" data-placement="left" class="btn btn-primary" title="Config">
+                                                <span class="glyphicon glyphicon-menu-down"></span>Config
+                                            </a>
+                                            <div id="propertyPopover-config-{$r.name}" class="hide">
+                                                <div id="propertyPopover-config-inner-{$r.name}" style="overflow:auto; width:400px; height:400px;">
+                                                    <table>
+                                                        <tr>
+                                                            <td>Durability</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.durability}
+                                                                {else}
+                                                                    <select form="edit-ring-host-{$r.name}" style="width:160px; padding-left:10px;" class="form-control"
+                                                                        placeholder="Durability" name="durability">
+                                                                        <option value="ephemeral" {if $r.durability == 'ephemeral'}selected="selected"{/if}>Ephemeral</option>
+                                                                        <option value="fsync_never" {if $r.durability == 'fsync_never'}selected="selected"{/if}>Fsync Never</option>
+                                                                        <option value="fsync_async" {if $r.durability == 'fsync_async'}selected="selected"{/if}>Fsync Async</option>
+                                                                        <option value="fsync_always" {if $r.durability == 'fsync_always'}selected="selected"{/if}>Fsync Always</option>
+                                                                    </select>
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Tombstone Age</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.tombstoneTimestampAgeInMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="tombstoneTimestampAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="tombstoneTimestampAgeInMillis" value="{$r.tombstoneTimestampAgeInMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.tombstoneTimestampAgeInMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Tombstone Interval</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.tombstoneTimestampIntervalMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="tombstoneTimestampIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="tombstoneTimestampIntervalMillis" value="{$r.tombstoneTimestampIntervalMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.tombstoneTimestampIntervalMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Tombstone Version Age</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.tombstoneVersionAgeInMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="tombstoneVersionAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="tombstoneVersionAgeInMillis" value="{$r.tombstoneVersionAgeInMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.tombstoneVersionAgeInMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Tombstone Version Interval</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.tombstoneVersionIntervalMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="tombstoneVersionIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="tombstoneVersionIntervalMillis" value="{$r.tombstoneVersionIntervalMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.tombstoneVersionIntervalMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>TTL Age</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.ttlTimestampAgeInMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="ttlTimestampAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="ttlTimestampAgeInMillis" value="{$r.ttlTimestampAgeInMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.ttlTimestampAgeInMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>TTL Interval</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.ttlTimestampIntervalMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="ttlTimestampIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="ttlTimestampIntervalMillis" value="{$r.ttlTimestampIntervalMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.ttlTimestampIntervalMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>TTL Version Age</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.ttlVersionAgeInMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="ttlVersionAgeInMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="ttlVersionAgeInMillis" value="{$r.ttlVersionAgeInMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.ttlVersionAgeInMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>TTL Version Interval</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.ttlVersionIntervalMillis}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="ttlVersionIntervalMillis" min="0" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="ttlVersionIntervalMillis" value="{$r.ttlVersionIntervalMillis?:'0'}"
+                                                                        data-original-title="" title="{$r.ttlVersionIntervalMillis?:'0'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Force Compaction On Startup</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.forceCompactionOnStartup}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                                    class="form-control" placeholder="Force Compaction On Startup"
+                                                                    value="true"
+                                                                    name="forceCompactionOnStartup" title="" {if $r.forceCompactionOnStartup}checked="checked"{/if}>
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Consistency</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.consistency}
+                                                                {else}
+                                                                    <select form="edit-ring-host-{$r.name}" style="width:160px; padding-left:10px;" class="form-control"
+                                                                        placeholder="Consistency" name="consistency">
+                                                                        <option value="none" {if $r.consistency == 'none'}selected="selected"{/if}>None</option>
+                                                                        <option value="leader" {if $r.consistency == 'leader'}selected="selected"{/if}>Leader</option>
+                                                                        <option value="leader_plus_one" {if $r.consistency == 'leader_plus_one'}selected="selected"{/if}>Leader Plus One</option>
+                                                                        <option value="leader_quorum" {if $r.consistency == 'leader_quorum'}selected="selected"{/if}>Leader Quorum</option>
+                                                                        <option value="quorum" {if $r.consistency == 'quorum'}selected="selected"{/if}>Quorum</option>
+                                                                        <option value="write_all_read_one" {if $r.consistency == 'write_all_read_one'}selected="selected"{/if}>Write All Read One</option>
+                                                                        <option value="write_one_read_all" {if $r.consistency == 'write_one_read_all'}selected="selected"{/if}>Write One Read All</option>
+                                                                    </select>
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Require Consistency</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.requireConsistency}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                                    class="form-control" placeholder="Require Consistency"
+                                                                    value="true"
+                                                                    name="requireConsistency" title="" {if $r.requireConsistency}checked="checked"{/if}>
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Replicated</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.replicated}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                                    class="form-control" placeholder="Replicated"
+                                                                    value="true"
+                                                                    name="replicated" title="" {if $r.replicated}checked="checked"{/if}>
+                                                                {/if}
+                                                            </td>
+                                                         </tr>
+                                                        <tr>
+                                                            <td>Disabled</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.disabled}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                                    class="form-control" placeholder="Disabled"
+                                                                    value="true"
+                                                                    name="disabled" title="" {if $r.disabled}checked="checked"{/if}>
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Row Type</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.rowType}
+                                                                {else}
+                                                                    <select form="edit-ring-host-{$r.name}" style="width:160px; padding-left:10px;" class="form-control"
+                                                                        placeholder="Row Type" name="rowType">
+                                                                        <option value="end_of_merge" {if $r.rowType == 'end_of_merge'}selected="selected"{/if}>End of Merge</option>
+                                                                        <option value="system" {if $r.rowType == 'system'}selected="selected"{/if}>System</option>
+                                                                        <option value="highwater" {if $r.rowType == 'highwater'}selected="selected"{/if}>Highwater</option>
+                                                                        <option value="primary" {if $r.rowType == 'primary'}selected="selected"{/if}>Primary</option>
+                                                                        <option value="snappy_primary" {if $r.rowType == 'snappy_primary'}selected="selected"{/if}>Snappy Primary</option>
+                                                                    </select>
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Index Class Name</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.rowType}
+                                                                {else}
+                                                                    <select form="edit-ring-host-{$r.name}" style="width:160px; padding-left:10px;" class="form-control"
+                                                                        placeholder="indexClassName" name="indexClassName">
+                                                                        <option value="berkeleydb" {if $r.indexClassName == 'berkeleydb'}selected="selected"{/if}>Berkeley DB</option>
+                                                                        <option value="lab" {if $r.indexClassName == 'lab'}selected="selected"{/if}>LAB</option>
+                                                                        <option value="memory_ephemeral" {if $r.indexClassName == 'memory_ephemeral'}selected="selected"{/if}>Memory Ephemeral</option>
+                                                                        <option value="memory_persistent" {if $r.indexClassName == 'memory_persistent'}selected="selected"{/if}>Memory Persistent</option>
+                                                                        <option value="noop_persistent" {if $r.indexClassName == 'noop_persistent'}selected="selected"{/if}>Noop Persistent</option>
+                                                                    </select>
+                                                                 {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Max Value Size In Index</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.maxValueSizeInIndex}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="maxValueSizeInIndex" min="-1" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="maxValueSizeInIndex" value="{$r.maxValueSizeInIndex?:'-1'}"
+                                                                        data-original-title="" title="{$r.maxValueSizeInIndex?:'-1'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Updates Between Leaps</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.updatesBetweenLeaps}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="updatesBetweenLeaps" min="-1" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="updatesBetweenLeaps" value="{$r.updatesBetweenLeaps?:'-1'}"
+                                                                        data-original-title="" title="{$r.updatesBetweenLeaps?:'-1'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Max Leaps</td>
+                                                            <td>
+                                                                {if $r.type == 'SYSTEM'}
+                                                                    {$r.updatesBetweenLeaps}
+                                                                {else}
+                                                                    <input form="edit-ring-host-{$r.name}" type="number" name="maxLeaps" min="-1" autocomplete="off" role="combobox"
+                                                                        style="width:160px; padding-left:10px;"
+                                                                        class="form-control" placeholder="maxLeaps" value="{$r.maxLeaps?:'-1'}"
+                                                                        data-original-title="" title="{$r.maxLeaps?:'-1'}">
+                                                                {/if}
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </div>
+                                                {if $r.type == 'USER'}
+                                                    <button form="edit-ring-host-{$r.name}" title="Update" type="submit" name="action" value="update" class="btn btn-default">
+                                                       <span class="glyphicon glyphicon-save"></span>&nbsp;Update
+                                                    </button>
+                                                {/if}
+                                            </div>
                                         </td>
                                         <td>{$r.highwaters|noAutoescape}</td>
                                     </tr>

@@ -22,7 +22,7 @@ import java.util.Map;
 // soy.page.amzaClusterPluginRegion
 public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterPluginRegion.AmzaClusterPluginRegionInput>> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final String template;
     private final SoyRenderer renderer;
@@ -85,7 +85,7 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
 
             }
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
         }
 
         return renderer.render(template, data);

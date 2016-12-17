@@ -3,16 +3,12 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.ui.region.HomeRegion.HomeInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
 
 /**
  *
  */
 public class HomeRegion implements PageRegion<HomeInput> {
-
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
     private final String template;
     private final SoyRenderer renderer;

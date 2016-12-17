@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 // soy.page.amzaStressPluginRegion
 public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegion.AmzaInspectPluginRegionInput> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final String template;
     private final SoyRenderer renderer;
@@ -327,7 +327,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             data.put("rows", rows);
 
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
             msg.add(e.getMessage());
         }
 

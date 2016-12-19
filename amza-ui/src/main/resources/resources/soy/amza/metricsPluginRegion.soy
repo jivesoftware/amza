@@ -154,7 +154,7 @@
                                         </tr>
                                     </tbody>
                                 </table>
-                                {foreach $l in $r.tookLatencies}
+                                {if $r.tookLatencies}
                                     <table class="table table-condensed">
                                         <thead>
                                             <tr class="active">
@@ -168,20 +168,20 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {foreach $l in $longPolled}
+                                            {foreach $took in $r.tookLatencies}
                                                 <tr>
-                                                    <td>{$l.member?:''}</td>
-                                                    <td>{$l.latency?:''}</td>
-                                                    <td>{$l.category?:''}</td>
-                                                    <td>{$l.tooSlow?:''}</td>
-                                                    <td>{$l.takeSessionId?:''}</td>
-                                                    <td>{$l.online?:''}</td>
-                                                    <td>{$l.steadyState?:''}</td>
+                                                    <td>{$took.member?:''}</td>
+                                                    <td>{$took.latency?:''}</td>
+                                                    <td>{$took.category?:''}</td>
+                                                    <td>{$took.tooSlow?:''}</td>
+                                                    <td>{$took.takeSessionId?:''}</td>
+                                                    <td>{$took.online?:''}</td>
+                                                    <td>{$took.steadyState?:''}</td>
                                                 </tr>
                                             {/foreach}
                                         </tbody>
                                     </table>
-                                {/foreach}
+                                {/if}
                             </td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>

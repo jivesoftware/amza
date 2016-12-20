@@ -130,6 +130,7 @@ public class AmzaStats {
         public volatile long updatesLag = 0;
         public final LongAdder offers = new LongAdder();
         public volatile long offersLag = 0;
+        public final Map<RingMember, AtomicLong> memberOffersLag = Maps.newConcurrentMap();
         public final LongAdder takes = new LongAdder();
         public volatile long takesLag = 0;
         public final LongAdder takeApplies = new LongAdder();
@@ -138,6 +139,7 @@ public class AmzaStats {
         public volatile long directAppliesLag = 0;
         public final LongAdder acks = new LongAdder();
         public volatile long acksLag = 0;
+        public final Map<RingMember, AtomicLong> memberAcksLag = Maps.newConcurrentMap();
         public final LongAdder quorums = new LongAdder();
         public volatile long quorumsLatency = 0;
         public final Map<RingMember, AtomicLong> memberQuorumsLatency = Maps.newConcurrentMap();
@@ -297,13 +299,15 @@ public class AmzaStats {
         grandTotals.updatesLag = (grandTotals.updatesLag + lag) / 2;
     }
 
-    public void offers(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
+    public void offers(RingMember to, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.offers.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.offers.add(count);
         long lag = lag(smallestTxId);
         totals.offersLag = lag;
         grandTotals.offersLag = (grandTotals.offersLag + lag) / 2;
+        grandTotals.memberOffersLag.computeIfAbsent(to, ringMember1 -> new AtomicLong())
+            .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
     }
 
     public void acks(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
@@ -313,6 +317,8 @@ public class AmzaStats {
         long lag = lag(smallestTxId);
         totals.acksLag = lag;
         grandTotals.acksLag = (grandTotals.acksLag + lag) / 2;
+        grandTotals.memberAcksLag.computeIfAbsent(from, ringMember1 -> new AtomicLong())
+            .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
     }
 
     public void quorums(PartitionName partitionName, int count, long lag, List<RingMember> tookFrom) {

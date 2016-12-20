@@ -1,10 +1,13 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.MetricsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
@@ -56,8 +59,8 @@ public class MetricsPluginEndpoints {
     @GET
     @Produces(MediaType.TEXT_HTML)
     @Path("/overview")
-    public Response overview() throws Exception {
-        return Response.ok(pluginRegion.renderOverview()).build();
+    public Response overview(@QueryParam("expand") List<String> expand) throws Exception {
+        return Response.ok(pluginRegion.renderOverview(expand == null ? Collections.emptySet() : Sets.newHashSet(expand))).build();
     }
 
     @POST

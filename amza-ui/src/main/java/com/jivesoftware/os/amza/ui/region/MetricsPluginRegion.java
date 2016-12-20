@@ -78,6 +78,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     private final List<GarbageCollectorMXBean> garbageCollectors;
     private final MemoryMXBean memoryBean;
     private final RuntimeMXBean runtimeBean;
+    private final Map<String, String> progressKeys = Maps.newConcurrentMap();
 
     public MetricsPluginRegion(String template,
         String partitionMetricsTemplate,
@@ -490,7 +491,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         return partitionViz;
     }
 
-    public String renderOverview() throws Exception {
+    public String renderOverview(Set<String> expandKeys) throws Exception {
 
         StringBuilder sb = new StringBuilder();
         sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
@@ -508,13 +509,15 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
             (int) (processCpuLoad),
-            numberFormat.format(processCpuLoad) + " cpu load"));
+            numberFormat.format(processCpuLoad) + " cpu load",
+            null, null));
 
         double memoryLoad = (double) memoryBean.getHeapMemoryUsage().getUsed() / (double) memoryBean.getHeapMemoryUsage().getMax();
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false),
+            null, null));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -523,72 +526,111 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         double gcLoad = (double) s / (double) runtimeBean.getUptime();
         sb.append(progress("GC",
             (int) (gcLoad * 100),
-            getDurationBreakdown(s) + " total gc"));
+            getDurationBreakdown(s) + " total gc",
+            null, null));
 
         Totals grandTotal = amzaStats.getGrandTotal();
 
         sb.append(progress("Gets (" + numberFormat.format(grandTotal.gets.longValue()) + ")",
             (int) (((double) grandTotal.getsLatency / 1000d) * 100),
-            getDurationBreakdown(grandTotal.getsLatency) + " lag"));
+            getDurationBreakdown(grandTotal.getsLatency) + " lag",
+            null, null));
 
         sb.append(progress("Scans (" + numberFormat.format(grandTotal.scans.longValue()) + ")",
             (int) ((grandTotal.scansLatency / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scansLatency) + " lag"));
+            getDurationBreakdown(grandTotal.scansLatency) + " lag",
+            null, null));
 
         sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.longValue()) + ")",
             (int) ((grandTotal.scanKeysLatency / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scanKeysLatency) + " lag"));
+            getDurationBreakdown(grandTotal.scanKeysLatency) + " lag",
+            null, null));
 
         sb.append(progress("Direct Applied (" + numberFormat.format(grandTotal.directApplies.longValue()) + ")",
             (int) ((grandTotal.directAppliesLag / 1000d) * 100),
-            getDurationBreakdown(grandTotal.directAppliesLag) + " lag"));
+            getDurationBreakdown(grandTotal.directAppliesLag) + " lag",
+            null, null));
 
         sb.append(progress("Updates (" + numberFormat.format(grandTotal.updates.longValue()) + ")",
             (int) ((grandTotal.updatesLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.updatesLag) + " lag"));
+            getDurationBreakdown(grandTotal.updatesLag) + " lag",
+            null, null));
+
+        List<Map<String, Object>> subOffersLag = Lists.newArrayList();
+        if (expandKeys.contains("offers")) {
+            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberOffersLag.entrySet()) {
+                long latency = entry.getValue().get();
+                subOffersLag.add(progressData("Offers " + entry.getKey().getMember(),
+                    (int) ((latency / 10000d) * 100),
+                    getDurationBreakdown(latency) + " lag"));
+            }
+        }
 
         sb.append(progress("Offers (" + numberFormat.format(grandTotal.offers.longValue()) + ")",
             (int) ((grandTotal.offersLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.offersLag) + " lag"));
+            getDurationBreakdown(grandTotal.offersLag) + " lag",
+            "offers", subOffersLag));
 
         sb.append(progress("Took (" + numberFormat.format(grandTotal.takes.longValue()) + ")",
             (int) ((grandTotal.takesLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.takesLag) + " lag"));
+            getDurationBreakdown(grandTotal.takesLag) + " lag",
+            null, null));
 
         sb.append(progress("Took Applied (" + numberFormat.format(grandTotal.takeApplies.longValue()) + ")",
             (int) ((grandTotal.takeAppliesLag / 1000d) * 100),
-            getDurationBreakdown(grandTotal.takeAppliesLag) + " lag"));
+            getDurationBreakdown(grandTotal.takeAppliesLag) + " lag",
+            null, null));
 
         sb.append(progress("Took Average Rows (" + numberFormat.format(amzaStats.takes.longValue()) + ")",
             (int) (((double) amzaStats.takeExcessRows.longValue()/ amzaStats.takes.longValue()) / 4096 * 100),
-            numberFormat.format(amzaStats.takeExcessRows.longValue())));
+            numberFormat.format(amzaStats.takeExcessRows.longValue()),
+            null, null));
+
+        List<Map<String, Object>> subAcksLag = Lists.newArrayList();
+        if (expandKeys.contains("acks")) {
+            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberAcksLag.entrySet()) {
+                long latency = entry.getValue().get();
+                subAcksLag.add(progressData("Acks " + entry.getKey().getMember(),
+                    (int) ((latency / 10000d) * 100),
+                    getDurationBreakdown(latency) + " lag"));
+            }
+        }
 
         sb.append(progress("Acks (" + numberFormat.format(grandTotal.acks.longValue()) + ")",
             (int) ((grandTotal.acksLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.acksLag) + " lag"));
+            getDurationBreakdown(grandTotal.acksLag) + " lag",
+            "acks", subAcksLag));
+
+        List<Map<String, Object>> subQuorumsLatency = Lists.newArrayList();
+        if (expandKeys.contains("quorums")) {
+            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
+                long latency = entry.getValue().get();
+                subAcksLag.add(progressData("Quorums " + entry.getKey().getMember(),
+                    (int) ((latency / 10000d) * 100),
+                    getDurationBreakdown(latency) + " lag"));
+            }
+        }
 
         sb.append(progress("Quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
             (int) ((grandTotal.quorumsLatency / 10000d) * 100),
-            getDurationBreakdown(grandTotal.quorumsLatency) + " lag"));
-
-        for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
-            long latency = entry.getValue().get();
-            sb.append(progress("Quorums " + entry.getKey(),
-                (int) ((latency / 10000d) * 100),
-                getDurationBreakdown(latency) + " lag"));
-        }
+            getDurationBreakdown(grandTotal.quorumsLatency) + " lag",
+            "quorums", subQuorumsLatency));
 
         sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.longValue()) + ")",
-            (int) ((amzaStats.availableRowsStream.longValue() / 100d) * 100), ""));
+            (int) ((amzaStats.availableRowsStream.longValue() / 100d) * 100), "",
+            null, null));
 
         sb.append(progress("Active Row Streaming (" + numberFormat.format(amzaStats.rowsStream.longValue()) + ")",
-            (int) ((amzaStats.rowsStream.longValue() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsStream.longValue())));
+            (int) ((amzaStats.rowsStream.longValue() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsStream.longValue()),
+            null, null));
 
         sb.append(progress("Active Row Acknowledging (" + numberFormat.format(amzaStats.rowsTaken.longValue()) + ")",
-            (int) ((amzaStats.rowsTaken.longValue() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsTake.longValue())));
+            (int) ((amzaStats.rowsTaken.longValue() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsTake.longValue()),
+            null, null));
 
         sb.append(progress("Back Pressure (" + numberFormat.format(amzaStats.backPressure.longValue()) + ")",
-            (int) ((amzaStats.backPressure.longValue() / 10000d) * 100), "" + amzaStats.pushBacks.longValue()));
+            (int) ((amzaStats.backPressure.longValue() / 10000d) * 100), "" + amzaStats.pushBacks.longValue(),
+            null, null));
 
         long[] count = amzaStats.deltaStripeMergeLoaded;
         double[] load = amzaStats.deltaStripeLoad;
@@ -596,10 +638,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         double[] mergeLoad = amzaStats.deltaStripeMerge;
         if (count.length == load.length) {
             for (int i = 0; i < load.length; i++) {
-                sb.append(progress(" Delta Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + numberFormat.format(count[i])));
+                sb.append(progress(" Delta Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + numberFormat.format(count[i]), null, null));
                 if (mergeLoad.length > i && mergeCount.length > i) {
                     sb.append(progress("Merge Stripe " + i + " (" + numberFormat.format(mergeLoad[i]) + ")", (int) (mergeLoad[i] * 100),
-                        numberFormat.format(mergeCount[i]) + " partitions"));
+                        numberFormat.format(mergeCount[i]) + " partitions",
+                        null, null));
                 }
             }
         } else {
@@ -611,23 +654,37 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         int expungeCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.expunge);
 
         sb.append(progress("Tombstone Compactions (" + numberFormat.format(tombostoneCompaction) + ")",
-            (int) ((tombostoneCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.tombstone)));
+            (int) ((tombostoneCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.tombstone),
+            null, null));
 
         sb.append(progress("Merge Compactions (" + numberFormat.format(mergeCompaction) + ")",
-            (int) ((mergeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.merge)));
+            (int) ((mergeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.merge),
+            null, null));
 
         sb.append(progress("Expunge Compactions (" + numberFormat.format(expungeCompaction) + ")",
-            (int) ((expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge)));
+            (int) ((expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge),
+            null, null));
 
         return sb.toString();
     }
 
-    private String progress(String title, int progress, String value) {
+    private String progress(String title, int progress, String value, String progressKey, List<Map<String, Object>> subProgress) {
+        Map<String, Object> data = progressData(title, progress, value);
+        if (progressKey != null) {
+            data.put("progressKey", progressKey);
+        }
+        if (subProgress != null && !subProgress.isEmpty()) {
+            data.put("subProgress", subProgress);
+        }
+        return renderer.render("soy.page.amzaStackedProgress", data);
+    }
+
+    private Map<String, Object> progressData(String title, int progress, String value) {
         Map<String, Object> data = new HashMap<>();
         data.put("title", title);
         data.put("progress", progress);
         data.put("value", value);
-        return renderer.render("soy.page.amzaStackedProgress", data);
+        return data;
     }
 
     public static double getProcessCpuLoad() throws MalformedObjectNameException, ReflectionException, InstanceNotFoundException {

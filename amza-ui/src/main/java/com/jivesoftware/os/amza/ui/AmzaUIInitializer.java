@@ -39,12 +39,23 @@ import com.jivesoftware.os.amza.ui.soy.SoyService;
 import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import org.apache.commons.io.IOUtils;
 
 /**
  * @author jonathan.colt
  */
 public class AmzaUIInitializer {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     public interface InjectionCallback {
 
@@ -67,22 +78,26 @@ public class AmzaUIInitializer {
 
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
 
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/chrome.soy"), "chome.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/homeRegion.soy"), "home.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/metricsPluginRegion.soy"), "metrics.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/partitionMetricsPluginRegion.soy"), "pmetrics.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/visualizePartitionPluginRegion.soy"), "vmetrics.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/compactionsPluginRegion.soy"), "compactions.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaRingsPluginRegion.soy"), "amzaRings.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaPartitionsPluginRegion.soy"), "amzaPartitions.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStats.soy"), "amzaStats.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStressPluginRegion.soy"), "amzaStress.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaInspectPluginRegion.soy"), "amzaInspect.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/aquariumPluginRegion.soy"), "aquarium.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/overviewRegion.soy"), "overview.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaChatterPluginRegion.soy"), "chatter.soy");
+        URL dirURL = AmzaUIInitializer.class.getClassLoader().getResource("resources/soy/amza/");
+        if (dirURL != null && dirURL.getProtocol().equals("jar")) {
+            String jarPath = dirURL.getPath().substring(5, dirURL.getPath().indexOf("!"));
+            JarFile jar = new JarFile(URLDecoder.decode(jarPath, "UTF-8"));
+            Enumeration<JarEntry> entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                String name = entries.nextElement().getName();
+                if (name.endsWith(".soy") && name.startsWith("resources/soy/amza/")) {
+                    String soyName = name.substring(name.lastIndexOf('/') + 1);
+                    LOG.info("/" + name + " " + soyName);
+                    soyFileSetBuilder.add(this.getClass().getResource("/" + name), soyName);
+                }
+            }
+        } else {
+            List<String> soyFiles = IOUtils.readLines(this.getClass().getResourceAsStream("resources/soy/amza/"), StandardCharsets.UTF_8);
+            for (String soyFile : soyFiles) {
+                LOG.info("Adding {}", soyFile);
+                soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/" + soyFile), soyFile);
+            }
+        }
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();

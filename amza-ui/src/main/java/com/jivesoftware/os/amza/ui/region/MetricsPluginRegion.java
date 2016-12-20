@@ -605,7 +605,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         if (expandKeys.contains("quorums")) {
             for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
                 long latency = entry.getValue().get();
-                subAcksLag.add(progressData("Quorums " + entry.getKey().getMember(),
+                subQuorumsLatency.add(progressData("Quorums " + entry.getKey().getMember(),
                     (int) ((latency / 10000d) * 100),
                     getDurationBreakdown(latency) + " lag"));
             }

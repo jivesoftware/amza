@@ -41,28 +41,28 @@
     {if $subProgress}
         {foreach $sub in $subProgress}
             <div class="row">
-                <div class="col-sm-2" style="padding-left:20px;">
-                    {$title}
+                <div class="col-sm-2">
+                    &nbsp;&#8627;&nbsp;{$sub.title}
                 </div>
                 <div class="col-sm-8">
                     <div class="progress">
-                        <div class="progress-bar progress-bar-success" style="width: {if $progress > 70}70{else}{$progress}{/if}%">
+                        <div class="progress-bar progress-bar-success" style="width: {if $sub.progress > 70}70{else}{$sub.progress}{/if}%">
                             <span class="sr-only"></span>
                         </div>
-                        {if $progress > 70}
-                            <div class="progress-bar progress-bar-warning progress-bar-striped" style="width: {if $progress > 90}20{else}{$progress-70}{/if}%">
+                        {if $sub.progress > 70}
+                            <div class="progress-bar progress-bar-warning progress-bar-striped" style="width: {if $sub.progress > 90}20{else}{$sub.progress-70}{/if}%">
                                 <span class="sr-only"></span>
                             </div>
                         {/if}
-                        {if $progress > 90}
-                            <div class="progress-bar progress-bar-danger" style="width: {if $progress > 100}10{else}{$progress-90}{/if}%">
+                        {if $sub.progress > 90}
+                            <div class="progress-bar progress-bar-danger" style="width: {if $sub.progress > 100}10{else}{$sub.progress-90}{/if}%">
                                 <span class="sr-only"></span>
                             </div>
                         {/if}
                     </div>
                 </div>
                 <div class="col-sm-2">
-                    <span class="badge">{$value}</span>
+                    <span class="badge">{$sub.value}</span>
                 </div>
             </div>
         {/foreach}

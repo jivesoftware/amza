@@ -270,6 +270,7 @@ amza.overview = {
     expand: [],
     handle: null,
     init: function () {
+        $.ajaxSetup({traditional: true}); // removes brackets from GET data list
         amza.overview.poll();
     },
     toggle: function (ele, key) {

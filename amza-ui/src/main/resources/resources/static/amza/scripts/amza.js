@@ -267,18 +267,32 @@ amza.overview = {
     input: {},
     requireFocus: true,
     html: null,
+    expand: [],
+    handle: null,
     init: function () {
-        $overview = $('#overview');
-
+        amza.overview.poll();
+    },
+    toggle: function (ele, key) {
+        var ix = amza.overview.expand.indexOf(key);
+        if (ix > -1) {
+            amza.overview.expand.splice(ix, 1);
+        } else {
+            amza.overview.expand.push(key);
+        }
         amza.overview.poll();
     },
     poll: function () {
+        if (amza.overview.handle != null) {
+            clearTimeout(amza.overview.handle);
+            amza.overview.handle = null;
+        }
         $.ajax({
             type: "GET",
             url: "/amza/ui/metrics/overview",
             dataType: "html",
             data: {
-                name: ""
+                name: "",
+                expand: amza.overview.expand
             },
             //contentType: "application/json",
             success: function (data) {
@@ -296,7 +310,7 @@ amza.overview = {
         if (!amza.overview.requireFocus || amza.windowFocused) {
             //amza.stats.update();
         }
-        setTimeout(amza.overview.poll, 1000);
+        amza.overview.handle = setTimeout(amza.overview.poll, 1000);
     }
 };
 

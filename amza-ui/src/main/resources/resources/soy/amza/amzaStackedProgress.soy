@@ -14,7 +14,7 @@
             {$title}
             {if $progressKey}
                 {sp}
-                <a href="#" onclick="amza.overview.toggle(this, '{$progressKey}');">{if $subProgress}&#9660;{else}&#9658;{/if}</a>
+                <a href="#" onmousedown="amza.overview.toggle(this, '{$progressKey}');">{if $subProgress}&#9660;{else}&#9658;{/if}</a>
             {/if}
         </div>
         <div class="col-sm-8">

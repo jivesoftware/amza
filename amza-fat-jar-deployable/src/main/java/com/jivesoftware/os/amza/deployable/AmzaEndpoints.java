@@ -149,7 +149,7 @@ public class AmzaEndpoints {
             Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
             List<String> got = new ArrayList<>();
             //TODO prefix
-            partition.get(Consistency.valueOf(consistency), null,
+            partition.get(Consistency.valueOf(consistency), null, true,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
                         if (!stream.stream(s.getBytes(StandardCharsets.UTF_8))) {

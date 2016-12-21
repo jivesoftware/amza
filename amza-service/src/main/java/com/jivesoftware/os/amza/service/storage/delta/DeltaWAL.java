@@ -58,9 +58,6 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     void release() {
         long count = referenceCount.decrementAndGet();
         //System.out.println("released: " + count);
-        synchronized (referenceCount) {
-            referenceCount.notifyAll();
-        }
     }
 
     @Override
@@ -69,14 +66,12 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     }
 
     void awaitDerefenced() throws InterruptedException {
-        synchronized (referenceCount) {
-            long count = referenceCount.get();
+        long count = referenceCount.get();
+        //System.out.println("await: " + count);
+        while (count > 0) {
+            Thread.sleep(1000); //TODO config if we care
+            count = referenceCount.get();
             //System.out.println("await: " + count);
-            while (count > 0) {
-                referenceCount.wait();
-                count = referenceCount.get();
-                //System.out.println("await: " + count);
-            }
         }
     }
 

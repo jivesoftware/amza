@@ -24,6 +24,7 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AmzaPartitionCommitable;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.AmzaSystemReady;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
@@ -138,6 +139,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     public void start() {
+
         running.set(true);
         livelynessExecutorService.submit(() -> {
             while (running.get()) {
@@ -150,9 +152,14 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 } catch (Throwable t) {
                     sickThreads.sick(t);
                     LOG.error("Failed to feed the fish", t);
-                    Thread.sleep(1000L);
+                    try {
+                        Thread.sleep(1000L);
+                    } catch (InterruptedException e) {
+                        break;
+                    }
                 }
             }
+            sickThreads.recovered();
             return null;
         });
 
@@ -189,21 +196,26 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                             throw e;
                         }
                     }
+                    sickThreads.recovered();
                     synchronized (smellsFishy) {
                         if (startVersion == smellOVersion.get()) {
                             smellsFishy.wait(smellsFishy.isEmpty() ? 0 : feedEveryMillis);
                         }
                     }
-                    sickThreads.recovered();
                     /*LOG.info("Smelled {} fish in {}", count, (System.currentTimeMillis() - start));*/
                 } catch (InterruptedException e) {
                     break;
                 } catch (Throwable t) {
                     sickThreads.sick(t);
                     LOG.error("Failed to feed the fish", t);
-                    Thread.sleep(1000L);
+                    try {
+                        Thread.sleep(1000L);
+                    } catch (InterruptedException e) {
+                        break;
+                    }
                 }
             }
+            sickThreads.recovered();
             return null;
         });
     }
@@ -850,7 +862,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     static class LeadershipTokenAndTookFully {
 
         final long leadershipToken;
-        final Set<RingMember> tookFully = new HashSet<>();
+        final Set<RingMember> tookFully = Collections.synchronizedSet(new HashSet<>());
 
         public LeadershipTokenAndTookFully(long leadershipToken) {
             this.leadershipToken = leadershipToken;

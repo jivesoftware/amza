@@ -123,12 +123,12 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+    public boolean get(Consistency consistency, byte[] prefix, boolean requiresOnline, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         return systemWALStorage.get(versionedPartitionName, prefix, keys, stream);
     }
 
     @Override
-    public boolean scan(Iterable<ScanRange> ranges, KeyValueStream stream, boolean hydrateValues) throws Exception {
+    public boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
         for (ScanRange range : ranges) {
             if (range.fromKey == null && range.toKey == null) {
                 boolean result = systemWALStorage.rowScan(versionedPartitionName, stream, true);
@@ -153,6 +153,7 @@ public class SystemPartition implements Partition {
 
     @Override
     public TakeResult takeFromTransactionId(long txId,
+        boolean requiresOnline,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
         return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
@@ -161,6 +162,7 @@ public class SystemPartition implements Partition {
     @Override
     public TakeResult takePrefixFromTransactionId(byte[] prefix,
         long txId,
+        boolean requiresOnline,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 

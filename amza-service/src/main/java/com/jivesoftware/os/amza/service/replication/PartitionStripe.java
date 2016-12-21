@@ -97,10 +97,10 @@ public class PartitionStripe {
         WALUpdated updated) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        Preconditions.checkState(!requiresOnline || livelyEndState.isOnline(), "Partition:%s state:%s is not online.",
-            versionedPartitionName,
-            livelyEndState);
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
         if (specificVersion.isPresent() && versionedPartitionName.getPartitionVersion() != specificVersion.get()) {
             return null;
         }
@@ -128,11 +128,16 @@ public class PartitionStripe {
         storage.flush(fsync);
     }
 
-    public boolean get(VersionedAquarium versionedAquarium, byte[] prefix, byte[] key, KeyValueStream keyValueStream) throws
-        Exception {
+    public boolean get(VersionedAquarium versionedAquarium,
+        byte[] prefix,
+        byte[] key,
+        boolean requiresOnline,
+        KeyValueStream keyValueStream) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
@@ -156,11 +161,16 @@ public class PartitionStripe {
         }
     }
 
-    public boolean get(VersionedAquarium versionedAquarium, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws
-        Exception {
+    public boolean get(VersionedAquarium versionedAquarium,
+        byte[] prefix,
+        boolean requiresOnline,
+        UnprefixedWALKeys keys,
+        KeyValueStream stream) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
@@ -182,10 +192,15 @@ public class PartitionStripe {
 
     }
 
-    public void rowScan(VersionedAquarium versionedAquarium, KeyValueStream keyValueStream, boolean hydrateValues) throws Exception {
+    public void rowScan(VersionedAquarium versionedAquarium,
+        KeyValueStream keyValueStream,
+        boolean hydrateValues,
+        boolean requiresOnline) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
@@ -215,13 +230,15 @@ public class PartitionStripe {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueStream keyValueStream,
-        boolean hydrateValues) throws Exception {
+        boolean hydrateValues,
+        boolean requiresOnline,
+        KeyValueStream keyValueStream) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName,
-            livelyEndState);
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
@@ -290,15 +307,18 @@ public class PartitionStripe {
 
     public WALHighwater takeFromTransactionId(VersionedAquarium versionedAquarium,
         long transactionId,
+        boolean requiresOnline,
         HighwaterStorage highwaterStorage,
         Highwaters highwaters,
         TxKeyValueStream txKeyValueStream) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-
         WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
@@ -334,15 +354,18 @@ public class PartitionStripe {
     public WALHighwater takeFromTransactionId(VersionedAquarium versionedAquarium,
         byte[] prefix,
         long transactionId,
+        boolean requiresOnline,
         HighwaterStorage highwaterStorage,
         Highwaters highwaters,
         TxKeyValueStream txKeyValueStream) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-
         WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {
@@ -424,10 +447,16 @@ public class PartitionStripe {
         }
     }
 
-    public boolean containsKeys(VersionedAquarium versionedAquarium, byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
+    public boolean containsKeys(VersionedAquarium versionedAquarium,
+        byte[] prefix,
+        boolean requiresOnline,
+        UnprefixedWALKeys keys,
+        KeyContainedStream stream) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        if (requiresOnline) {
+            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+            Preconditions.checkState(livelyEndState.isOnline(), "Partition:%s state:%s is not online.", versionedPartitionName, livelyEndState);
+        }
 
         PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
         if (partitionStore == null) {

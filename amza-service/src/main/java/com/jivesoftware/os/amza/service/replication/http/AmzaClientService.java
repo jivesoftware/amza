@@ -146,7 +146,9 @@ public class AmzaClientService implements AmzaRestClient {
         byte[] intLongBuffer = new byte[8];
         byte[] prefix = UIO.readByteArray(in, "prefix", intLongBuffer);
 
-        partition.get(consistency, prefix,
+        partition.get(consistency,
+            prefix,
+            true,
             (keyStream) -> {
                 while (!UIO.readBoolean(in, "eos")) {
                     if (!keyStream.stream(UIO.readByteArray(in, "key", intLongBuffer))) {
@@ -175,7 +177,7 @@ public class AmzaClientService implements AmzaRestClient {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
 
-        partition.scan(ranges,
+        partition.scan(ranges, true, hydrateValues,
             (prefix, key, value, timestamp, tombstoned, version) -> {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);
@@ -187,7 +189,7 @@ public class AmzaClientService implements AmzaRestClient {
                 UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
                 UIO.writeLong(out, version, "version");
                 return true;
-            }, hydrateValues);
+            });
 
         UIO.writeByte(out, (byte) 1, "eos");
     }
@@ -247,9 +249,9 @@ public class AmzaClientService implements AmzaRestClient {
         };
         TakeResult takeResult;
         if (usePrefix) {
-            takeResult = partition.takePrefixFromTransactionId(prefix, txId, streamHighwater, stream);
+            takeResult = partition.takePrefixFromTransactionId(prefix, txId, true, streamHighwater, stream);
         } else {
-            takeResult = partition.takeFromTransactionId(txId, streamHighwater, stream);
+            takeResult = partition.takeFromTransactionId(txId, true, streamHighwater, stream);
         }
         UIO.writeByte(out, (byte) 1, "eos");
 

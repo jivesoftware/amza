@@ -180,33 +180,34 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+    public boolean get(Consistency consistency, byte[] prefix, boolean requiresOnline, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         systemReady.await(0);
         checkReadConsistencySupport(consistency);
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                return partitionStripe.get(versionedAquarium, prefix, keys, stream);
+                return partitionStripe.get(versionedAquarium, prefix, requiresOnline, keys, stream);
             });
         });
     }
 
     @Override
-    public boolean scan(Iterable<ScanRange> ranges, KeyValueStream stream, boolean hydrateValues) throws Exception {
+    public boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
 
         systemReady.await(0);
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 for (ScanRange range : ranges) {
                     if (range.fromKey == null && range.toKey == null) {
-                        partitionStripe.rowScan(versionedAquarium, stream, hydrateValues);
+                        partitionStripe.rowScan(versionedAquarium, stream, hydrateValues, requiresOnline);
                     } else {
                         partitionStripe.rangeScan(versionedAquarium,
                             range.fromPrefix,
                             range.fromKey,
                             range.toPrefix,
                             range.toKey,
-                            stream,
-                            hydrateValues);
+                            hydrateValues,
+                            requiresOnline,
+                            stream);
                     }
                 }
 
@@ -217,32 +218,35 @@ public class StripedPartition implements Partition {
 
     @Override
     public TakeResult takeFromTransactionId(long txId,
+        boolean requiresOnline,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
         systemReady.await(0);
-        return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
+        return takeFromTransactionIdInternal(false, null, txId, requiresOnline, highwaters, stream);
     }
 
     @Override
     public TakeResult takePrefixFromTransactionId(byte[] prefix,
         long txId,
+        boolean requiresOnline,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
         systemReady.await(0);
-        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, stream);
+        return takeFromTransactionIdInternal(true, prefix, txId, requiresOnline, highwaters, stream);
     }
 
     private TakeResult takeFromTransactionIdInternal(boolean usePrefix,
         byte[] takePrefix,
         long txId,
+        boolean requiresOnline,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-            long[] lastTxId = {-1};
+            long[] lastTxId = { -1 };
             TxResult[] done = new TxResult[1];
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] != null && rowTxId > lastTxId[0]) {
@@ -277,9 +281,20 @@ public class StripedPartition implements Partition {
 
             WALHighwater highwater = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                 if (usePrefix) {
-                    return partitionStripe.takeFromTransactionId(versionedAquarium, takePrefix, txId, highwaterStorage, highwaters, txKeyValueStream);
+                    return partitionStripe.takeFromTransactionId(versionedAquarium,
+                        takePrefix,
+                        txId,
+                        requiresOnline,
+                        highwaterStorage,
+                        highwaters,
+                        txKeyValueStream);
                 } else {
-                    return partitionStripe.takeFromTransactionId(versionedAquarium, txId, highwaterStorage, highwaters, txKeyValueStream);
+                    return partitionStripe.takeFromTransactionId(versionedAquarium,
+                        txId,
+                        requiresOnline,
+                        highwaterStorage,
+                        highwaters,
+                        txKeyValueStream);
                 }
             });
             return new TakeResult(ringMember, lastTxId[0], highwater);

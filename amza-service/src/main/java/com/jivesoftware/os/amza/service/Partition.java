@@ -16,31 +16,31 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
  */
 public interface Partition {
 
-    void commit(Consistency consistency, byte[] prefix,
+    void commit(Consistency consistency,
+        byte[] prefix,
         ClientUpdates updates,
         long timeoutInMillis) throws Exception;
 
-    boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
+    boolean get(Consistency consistency, byte[] prefix, boolean requiresOnline, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
 
-    boolean scan(Iterable<ScanRange> ranges, KeyValueStream stream, boolean hydrateValues) throws Exception;
+    boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception;
 
     TakeResult takeFromTransactionId(long txId,
-        Highwaters highwaters,
-        TxKeyValueStream stream) throws
-        Exception;
-
-    TakeResult takePrefixFromTransactionId(byte[] prefix,
-        long txId,
+        boolean requiresOnline,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception;
 
-    // TODO fix or deprecate: Currently know to be broken. Only accurate if you never delete.
+    TakeResult takePrefixFromTransactionId(byte[] prefix,
+        long txId,
+        boolean requiresOnline,
+        Highwaters highwaters,
+        TxKeyValueStream stream) throws Exception;
+
+    // TODO fix or deprecate: Currently known to be broken. Only accurate if you never delete.
     long count() throws Exception;
 
     /**
-     Inaccurate by the number of un merged changes on the delta WAL
-    @return
-    @throws Exception
+     * Inaccurate by the number of unmerged changes on the delta WAL
      */
     long approximateCount() throws Exception;
 

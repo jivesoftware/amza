@@ -69,19 +69,17 @@ public class PartitionStore implements RangeScannable {
     }
 
     public void load(File baseKey, long deltaWALId, long prevDeltaWALId, int stripe, ExecutorService executorService) throws Exception {
+        if (checkIfLoaded(deltaWALId)) {
+            return;
+        }
+
         // load as a future so that initialization cannot be interrupted
         Future<Boolean> future = executorService.submit(() -> {
+            if (checkIfLoaded(deltaWALId)) {
+                return true;
+            }
             synchronized (loadedAtDeltaWALId) {
-                long loaded = loadedAtDeltaWALId.get();
-                if (deltaWALId > -1) {
-                    if (loaded == -1) {
-                        throw new IllegalStateException("Partition was loaded without a delta before validation. attempted:" + deltaWALId);
-                    } else if (deltaWALId < loaded) {
-                        throw new IllegalStateException("Partition was loaded out of order. attempted:" + deltaWALId + " loaded:" + loaded);
-                    } else if (loaded != Integer.MIN_VALUE && deltaWALId >= loaded) {
-                        return true;
-                    }
-                } else if (loaded != Integer.MIN_VALUE) {
+                if (checkIfLoaded(deltaWALId)) {
                     return true;
                 }
                 PartitionProperties stackProperties = this.properties;
@@ -106,6 +104,22 @@ public class PartitionStore implements RangeScannable {
             }
         });
         future.get();
+    }
+
+    private boolean checkIfLoaded(long deltaWALId) {
+        long loaded = loadedAtDeltaWALId.get();
+        if (deltaWALId > -1) {
+            if (loaded == -1) {
+                throw new IllegalStateException("Partition was loaded without a delta before validation. attempted:" + deltaWALId);
+            } else if (deltaWALId < loaded) {
+                throw new IllegalStateException("Partition was loaded out of order. attempted:" + deltaWALId + " loaded:" + loaded);
+            } else if (loaded != Integer.MIN_VALUE && deltaWALId >= loaded) {
+                return true;
+            }
+        } else if (loaded != Integer.MIN_VALUE) {
+            return true;
+        }
+        return false;
     }
 
     public boolean isSick() {

@@ -40,6 +40,7 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
+import com.jivesoftware.os.amza.service.EmbeddedClientProvider.CheckOnline;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
@@ -432,7 +433,7 @@ public class AmzaTestCluster {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
-            clientProvider.getClient(partitionName).commit(consistency, p, commitKeyValueStream -> {
+            clientProvider.getClient(partitionName, CheckOnline.always).commit(consistency, p, commitKeyValueStream -> {
                 long timestamp = orderIdProvider.nextId();
                 if (tombstone) {
                     return commitKeyValueStream.commit(k, null, timestamp, true);
@@ -449,7 +450,7 @@ public class AmzaTestCluster {
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(consistency, prefix, stream -> stream.stream(key),
+            clientProvider.getClient(partitionName, CheckOnline.always).get(consistency, prefix, stream -> stream.stream(key),
                 (_prefix, _key, value, timestamp, version) -> {
                     got.add(value);
                     return true;
@@ -461,7 +462,7 @@ public class AmzaTestCluster {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
-            return clientProvider.getClient(partitionName).takeFromTransactionId(transactionId, stream);
+            return clientProvider.getClient(partitionName, CheckOnline.always).takeFromTransactionId(transactionId, stream);
         }
 
         public void watch(PartitionName partitionName) throws Exception {
@@ -554,12 +555,12 @@ public class AmzaTestCluster {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
                     int[] count = { 0 };
-                    partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, tombstoned, version) -> {
+                    partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), true, true, (prefix, key, value, timestamp, tombstoned, version) -> {
                         if (!tombstoned) {
                             count[0]++;
                         }
                         return true;
-                    }, true);
+                    });
                     if (count[0] > 0) {
                         return false;
                     }
@@ -652,6 +653,8 @@ public class AmzaTestCluster {
             final MutableBoolean passed = new MutableBoolean(true);
             try {
                 a.scan(Collections.singletonList(ScanRange.ROW_SCAN),
+                    true,
+                    true,
                     (prefix, key, aValue, aTimestamp, aTombstoned, aVersion) -> {
                         try {
                             compared.increment();
@@ -659,7 +662,7 @@ public class AmzaTestCluster {
                             byte[][] bvalue = new byte[1][];
                             boolean[] btombstoned = new boolean[1];
                             long[] bversion = new long[1];
-                            b.get(consistency, prefix, stream -> stream.stream(key),
+                            b.get(consistency, prefix, true, stream -> stream.stream(key),
                                 (_prefix, _key, value, timestamp, tombstoned, version) -> {
                                     btimestamp[0] = timestamp;
                                     bvalue[0] = value;
@@ -724,7 +727,7 @@ public class AmzaTestCluster {
                         } catch (Exception x) {
                             throw new RuntimeException("Failed while comparing", x);
                         }
-                    }, true);
+                    });
             } catch (Exception e) {
                 System.out.println("EXCEPTION: " + e.getMessage());
                 e.printStackTrace();

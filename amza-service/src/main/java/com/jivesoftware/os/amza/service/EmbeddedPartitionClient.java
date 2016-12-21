@@ -60,7 +60,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        return partition.get(consistency, prefix, keys, (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+        return partition.get(consistency, prefix, true, keys, (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (valueTimestamp == -1 || valueTombstoned) {
                 return valuesStream.stream(prefix1, key, null, -1, -1);
             } else {
@@ -78,7 +78,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        return partition.get(consistency, prefix, keys, valuesStream);
+        return partition.get(consistency, prefix, true, keys, valuesStream);
     }
 
     @Override
@@ -113,11 +113,10 @@ public class EmbeddedPartitionClient implements PartitionClient {
             scanRanges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
             return true;
         });
-        return partition.scan(scanRanges,
+        return partition.scan(scanRanges, hydrateValues, true,
             (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
-            },
-            hydrateValues);
+            });
     }
 
     @Override
@@ -135,7 +134,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
         }
         long txId = memberTxIds.getOrDefault(rootRingMember, -1L);
         int[] count = { 0 };
-        return partition.takeFromTransactionId(txId, highwaters,
+        return partition.takeFromTransactionId(txId, true, highwaters,
             (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 TxResult result = stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                 count[0]++;
@@ -159,7 +158,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
         }
         long txId = memberTxIds.getOrDefault(rootRingMember, -1L);
         int[] count = { 0 };
-        return partition.takePrefixFromTransactionId(prefix, txId, highwaters,
+        return partition.takePrefixFromTransactionId(prefix, txId, true, highwaters,
             (rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 TxResult result = stream.stream(rowTxId, prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion);
                 count[0]++;

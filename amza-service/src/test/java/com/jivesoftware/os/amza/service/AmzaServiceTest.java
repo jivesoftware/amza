@@ -394,7 +394,13 @@ public class AmzaServiceTest {
             AmzaService.AmzaPartitionRoute route = node.getPartitionRoute(partitionName);
             assertEquals(route.orderedMembers.size(), clusterNodes.size());
             assertNotNull(route.leader);
-            assertTrue(node.sickThreads.getSickThread().isEmpty());
+            for (int i = 0; i < 50 && !node.sickThreads.getSickThread().isEmpty(); i++) {
+                Thread.sleep(100);
+            }
+            assertTrue(node.sickThreads.getSickThread().isEmpty(), "Threads were sick: " + node.sickThreads.getSickThread());
+            for (int i = 0; i < 50 && !node.sickPartitions.getSickPartitions().isEmpty(); i++) {
+                Thread.sleep(100);
+            }
             assertTrue(node.sickPartitions.getSickPartitions().isEmpty(), "Partitions were sick: " + node.sickPartitions.getSickPartitions());
         }
 

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author jonathan.colt
@@ -33,16 +34,26 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
         this.partitionProvider = partitionProvider;
     }
 
-    public EmbeddedClient getClient(PartitionName partitionName) {
-        return new EmbeddedClient(partitionName);
+    public EmbeddedClient getClient(PartitionName partitionName, CheckOnline checkOnline) {
+        return new EmbeddedClient(partitionName, checkOnline);
+    }
+
+    public enum CheckOnline {
+        never,
+        once,
+        always
     }
 
     public class EmbeddedClient { // Aka Partition Client
 
         private final PartitionName partitionName;
+        private final CheckOnline checkOnline;
+        private final AtomicBoolean requiresOnline;
 
-        public EmbeddedClient(PartitionName partitionName) {
+        public EmbeddedClient(PartitionName partitionName, CheckOnline checkOnline) {
             this.partitionName = partitionName;
+            this.checkOnline = checkOnline;
+            this.requiresOnline = new AtomicBoolean(checkOnline != CheckOnline.never);
         }
 
         public void commit(Consistency consistency,
@@ -57,7 +68,7 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
 
         public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
             // TODO impl quorum reads?
-            partitionProvider.getPartition(partitionName).get(consistency, prefix, keys,
+            partitionProvider.getPartition(partitionName).get(consistency, prefix, requiresOnline.get(), keys,
                 (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueTimestamp == -1 || valueTombstoned) {
                         return valuesStream.stream(prefix1, key, null, -1, -1);
@@ -65,6 +76,9 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
                         return valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
                     }
                 });
+            if (checkOnline == CheckOnline.once) {
+                requiresOnline.set(false);
+            }
         }
 
         public byte[] getValue(Consistency consistency, byte[] prefix, byte[] key) throws Exception {
@@ -86,22 +100,29 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
 
         public void scan(Iterable<ScanRange> ranges,
             KeyValueTimestampStream stream, boolean hydrateValues) throws Exception {
-            partitionProvider.getPartition(partitionName).scan(ranges,
+            partitionProvider.getPartition(partitionName).scan(ranges, hydrateValues, requiresOnline.get(),
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
-                },
-                hydrateValues);
+                });
+            if (checkOnline == CheckOnline.once) {
+                requiresOnline.set(false);
+            }
         }
 
         public TakeCursors takeFromTransactionId(long transactionId, TxKeyValueStream stream) throws Exception {
 
             Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
             TakeResult takeResult = partitionProvider.getPartition(partitionName).takeFromTransactionId(transactionId,
+                requiresOnline.get(),
                 (highwater) -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
                     }
-                }, stream);
+                },
+                stream);
+            if (checkOnline == CheckOnline.once) {
+                requiresOnline.set(false);
+            }
 
             boolean tookToEnd = false;
             if (takeResult.tookToEnd != null) {
@@ -122,12 +143,18 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
         public TakeCursors takeFromTransactionId(byte[] prefix, long transactionId, TxKeyValueStream stream) throws Exception {
 
             Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
-            TakeResult takeResult = partitionProvider.getPartition(partitionName).takePrefixFromTransactionId(prefix, transactionId,
+            TakeResult takeResult = partitionProvider.getPartition(partitionName).takePrefixFromTransactionId(prefix,
+                transactionId,
+                requiresOnline.get(),
                 (highwater) -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
                     }
-                }, stream);
+                },
+                stream);
+            if (checkOnline == CheckOnline.once) {
+                requiresOnline.set(false);
+            }
 
             boolean tookToEnd = false;
             if (takeResult.tookToEnd != null) {

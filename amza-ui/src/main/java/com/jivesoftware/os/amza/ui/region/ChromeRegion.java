@@ -30,8 +30,11 @@ public class ChromeRegion<I, R extends PageRegion<I>> implements Region<I> {
 
     @Override
     public String render(I input) {
-        List<Map<String, String>> p = Lists.transform(plugins, (ManagePlugin input1) -> ImmutableMap.of("name", input1.name, "path", input1.path, "glyphicon",
-            input1.glyphicon));
+        List<Map<String, String>> p = Lists.transform(plugins, (ManagePlugin input1) -> ImmutableMap.of(
+            "name", input1.name,
+            "path", input1.path,
+            "glyphicon", input1.glyphicon)
+        );
         Map<String, Object> headerData = new HashMap<>();
         headerData.put("plugins", p);
 

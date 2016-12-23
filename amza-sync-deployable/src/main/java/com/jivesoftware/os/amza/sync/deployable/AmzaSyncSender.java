@@ -50,6 +50,7 @@ public class AmzaSyncSender {
         0, 0, 0, 0, 0, 0, 0, 0,
         false, Consistency.leader_quorum, true, true, false, RowType.primary, "lab", 8, null, -1, -1);
 
+    private final String name;
     private final AmzaClientAquariumProvider amzaClientAquariumProvider;
     private final int syncRingStripes;
     private final ExecutorService executorService;
@@ -58,7 +59,7 @@ public class AmzaSyncSender {
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaSyncClient toSyncClient;
     private final ObjectMapper mapper;
-    private final Map<PartitionName, PartitionName> whitelist;
+    private final AmzaSyncPartitionConfigProvider syncPartitionConfigProvider;
     private final int batchSize;
     private final BAInterner interner;
 
@@ -69,7 +70,8 @@ public class AmzaSyncSender {
     private final long abandonLeaderSolutionAfterNMillis = 30_000; //TODO expose to conf?
     private final long abandonSolutionAfterNMillis = 60_000; //TODO expose to conf?
 
-    public AmzaSyncSender(AmzaClientAquariumProvider amzaClientAquariumProvider,
+    public AmzaSyncSender(String name,
+        AmzaClientAquariumProvider amzaClientAquariumProvider,
         int syncRingStripes,
         ExecutorService executorService,
         int syncThreadCount,
@@ -77,9 +79,11 @@ public class AmzaSyncSender {
         PartitionClientProvider partitionClientProvider,
         AmzaSyncClient toSyncClient,
         ObjectMapper mapper,
-        Map<PartitionName, PartitionName> whitelist,
+        AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         int batchSize,
         BAInterner interner) {
+
+        this.name = name;
         this.amzaClientAquariumProvider = amzaClientAquariumProvider;
         this.syncRingStripes = syncRingStripes;
         this.executorService = executorService;
@@ -88,9 +92,13 @@ public class AmzaSyncSender {
         this.partitionClientProvider = partitionClientProvider;
         this.toSyncClient = toSyncClient;
         this.mapper = mapper;
-        this.whitelist = whitelist;
+        this.syncPartitionConfigProvider = syncPartitionConfigProvider;
         this.batchSize = batchSize;
         this.interner = interner;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public void start() {
@@ -118,7 +126,7 @@ public class AmzaSyncSender {
             }
 
             for (int i = 0; i < syncRingStripes; i++) {
-                amzaClientAquariumProvider.register("sync-stripe-" + i);
+                amzaClientAquariumProvider.register("sync-"+name+"-stripe-" + i);
             }
         }
     }
@@ -197,7 +205,7 @@ public class AmzaSyncSender {
     }
 
     private LivelyEndState livelyEndState(int syncStripe) throws Exception {
-        return amzaClientAquariumProvider.livelyEndState("sync-stripe-" + syncStripe);
+        return amzaClientAquariumProvider.livelyEndState("sync-"+name+"-stripe-" + syncStripe);
     }
 
     private int threadIndex(int syncStripe) {
@@ -221,20 +229,20 @@ public class AmzaSyncSender {
         LOG.info("Syncing stripe:{}", stripe);
         int partitionCount = 0;
         int rowCount = 0;
-        Map<PartitionName, PartitionName> partitions;
-        if (whitelist != null) {
-            partitions = whitelist;
+        Map<PartitionName, AmzaSyncPartitionConfig> partitions;
+        if (syncPartitionConfigProvider != null) {
+            partitions = syncPartitionConfigProvider.getAll(name);
         } else {
             partitions = Maps.newHashMap();
             LOG.warn("Syncing all partitions is not supported yet");
             List<PartitionName> allPartitions = Lists.newArrayList(); //TODO partitionClientProvider.getAllPartitionNames();
             for (PartitionName partitionName : allPartitions) {
-                partitions.put(partitionName, partitionName);
+                partitions.put(partitionName, new AmzaSyncPartitionConfig(partitionName, partitionName));
             }
         }
-        for (Entry<PartitionName, PartitionName> entry : partitions.entrySet()) {
+        for (Entry<PartitionName, AmzaSyncPartitionConfig> entry : partitions.entrySet()) {
             PartitionName fromPartitionName = entry.getKey();
-            PartitionName toPartitionName = entry.getValue();
+            PartitionName toPartitionName = entry.getValue().to;
             if (!ensurePartition(fromPartitionName, toPartitionName) || !isElected(stripe)) {
                 break;
             }
@@ -242,7 +250,7 @@ public class AmzaSyncSender {
             if (partitionStripe == stripe) {
                 partitionCount++;
 
-                int synced = syncPartition(fromPartitionName, toPartitionName, stripe);
+                int synced = syncPartition(fromPartitionName, entry.getValue(), stripe);
                 if (synced > 0) {
                     LOG.info("Synced stripe:{} tenantId:{} rows:{}", stripe, fromPartitionName, synced);
                 }
@@ -273,7 +281,8 @@ public class AmzaSyncSender {
         return true;
     }
 
-    private int syncPartition(PartitionName fromPartitionName, PartitionName toPartitionName, int stripe) throws Exception {
+    private int syncPartition(PartitionName fromPartitionName, AmzaSyncPartitionConfig toPartitionConfig, int stripe) throws Exception {
+        PartitionName toPartitionName = toPartitionConfig.to;
         Cursor cursor = getPartitionCursor(fromPartitionName, toPartitionName);
         PartitionClient fromClient = partitionClientProvider.getPartition(fromPartitionName);
         if (!isElected(stripe)) {

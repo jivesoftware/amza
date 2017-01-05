@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.sync.deployable;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
@@ -60,7 +61,7 @@ public class AmzaSyncSenderTest {
             orderIdProvider,
             ringMember.asAquariumMember(),
             count -> count == 1,
-            member -> true,
+            () -> Sets.newHashSet(ringMember.asAquariumMember()),
             128,
             128,
             5_000L,

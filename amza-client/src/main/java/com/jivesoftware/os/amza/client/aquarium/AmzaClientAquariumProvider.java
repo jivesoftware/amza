@@ -12,7 +12,7 @@ import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
-import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
+import com.jivesoftware.os.aquarium.interfaces.CurrentMembers;
 import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -51,7 +51,7 @@ public class AmzaClientAquariumProvider {
     private final OrderIdProvider orderIdProvider;
     private final Member member;
     private final AtQuorum atQuorum;
-    private final IsCurrentMember isCurrentMember;
+    private final CurrentMembers currentMembers;
     private final Liveliness liveliness;
     private final int aquariumStateStripes;
     private final long heartbeatEveryNMillis;
@@ -87,7 +87,7 @@ public class AmzaClientAquariumProvider {
         OrderIdProvider orderIdProvider,
         Member member,
         AtQuorum atQuorum,
-        IsCurrentMember isCurrentMember,
+        CurrentMembers currentMembers,
         int aquariumStateStripes,
         int aquariumLivelinessStripes,
         long heartbeatEveryNMillis,
@@ -106,7 +106,7 @@ public class AmzaClientAquariumProvider {
         this.orderIdProvider = orderIdProvider;
         this.member = member;
         this.atQuorum = atQuorum;
-        this.isCurrentMember = isCurrentMember;
+        this.currentMembers = currentMembers;
         this.aquariumStateStripes = aquariumStateStripes;
         this.heartbeatEveryNMillis = heartbeatEveryNMillis;
         this.pushOnlineEveryNMillis = pushOnlineEveryNMillis;
@@ -229,7 +229,7 @@ public class AmzaClientAquariumProvider {
                         member1 -> 0L,
                         Long.class,
                         atQuorum,
-                        isCurrentMember,
+                        currentMembers,
                         member,
                         awaitLivelyEndState),
                     currentStateStorage,

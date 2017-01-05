@@ -130,7 +130,7 @@ public class AmzaServiceInitializer {
         public long takeLongPollTimeoutMillis = 10_000;
         public long takeSystemReofferDeltaMillis = 100;
         public long takeReofferDeltaMillis = 1_000;
-        public long takeReofferMaxElectionsPerHeartbeat = 1_000;
+        public long takeReofferMaxElectionsPerHeartbeat = 1_000_000;
         public long hangupAvailableRowsAfterUnresponsiveMillis = 60_000;
         public long pongIntervalMillis = 10_000;
         public long rowsTakerLimit = 65_536L;

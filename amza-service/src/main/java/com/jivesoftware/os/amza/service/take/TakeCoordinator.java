@@ -207,7 +207,15 @@ public class TakeCoordinator {
         }
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName, system ? -1 : 0);
-        ensureRingCoordinator(ringName, null, -1, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
+        if (system) {
+            ensureRingCoordinator("updateInternal>get>system", "updateInternal>put>system", ringName, null, -1, () -> ring).update(ring, versionedPartitionName,
+                txId,
+                invalidateOnline);
+        } else {
+            ensureRingCoordinator("updateInternal>get>striped", "updateInternal>put>striped", ringName, null, -1, () -> ring).update(ring,
+                versionedPartitionName, txId,
+                invalidateOnline);
+        }
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         for (Session session : takeSessions.values()) {
             synchronized (session.dirtySet) {
@@ -282,12 +290,14 @@ public class TakeCoordinator {
         RingTopology get() throws Exception;
     }
 
-    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName,
+    private TakeRingCoordinator ensureRingCoordinator(String getContext,
+        String putContext,
+        byte[] ringName,
         BAHash<TakeRingCoordinator> stackCache,
         int ringHash,
         RingSupplier ringSupplier) throws InterruptedException {
 
-        LOG.inc("WTF>get");
+        LOG.inc(getContext);
         TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringHash, ringName, 0, ringName.length);
         if (ringCoordinator == null) {
             ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
@@ -308,7 +318,7 @@ public class TakeCoordinator {
                     }
                 });
             if (stackCache != null) {
-                LOG.inc("WTF>put");
+                LOG.inc(putContext);
                 stackCache.put(ringHash, ringName, ringCoordinator);
             }
         }
@@ -360,13 +370,25 @@ public class TakeCoordinator {
 
             long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
 
+            String getContext;
+            String putContext;
+            if (system) {
+                getContext = "availableRowsStream>get>system";
+                putContext = "availableRowsStream>put>system";
+
+            } else {
+                getContext = "availableRowsStream>get>striped";
+                putContext = "availableRowsStream>put>striped";
+            }
+
             AtomicLong electionCounter = new AtomicLong(-1);
             RingNameStream ringNameStream = (ringName, ringHash) -> {
                 if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
                     return true;
                 }
 
-                TakeRingCoordinator ring = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, system ? -1 : 0));
+
+                TakeRingCoordinator ring  = ensureRingCoordinator(getContext, putContext, ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, system ? -1 : 0));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
                         ring.allAvailableRowsStream(partitionStripeProvider,
@@ -422,12 +444,12 @@ public class TakeCoordinator {
                         dirtyRings.stream(dirtyRingsSemaphore, (ringName, versionedPartitionNames) -> {
                             TakeRingCoordinator ringCoordinator = null;
                             if (system) {
-                                ringCoordinator = ensureRingCoordinator(ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName, -1));
+                                ringCoordinator = ensureRingCoordinator(getContext, putContext, ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName, -1));
                             } else {
                                 RingSet ringSet = ringReader.getRingSet(remoteRingMember, 0);
                                 Integer ringHash = ringSet.ringNames.get(ringName, 0, ringName.length);
                                 if (ringHash != null) {
-                                    ringCoordinator = ensureRingCoordinator(ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, 0));
+                                    ringCoordinator = ensureRingCoordinator(getContext, putContext, ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, 0));
                                 }
                             }
                             if (ringCoordinator != null) {

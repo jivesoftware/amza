@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -352,7 +351,7 @@ public class TakeCoordinator {
     private static final Function<RingMember, Object> LOCK_CREATOR = (key) -> new Object();
 
     private void awakeRemoteTakers(RingTopology ring, boolean system) {
-        ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
+        Map<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
         for (int i = 0; i < ring.entries.size(); i++) {
             if (ring.rootMemberIndex != i) {
                 Object lock = ringMembersLocks.computeIfAbsent(ring.entries.get(i).ringMember, LOCK_CREATOR);
@@ -417,7 +416,7 @@ public class TakeCoordinator {
             };
 
             AtomicLong updates = system ? systemUpdates : stripedUpdates;
-            ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
+            Map<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
 
             long lastScan = 0;

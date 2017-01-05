@@ -18,7 +18,9 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
@@ -64,15 +66,18 @@ public class AmzaClientAquariumProviderTest {
         };
         AquariumStats aquariumStats = new AquariumStats();
 
+        Set<Member> members = new HashSet<>();
         AmzaClientAquariumProvider[] providers = new AmzaClientAquariumProvider[ringSize];
         for (int i = 0; i < ringSize; i++) {
+            Member m = new Member(("member" + i).getBytes(StandardCharsets.UTF_8));
+            members.add(m);
             providers[i] = new AmzaClientAquariumProvider(aquariumStats,
                 serviceName,
                 partitionClientProvider,
                 orderIdProvider,
-                new Member(("member" + i).getBytes(StandardCharsets.UTF_8)),
+                m,
                 count -> count > ringSize / 2,
-                member -> true,
+                () -> members,
                 128,
                 128,
                 1_000L,

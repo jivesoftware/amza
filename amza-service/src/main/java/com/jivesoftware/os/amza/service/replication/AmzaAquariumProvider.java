@@ -46,7 +46,7 @@ import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
-import com.jivesoftware.os.aquarium.interfaces.IsCurrentMember;
+import com.jivesoftware.os.aquarium.interfaces.CurrentMembers;
 import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
@@ -325,11 +325,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         AmzaStateStorage amzaStateStorage = currentStateStorage(partitionName);
         AmzaMemberLifecycle amzaMemberLifecycle = new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName, rootAquariumMember);
         AmzaAtQuorum atQuorum = new AmzaAtQuorum(versionedPartitionProvider, ringStoreReader, versionedPartitionName);
-        IsCurrentMember isCurrentMember = member -> {
-            return ringStoreReader.getRing(partitionName.getRingName(), 0).aquariumMembers.contains(member);
+        CurrentMembers currentMembers = () -> {
+            return ringStoreReader.getRing(partitionName.getRingName(), 0).aquariumMembers;
         };
         return new ReadWaterline<>(aquariumStats.getMyCurrentWaterline, aquariumStats.getOthersCurrentWaterline, aquariumStats.acknowledgeCurrentOther,
-            amzaStateStorage, amzaMemberLifecycle, atQuorum, isCurrentMember, Long.class).get(remoteRingMember.asAquariumMember());
+            amzaStateStorage, amzaMemberLifecycle, atQuorum, currentMembers, Long.class).get(remoteRingMember.asAquariumMember());
     }
 
     private Aquarium buildAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -453,8 +453,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         TransitionQuorum desiredTransitionQuorum = (existing, nextTimestamp, nextState, readCurrent, readDesired, writeCurrent, writeDesired) -> {
             return writeDesired.put(rootAquariumMember, nextState, nextTimestamp);
         };
-        IsCurrentMember isCurrentMember = member -> {
-            return ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName(), 0).aquariumMembers.contains(member);
+        CurrentMembers currentMembers = () -> {
+            return ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName(), 0).aquariumMembers;
         };
 
         return new Aquarium(aquariumStats,
@@ -467,7 +467,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             memberLifecycle,
             Long.class,
             atQuorum,
-            isCurrentMember,
+            currentMembers,
             rootRingMember.asAquariumMember(),
             new AwaitLivelyEndState() {
             @Override

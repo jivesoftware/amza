@@ -119,36 +119,35 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("ringTimestampId") long ringTimestampId,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
-        try {
-            amzaStats.availableRowsStream.increment();
-            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
 
-            new Thread(() -> {
+        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
+
+        new Thread(() -> {
+            try {
+                amzaStats.availableRowsStream.increment();
+                amzaInstance.availableRowsStream(
+                    system,
+                    chunkedOutput::write,
+                    new RingMember(ringMemberString),
+                    new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
+                    takeSessionId,
+                    timeoutMillis);
+            } catch (Exception x) {
+                LOG.warn("Failed to stream available rows", x);
+            } finally {
                 try {
-                    amzaInstance.availableRowsStream(
-                        system,
-                        chunkedOutput::write,
-                        new RingMember(ringMemberString),
-                        new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
-                        takeSessionId,
-                        timeoutMillis);
-                } catch (Exception x) {
-                    LOG.warn("Failed to stream available rows", x);
-                } finally {
-                    try {
-                        if (!chunkedOutput.isClosed()) {
-                            chunkedOutput.close();
-                        }
-                    } catch (IOException x) {
-                        LOG.warn("Failed to close stream for available rows", x);
+                    if (!chunkedOutput.isClosed()) {
+                        chunkedOutput.close();
                     }
+                } catch (IOException x) {
+                    LOG.warn("Failed to close stream for available rows", x);
                 }
-            }, "available-" + ringMemberString + "-" + (system ? "system" : "striped")).start();
+                amzaStats.availableRowsStream.decrement();
+            }
+        }, "available-" + ringMemberString + "-" + (system ? "system" : "striped")).start();
 
-            return chunkedOutput;
-        } finally {
-            amzaStats.availableRowsStream.decrement();
-        }
+        return chunkedOutput;
+
     }
 
     @POST

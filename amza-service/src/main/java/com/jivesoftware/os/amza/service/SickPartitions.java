@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SickPartitions {
 
-    private final Map<VersionedPartitionName, Throwable> sickPartitions = new ConcurrentHashMap<>();
+    private final Map<VersionedPartitionName, Throwable> sickPartitions = Maps.newConcurrentMap();
 
     public void sick(VersionedPartitionName versionedPartitionName, Throwable throwable) {
         sickPartitions.put(versionedPartitionName, throwable);

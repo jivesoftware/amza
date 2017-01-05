@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
@@ -23,7 +24,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     private final int defaultMaxLeaps;
     private final ByteBufferFactory byteBufferFactory;
 
-    private final ConcurrentHashMap<File, MemoryBackedWALFiler> filers = new ConcurrentHashMap<>();
+    private final Map<File, MemoryBackedWALFiler> filers = Maps.newConcurrentMap();
 
     public MemoryBackedRowIOProvider(IoStats ioStats,
         long initialBufferSegmentSize,

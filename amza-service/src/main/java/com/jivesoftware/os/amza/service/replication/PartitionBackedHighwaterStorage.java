@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -42,8 +41,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     private final int numPermits = 1024;
     private final Semaphore bigBird = new Semaphore(numPermits, true); // TODO expose to config
-    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates>> hostToPartitionToHighwaterUpdates =
-        new ConcurrentHashMap<>();
+    private final Map<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> hostToPartitionToHighwaterUpdates = Maps.newConcurrentMap();
     private final AtomicLong updatesSinceLastFlush = new AtomicLong();
 
     public PartitionBackedHighwaterStorage(BAInterner interner,
@@ -67,7 +65,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
         bigBird.acquire();
         try {
-            for (ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> got : hostToPartitionToHighwaterUpdates.values()) {
+            for (Map<VersionedPartitionName, HighwaterUpdates> got : hostToPartitionToHighwaterUpdates.values()) {
                 got.remove(versionedPartitionName);
             }
             byte[] fromKey = walKey(versionedPartitionName, null);
@@ -137,8 +135,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         bigBird.acquire();
         updatesSinceLastFlush.addAndGet(updates);
         try {
-            ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
-                (t) -> new ConcurrentHashMap<>());
+            Map<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
+                (t) -> Maps.newConcurrentMap());
             HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.computeIfAbsent(versionedPartitionName, (t) -> new HighwaterUpdates());
             highwaterUpdates.updateTxId(highwaterTxId);
             if (updates > 0) {
@@ -153,7 +151,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     public void clear(RingMember member, VersionedPartitionName versionedPartitionName) throws Exception {
         bigBird.acquire();
         try {
-            ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
+            Map<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
             if (partitionHighwaterUpdates != null) {
                 long timestampAndVersion = orderIdProvider.nextId();
                 systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
@@ -168,8 +166,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public long get(RingMember member, VersionedPartitionName versionedPartitionName) throws Exception {
-        ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member
-            , (t) -> new ConcurrentHashMap<>());
+        Map<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
+            (t) -> Maps.newConcurrentMap());
         HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);
         if (highwaterUpdates == null) {
             PartitionProperties partitionProperties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
@@ -207,7 +205,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     public void clearRing(final RingMember member) throws Exception {
         bigBird.acquire();
         try {
-            final ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitions = hostToPartitionToHighwaterUpdates.get(member);
+            final Map<VersionedPartitionName, HighwaterUpdates> partitions = hostToPartitionToHighwaterUpdates.get(member);
             if (partitions != null && !partitions.isEmpty()) {
                 systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
@@ -245,7 +243,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         }
 
                         long timestampAndVersion = orderIdProvider.nextId();
-                        for (Entry<RingMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates>> ringEntry
+                        for (Entry<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> ringEntry
                             : hostToPartitionToHighwaterUpdates.entrySet()) {
                             RingMember ringMember = ringEntry.getKey();
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {

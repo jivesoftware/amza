@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Maps;
 import com.google.common.primitives.Longs;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -46,7 +47,7 @@ class PartitionDelta {
 
     private final ConcurrentBAHash<WALPointer> pointerIndex = new ConcurrentBAHash<>(3, true, 4);
     private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(KeyUtil::compare);
-    private final ConcurrentHashMap<WALPrefix, AppendOnlyConcurrentArrayList> prefixTxFpIndex = new ConcurrentHashMap<>();
+    private final Map<WALPrefix, AppendOnlyConcurrentArrayList> prefixTxFpIndex = Maps.newConcurrentMap();
     private final AppendOnlyConcurrentArrayList txIdWAL = new AppendOnlyConcurrentArrayList(11); //TODO expose to config
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 

@@ -65,8 +65,8 @@ public class TakeCoordinator {
     private final long hangupAvailableRowsAfterUnresponsiveMillis;
 
     private final ConcurrentBAHash<TakeRingCoordinator> takeRingCoordinators = new ConcurrentBAHash<>(13, true, 128);
-    private final ConcurrentHashMap<RingMember, Object> systemRingMembersLocks = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RingMember, Object> stripedRingMembersLocks = new ConcurrentHashMap<>();
+    private final Map<RingMember, Object> systemRingMembersLocks = Maps.newConcurrentMap();
+    private final Map<RingMember, Object> stripedRingMembersLocks = Maps.newConcurrentMap();
     private final AtomicLong systemUpdates = new AtomicLong();
     private final AtomicLong stripedUpdates = new AtomicLong();
     private final AtomicLong cyaLock = new AtomicLong();

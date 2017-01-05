@@ -349,183 +349,192 @@ public class TakeCoordinator {
         Callable<Void> deliverCallback,
         Callable<Void> pingCallback) throws Exception {
 
-        SessionKey sessionKey = new SessionKey(remoteRingMember, takeSessionId);
-        Session session = takeSessions.computeIfAbsent(sessionKey, sessionKey1 -> new Session(System.currentTimeMillis(), system));
-        synchronized (session.sessionThread) {
-            session.sessionThread.set(Thread.currentThread());
-        }
         try {
-            AtomicLong offered = new AtomicLong();
-            AvailableStream watchAvailableStream = (versionedPartitionName, txId) -> {
-                offered.incrementAndGet();
-                availableStream.available(versionedPartitionName, txId);
-                amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
-            };
+            LOG.inc("availableRowsStream>" + system + ">entered");
 
-            int systemRingHash = BAHasher.SINGLETON.hashCode(AmzaRingReader.SYSTEM_RING, 0, AmzaRingReader.SYSTEM_RING.length);
-            BAHash<TakeRingCoordinator> stackCache = new BAHash<>(
-                new BAHMapState<>(takeRingCoordinators.size() * 2, true, BAHMapState.NIL),
-                BAHasher.SINGLETON,
-                BAHEqualer.SINGLETON);
-
-            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
-
-            String getContext;
-            String putContext;
-            if (system) {
-                getContext = "availableRowsStream>get>system";
-                putContext = "availableRowsStream>put>system";
-
-            } else {
-                getContext = "availableRowsStream>get>striped";
-                putContext = "availableRowsStream>put>striped";
+            SessionKey sessionKey = new SessionKey(remoteRingMember, takeSessionId);
+            Session session = takeSessions.computeIfAbsent(sessionKey, sessionKey1 -> new Session(System.currentTimeMillis(), system));
+            synchronized (session.sessionThread) {
+                session.sessionThread.set(Thread.currentThread());
             }
+            try {
+                AtomicLong offered = new AtomicLong();
+                AvailableStream watchAvailableStream = (versionedPartitionName, txId) -> {
+                    offered.incrementAndGet();
+                    availableStream.available(versionedPartitionName, txId);
+                    amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
+                };
 
-            AtomicLong electionCounter = new AtomicLong(-1);
-            RingNameStream ringNameStream = (ringName, ringHash) -> {
-                if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
-                    return true;
-                }
+                int systemRingHash = BAHasher.SINGLETON.hashCode(AmzaRingReader.SYSTEM_RING, 0, AmzaRingReader.SYSTEM_RING.length);
+                BAHash<TakeRingCoordinator> stackCache = new BAHash<>(
+                    new BAHMapState<>(takeRingCoordinators.size() * 2, true, BAHMapState.NIL),
+                    BAHasher.SINGLETON,
+                    BAHEqualer.SINGLETON);
 
+                long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
 
-                TakeRingCoordinator ring  = ensureRingCoordinator(getContext, putContext, ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, system ? -1 : 0));
-                if (ring != null) {
-                    suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.allAvailableRowsStream(partitionStripeProvider,
-                            remoteRingMember,
-                            takeSessionId,
-                            electionCounter,
-                            watchAvailableStream));
-                }
-                return true;
-            };
+                String getContext;
+                String putContext;
+                if (system) {
+                    getContext = "availableRowsStream>get>system";
+                    putContext = "availableRowsStream>put>system";
 
-            AtomicLong updates = system ? systemUpdates : stripedUpdates;
-            ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
-            Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
-
-            long lastScan = 0;
-            while (true) {
-                long initialUpdates = updates.get();
-                suggestedWaitInMillis[0] = Long.MAX_VALUE;
-
-                long timeSinceLastFullScan = System.currentTimeMillis() - lastScan;
-                long start = System.currentTimeMillis();
-                if (timeSinceLastFullScan >= heartbeatIntervalMillis) {
-                    electionCounter.set(reofferMaxElectionsPerHeartbeat);
-                    if (system) {
-                        ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
-                    } else {
-                        ringReader.streamRingNames(remoteRingMember, 0, ringNameStream);
-                    }
-                    lastScan = System.currentTimeMillis();
                 } else {
-                    Set<VersionedPartitionName> dirtySet;
-                    synchronized (session.dirtySet) {
-                        dirtySet = session.dirtySet.getAndSet(null);
-                    }
-                    if (dirtySet != null && !dirtySet.isEmpty()) {
-                        Semaphore dirtyRingsSemaphore = new Semaphore(Short.MAX_VALUE, true);
-                        BAHash<List<VersionedPartitionName>> dirtyRings = new BAHash<>(
-                            new BAHMapState<>(10, true, BAHMapState.NIL),
-                            BAHasher.SINGLETON,
-                            BAHEqualer.SINGLETON);
-
-                        for (VersionedPartitionName versionedPartitionName : dirtySet) {
-                            byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
-                            List<VersionedPartitionName> dirty = dirtyRings.get(ringName, 0, ringName.length);
-                            if (dirty == null) {
-                                dirty = Lists.newArrayList();
-                                dirtyRings.put(ringName, dirty);
-                            }
-                            dirty.add(versionedPartitionName);
-                        }
-
-                        dirtyRings.stream(dirtyRingsSemaphore, (ringName, versionedPartitionNames) -> {
-                            TakeRingCoordinator ringCoordinator = null;
-                            if (system) {
-                                ringCoordinator = ensureRingCoordinator(getContext, putContext, ringName, stackCache, systemRingHash, () -> ringReader.getRing(ringName, -1));
-                            } else {
-                                RingSet ringSet = ringReader.getRingSet(remoteRingMember, 0);
-                                Integer ringHash = ringSet.ringNames.get(ringName, 0, ringName.length);
-                                if (ringHash != null) {
-                                    ringCoordinator = ensureRingCoordinator(getContext, putContext, ringName, stackCache, ringHash, () -> ringReader.getRing(ringName, 0));
-                                }
-                            }
-                            if (ringCoordinator != null) {
-                                suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                                    ringCoordinator.dirtyAvailableRowsStream(partitionStripeProvider,
-                                        remoteRingMember,
-                                        takeSessionId,
-                                        versionedPartitionNames,
-                                        electionCounter,
-                                        watchAvailableStream));
-                            }
-                            return true;
-                        });
-                    }
+                    getContext = "availableRowsStream>get>striped";
+                    putContext = "availableRowsStream>put>striped";
                 }
-                long elapsed = System.currentTimeMillis() - start;
 
-                int offerPower = offered.longValue() == 0 ? -1 : UIO.chunkPower(offered.longValue(), 0);
-                LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">count", 1);
-                LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">elapsed", elapsed);
-                LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
+                AtomicLong electionCounter = new AtomicLong(-1);
+                RingNameStream ringNameStream = (ringName, ringHash) -> {
+                    if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
+                        return true;
+                    }
 
+
+                    TakeRingCoordinator ring = ensureRingCoordinator(getContext, putContext, ringName, stackCache, ringHash,
+                        () -> ringReader.getRing(ringName, system ? -1 : 0));
+                    if (ring != null) {
+                        suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
+                            ring.allAvailableRowsStream(partitionStripeProvider,
+                                remoteRingMember,
+                                takeSessionId,
+                                electionCounter,
+                                watchAvailableStream));
+                    }
+                    return true;
+                };
+
+                AtomicLong updates = system ? systemUpdates : stripedUpdates;
+                ConcurrentHashMap<RingMember, Object> ringMembersLocks = system ? systemRingMembersLocks : stripedRingMembersLocks;
+                Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, LOCK_CREATOR);
+
+                long lastScan = 0;
                 while (true) {
-                    long currentOffer = offered.get();
-                    if (currentOffer == 0) {
-                        amzaStats.pingsSent.increment();
-                        pingCallback.call(); // Ping aka keep the socket alive
-                        break;
-                    } else if (offered.compareAndSet(currentOffer, 0)) {
-                        deliverCallback.call();
-                        break;
-                    }
-                }
-                session.lastPingTime.set(System.currentTimeMillis());
+                    long initialUpdates = updates.get();
+                    suggestedWaitInMillis[0] = Long.MAX_VALUE;
 
-                if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
-                    suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
-                }
-
-                synchronized (lock) {
-                    long time = System.currentTimeMillis();
-                    long timeRemaining = suggestedWaitInMillis[0];
-                    while (initialUpdates == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
-                        long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
-                        while (true) {
-                            long currentOffer = offered.get();
-                            if (currentOffer == 0) {
-                                amzaStats.pingsSent.increment();
-                                pingCallback.call(); // Ping aka keep the socket alive
-                                break;
-                            } else if (offered.compareAndSet(currentOffer, 0)) {
-                                deliverCallback.call();
-                                break;
-                            }
-                        }
-                        session.lastPingTime.set(System.currentTimeMillis());
-                        if (timeToWait > 0) {
-                            // park the stream
-                            lock.wait(timeToWait);
-                            timeRemaining -= heartbeatIntervalMillis;
+                    long timeSinceLastFullScan = System.currentTimeMillis() - lastScan;
+                    long start = System.currentTimeMillis();
+                    if (timeSinceLastFullScan >= heartbeatIntervalMillis) {
+                        electionCounter.set(reofferMaxElectionsPerHeartbeat);
+                        if (system) {
+                            ringNameStream.stream(AmzaRingReader.SYSTEM_RING, systemRingHash);
                         } else {
-                            timeRemaining = 0;
+                            ringReader.streamRingNames(remoteRingMember, 0, ringNameStream);
                         }
-                        if (timeRemaining <= 0) {
+                        lastScan = System.currentTimeMillis();
+                    } else {
+                        Set<VersionedPartitionName> dirtySet;
+                        synchronized (session.dirtySet) {
+                            dirtySet = session.dirtySet.getAndSet(null);
+                        }
+                        if (dirtySet != null && !dirtySet.isEmpty()) {
+                            Semaphore dirtyRingsSemaphore = new Semaphore(Short.MAX_VALUE, true);
+                            BAHash<List<VersionedPartitionName>> dirtyRings = new BAHash<>(
+                                new BAHMapState<>(10, true, BAHMapState.NIL),
+                                BAHasher.SINGLETON,
+                                BAHEqualer.SINGLETON);
+
+                            for (VersionedPartitionName versionedPartitionName : dirtySet) {
+                                byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
+                                List<VersionedPartitionName> dirty = dirtyRings.get(ringName, 0, ringName.length);
+                                if (dirty == null) {
+                                    dirty = Lists.newArrayList();
+                                    dirtyRings.put(ringName, dirty);
+                                }
+                                dirty.add(versionedPartitionName);
+                            }
+
+                            dirtyRings.stream(dirtyRingsSemaphore, (ringName, versionedPartitionNames) -> {
+                                TakeRingCoordinator ringCoordinator = null;
+                                if (system) {
+                                    ringCoordinator = ensureRingCoordinator(getContext, putContext, ringName, stackCache, systemRingHash,
+                                        () -> ringReader.getRing(ringName, -1));
+                                } else {
+                                    RingSet ringSet = ringReader.getRingSet(remoteRingMember, 0);
+                                    Integer ringHash = ringSet.ringNames.get(ringName, 0, ringName.length);
+                                    if (ringHash != null) {
+                                        ringCoordinator = ensureRingCoordinator(getContext, putContext, ringName, stackCache, ringHash,
+                                            () -> ringReader.getRing(ringName, 0));
+                                    }
+                                }
+                                if (ringCoordinator != null) {
+                                    suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
+                                        ringCoordinator.dirtyAvailableRowsStream(partitionStripeProvider,
+                                            remoteRingMember,
+                                            takeSessionId,
+                                            versionedPartitionNames,
+                                            electionCounter,
+                                            watchAvailableStream));
+                                }
+                                return true;
+                            });
+                        }
+                    }
+                    long elapsed = System.currentTimeMillis() - start;
+
+                    int offerPower = offered.longValue() == 0 ? -1 : UIO.chunkPower(offered.longValue(), 0);
+                    LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">count", 1);
+                    LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">elapsed", elapsed);
+                    LOG.inc("takeCoordinator>" + (system ? "system" : "striped") + ">" + remoteRingMember.getMember() + ">offered>" + offerPower, 1);
+
+                    while (true) {
+                        long currentOffer = offered.get();
+                        if (currentOffer == 0) {
+                            amzaStats.pingsSent.increment();
+                            pingCallback.call(); // Ping aka keep the socket alive
+                            break;
+                        } else if (offered.compareAndSet(currentOffer, 0)) {
+                            deliverCallback.call();
                             break;
                         }
                     }
+                    session.lastPingTime.set(System.currentTimeMillis());
+
+                    if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
+                        suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
+                    }
+
+                    synchronized (lock) {
+                        long time = System.currentTimeMillis();
+                        long timeRemaining = suggestedWaitInMillis[0];
+                        while (initialUpdates == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
+                            long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
+                            while (true) {
+                                long currentOffer = offered.get();
+                                if (currentOffer == 0) {
+                                    amzaStats.pingsSent.increment();
+                                    pingCallback.call(); // Ping aka keep the socket alive
+                                    break;
+                                } else if (offered.compareAndSet(currentOffer, 0)) {
+                                    deliverCallback.call();
+                                    break;
+                                }
+                            }
+                            session.lastPingTime.set(System.currentTimeMillis());
+                            if (timeToWait > 0) {
+                                // park the stream
+                                lock.wait(timeToWait);
+                                timeRemaining -= heartbeatIntervalMillis;
+                            } else {
+                                timeRemaining = 0;
+                            }
+                            if (timeRemaining <= 0) {
+                                break;
+                            }
+                        }
+                    }
                 }
+            } catch (InterruptedException e) {
+                LOG.warn("Available rows for member:{} session:{} was interrupted", remoteRingMember, takeSessionId);
+            } finally {
+                synchronized (session.sessionThread) {
+                    session.sessionThread.set(null);
+                }
+                takeSessions.remove(sessionKey);
             }
-        } catch (InterruptedException e) {
-            LOG.warn("Available rows for member:{} session:{} was interrupted", remoteRingMember, takeSessionId);
         } finally {
-            synchronized (session.sessionThread) {
-                session.sessionThread.set(null);
-            }
-            takeSessions.remove(sessionKey);
+            LOG.inc("availableRowsStream>"+system+">exited");
         }
     }
 

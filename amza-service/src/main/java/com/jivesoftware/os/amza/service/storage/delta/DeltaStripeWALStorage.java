@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.BAInterner;
@@ -98,7 +99,7 @@ public class DeltaStripeWALStorage {
 
     private final Object awakeCompactionsLock = new Object();
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
-    private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
+    private final Map<VersionedPartitionName, PartitionDelta> partitionDeltas = Maps.newConcurrentMap();
     private final Object oneWriterAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
     private final AtomicLong updateSinceLastMerge = new AtomicLong();

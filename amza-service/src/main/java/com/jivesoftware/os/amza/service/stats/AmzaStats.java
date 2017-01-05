@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
@@ -30,15 +29,15 @@ public class AmzaStats {
 
     private final Map<RingMember, LongAdder> took = new ConcurrentSkipListMap<>();
 
-    private final Map<CompactionFamily, Map<String, CompactionStats>> ongoingCompaction = new ConcurrentHashMap<>();
-    private final Map<CompactionFamily, LongAdder> totalCompactions = new ConcurrentHashMap<>();
+    private final Map<CompactionFamily, Map<String, CompactionStats>> ongoingCompaction = Maps.newConcurrentMap();
+    private final Map<CompactionFamily, LongAdder> totalCompactions = Maps.newConcurrentMap();
     private final List<Entry<String, CompactionStats>> recentCompaction = new ArrayList<>();
 
     public final Map<RingMember, LongAdder> longPolled = new ConcurrentSkipListMap<>();
     public final Map<RingMember, LongAdder> longPollAvailables = new ConcurrentSkipListMap<>();
 
     private final Totals grandTotals = new Totals();
-    private final Map<PartitionName, Totals> partitionTotals = new ConcurrentHashMap<>();
+    private final Map<PartitionName, Totals> partitionTotals = Maps.newConcurrentMap();
 
     public final Multiset<RingMember> takeErrors = ConcurrentHashMultiset.create();
 
@@ -171,12 +170,12 @@ public class AmzaStats {
     }
 
     public int ongoingCompaction(CompactionFamily family) {
-        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> Maps.newConcurrentMap());
         return got.size();
     }
 
     public CompactionStats beginCompaction(CompactionFamily family, String name) {
-        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> Maps.newConcurrentMap());
         CompactionStats compactionStats = new CompactionStats(family, name, System.currentTimeMillis());
         got.put(name, compactionStats);
         return compactionStats;
@@ -252,7 +251,7 @@ public class AmzaStats {
     }
 
     private void endCompaction(CompactionFamily family, String name) {
-        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        Map<String, CompactionStats> got = ongoingCompaction.computeIfAbsent(family, (key) -> Maps.newConcurrentMap());
         CompactionStats compactionStats = got.remove(name);
 
         totalCompactions.computeIfAbsent(family, (key) -> new LongAdder()).increment();

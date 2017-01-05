@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -36,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -62,8 +62,8 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final WALUpdated walUpdated;
     private final AwaitNotify<PartitionName> awaitNotify;
 
-    private final ConcurrentHashMap<PartitionName, StickyStorage> partitionStorage = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = new ConcurrentHashMap<>();
+    private final Map<PartitionName, StickyStorage> partitionStorage = Maps.newConcurrentMap();
+    private final Map<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = Maps.newConcurrentMap();
 
     public StorageVersionProvider(BAInterner interner,
         OrderIdProvider orderIdProvider,

@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -22,8 +23,8 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -43,7 +44,7 @@ public class TakeRingCoordinator {
     private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
 
-    private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
+    private final Map<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = Maps.newConcurrentMap();
 
     private volatile long callCount;
     private volatile VersionedRing versionedRing;

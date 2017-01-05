@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -22,7 +22,7 @@ public class AmzaClientProvider<C, E extends Throwable> implements PartitionClie
     private final long awaitLeaderElectionForNMillis;
     private final long debugClientCount;
     private final long debugClientCountInterval;
-    private final Map<PartitionName, PartitionClient> cache = new ConcurrentHashMap<>();
+    private final Map<PartitionName, PartitionClient> cache = Maps.newConcurrentMap();
 
     public AmzaClientProvider(PartitionClientFactory<C, E> partitionClientFactory,
         PartitionHostsProvider partitionHostsProvider,

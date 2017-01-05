@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
@@ -19,10 +20,10 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALRow;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.TakeFullySystemReady;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
+import com.jivesoftware.os.amza.service.TakeFullySystemReady;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -43,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -93,8 +93,8 @@ public class RowChangeTaker implements RowChanges {
     private final Object systemConsumerLock = new Object();
     private final Object realignmentLock = new Object();
 
-    private final ConcurrentHashMap<RingMember, AvailableRowsReceiver> systemAvailableRowsReceivers = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RingMember, AvailableRowsReceiver> stripedAvailableRowsReceivers = new ConcurrentHashMap<>();
+    private final Map<RingMember, AvailableRowsReceiver> systemAvailableRowsReceivers = Maps.newConcurrentMap();
+    private final Map<RingMember, AvailableRowsReceiver> stripedAvailableRowsReceivers = Maps.newConcurrentMap();
 
     public RowChangeTaker(AmzaStats amzaStats,
         int numberOfStripes,
@@ -244,7 +244,7 @@ public class RowChangeTaker implements RowChanges {
     private void scheduleConsumer(Object consumerLock,
         ExecutorService consumerThreadPool,
         boolean system,
-        ConcurrentHashMap<RingMember, AvailableRowsReceiver> availableRowsReceivers,
+        Map<RingMember, AvailableRowsReceiver> availableRowsReceivers,
         Predicate<VersionedPartitionName> partitionNamePredicate) throws InterruptedException {
 
         consumerThreadPool.submit(() -> {
@@ -315,8 +315,8 @@ public class RowChangeTaker implements RowChanges {
         private final boolean system;
         private final long sessionId;
 
-        private final ConcurrentHashMap<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = new ConcurrentHashMap<>();
-        private final ConcurrentHashMap<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = new ConcurrentHashMap<>();
+        private final Map<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = Maps.newConcurrentMap();
+        private final Map<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = Maps.newConcurrentMap();
         private final AtomicLong ping = new AtomicLong();
         private final AtomicLong pong = new AtomicLong();
         private final AtomicBoolean disposed = new AtomicBoolean(false);

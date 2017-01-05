@@ -1,20 +1,21 @@
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /**
  * @author jonathan.colt
  */
 public class WALIndexProviderRegistry {
 
-    private final ConcurrentHashMap<String, WALIndexProvider<?>> indexRegistry = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, RowIOProvider> rowIORegistry = new ConcurrentHashMap<>();
+    private final Map<String, WALIndexProvider<?>> indexRegistry = Maps.newConcurrentMap();
+    private final Map<String, RowIOProvider> rowIORegistry = Maps.newConcurrentMap();
 
     public WALIndexProviderRegistry(MemoryBackedRowIOProvider ephemeralRowIOProvider, BinaryRowIOProvider persistentRowIOProvider) {
         //public WALIndexProviderRegistry(String[] workingDirectories, IoStats ioStats, int corruptionParanoiaFactor, boolean useMemMap) {

@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -13,8 +14,8 @@ import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -28,7 +29,7 @@ public class AckWaters {
     private final HealthTimer quorumLatency;
     private final AwaitNotify<VersionedPartitionName> awaitNotify;
     private final boolean verboseLogTimeouts;
-    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId>> ackWaters = new ConcurrentHashMap<>();
+    private final Map<RingMember, Map<VersionedPartitionName, LeadershipTokenAndTxId>> ackWaters = Maps.newConcurrentMap();
 
     public AckWaters(AmzaStats amzaStats, HealthTimer quorumLatency, int stripingLevel, boolean verboseLogTimeouts) {
         this.amzaStats = amzaStats;
@@ -38,8 +39,8 @@ public class AckWaters {
     }
 
     public void set(RingMember ringMember, VersionedPartitionName partitionName, long txId, long leadershipToken) throws Exception {
-        ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.computeIfAbsent(ringMember,
-            (t) -> new ConcurrentHashMap<>());
+        Map<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.computeIfAbsent(ringMember,
+            (t) -> Maps.newConcurrentMap());
 
         awaitNotify.notifyChange(partitionName, () -> {
             LeadershipTokenAndTxId result = partitionTxIds.compute(partitionName, (key, current) -> {
@@ -59,7 +60,7 @@ public class AckWaters {
     }
 
     LeadershipTokenAndTxId get(RingMember ringMember, VersionedPartitionName partitionName) {
-        ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.get(ringMember);
+        Map<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.get(ringMember);
         if (partitionTxIds == null) {
             return null;
         }
@@ -146,9 +147,9 @@ public class AckWaters {
     }
 
     public boolean streamPartitionTxIds(VersionedPartitionName versionedPartitionName, MemberTxIdStream stream) throws Exception {
-        for (Entry<RingMember, ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId>> entry : ackWaters.entrySet()) {
+        for (Entry<RingMember, Map<VersionedPartitionName, LeadershipTokenAndTxId>> entry : ackWaters.entrySet()) {
             RingMember member = entry.getKey();
-            ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = entry.getValue();
+            Map<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = entry.getValue();
             LeadershipTokenAndTxId leadershipTokenAndTxId = partitionTxIds.get(versionedPartitionName);
             if (leadershipTokenAndTxId != null) {
                 if (!stream.stream(member, leadershipTokenAndTxId.txId)) {

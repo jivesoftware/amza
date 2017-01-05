@@ -15,18 +15,19 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 public class AmzaPartitionWatcher implements RowChanges {
 
     private final boolean systemWatcher;
     private final RowChanges rowChanges;
-    private final ConcurrentHashMap<PartitionName, List<RowChanges>> watchers = new ConcurrentHashMap<>();
+    private final Map<PartitionName, List<RowChanges>> watchers = Maps.newConcurrentMap();
 
     public AmzaPartitionWatcher(boolean systemWatcher, RowChanges rowChanges) {
         this.systemWatcher = systemWatcher;

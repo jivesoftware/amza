@@ -298,7 +298,11 @@ public class TakeCoordinator {
         RingSupplier ringSupplier) throws InterruptedException {
 
         LOG.inc(getContext);
+        long start = System.nanoTime();
         TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringHash, ringName, 0, ringName.length);
+        long elapse = System.nanoTime() - start;
+        LOG.inc(getContext+">"+UIO.chunkPower(elapse, 0));
+
         if (ringCoordinator == null) {
             ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
                 key -> {

@@ -24,7 +24,6 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AmzaPartitionCommitable;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.AmzaSystemReady;
 import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
@@ -646,17 +645,17 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         }
     }
 
-    static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream, BAInterner interner) throws Exception {
+    static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream) throws Exception {
         int o = 0;
         int partitionNameBytesLength = UIO.bytesInt(keyBytes, o);
         o += 4;
-        PartitionName partitionName = PartitionName.fromBytes(keyBytes, o, interner);
+        PartitionName partitionName = PartitionName.fromBytes(keyBytes, o);
         o += partitionNameBytesLength;
         byte context = keyBytes[o];
         o++;
         int rootRingMemberBytesLength = UIO.bytesInt(keyBytes, o);
         o += 4;
-        byte[] rootRingMemberBytes = interner.intern(keyBytes, o, rootRingMemberBytesLength);
+        byte[] rootRingMemberBytes = copy(keyBytes, o, rootRingMemberBytesLength);
         o += rootRingMemberBytesLength;
         long partitionVersion = UIO.bytesLong(keyBytes, o);
         o += 8;
@@ -665,7 +664,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         o++;
         int ackRingMemberBytesLength = UIO.bytesInt(keyBytes, o);
         o += 4;
-        byte[] ackRingMemberBytes = interner.intern(keyBytes, o, ackRingMemberBytesLength);
+        byte[] ackRingMemberBytes = copy(keyBytes, o, ackRingMemberBytesLength);
         o += ackRingMemberBytesLength;
 
         return stream.stream(partitionName,
@@ -674,6 +673,12 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             partitionVersion,
             isSelf,
             new Member(ackRingMemberBytes));
+    }
+
+    static private byte[] copy(byte[] bytes,int offest,int length) {
+        byte[] copy = new byte[length];
+        System.arraycopy(bytes,offest,copy,0,length);
+        return copy;
     }
 
     interface StateKeyStream {
@@ -800,7 +805,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 streamStateKey(change.getKey().key, (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                     smellsFishy.add(partitionName);
                     return true;
-                }, interner);
+                });
             }
             synchronized (smellsFishy) {
                 smellOVersion.incrementAndGet();

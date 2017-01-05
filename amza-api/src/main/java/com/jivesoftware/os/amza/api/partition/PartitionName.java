@@ -63,6 +63,30 @@ public class PartitionName implements Comparable<PartitionName> {
         throw new RuntimeException("Invalid version:" + bytes[0]);
     }
 
+    public static PartitionName fromBytes(byte[] bytes, int offset) throws InterruptedException {
+        int o = offset;
+        if (bytes[o] == 0) { // version
+            o++;
+            boolean systemPartition = (bytes[o] == 1);
+            o++;
+            int ringNameLength = UIO.bytesInt(bytes, o);
+            o += 4;
+            byte[] ringName = copy(bytes, o, ringNameLength);
+            o += ringNameLength;
+            int nameLength = UIO.bytesInt(bytes, o);
+            o += 4;
+            byte[] name = copy(bytes, o, nameLength);
+            return new PartitionName(systemPartition, ringName, name);
+        }
+        throw new RuntimeException("Invalid version:" + bytes[0]);
+    }
+
+    static private byte[] copy(byte[] bytes,int offest,int length) {
+        byte[] copy = new byte[length];
+        System.arraycopy(bytes,offest,copy,0,length);
+        return copy;
+    }
+
     @JsonCreator
     public PartitionName(@JsonProperty("systemPartition") boolean systemPartition,
         @JsonProperty("ringName") byte[] ringName,

@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.sync.deployable;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.collect.ImmutableMap;
@@ -70,6 +71,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.glassfish.jersey.oauth1.signature.OAuth1Request;
 import org.glassfish.jersey.oauth1.signature.OAuth1Signature;
@@ -170,47 +172,98 @@ public class AmzaSyncMain {
                 10_000L,//TODO config
                 syncConfig.getUseClientSolutionLog());
 
-            AmzaSyncSender syncSender = null;
+            ObjectMapper miruSyncMapper = new ObjectMapper();
+            miruSyncMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+            miruSyncMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+
+            AmzaSyncSenderConfigStorage senderConfigStorage = new AmzaSyncSenderConfigStorage(interner,
+                miruSyncMapper,
+                amzaClient,
+                30_000L // TODO config
+            );
+
+            AmzaSyncPartitionConfigStorage syncPartitionConfigStorage = new AmzaSyncPartitionConfigStorage(interner,
+                miruSyncMapper,
+                amzaClient,
+                30_000L // TODO config
+            );
+
+
+            AmzaSyncSenders syncSenders = null;
             AmzaSyncReceiver syncReceiver = null;
 
             String syncWhitelist = syncConfig.getSyncSenderWhitelist().trim();
-            Map<PartitionName, PartitionName> whitelistPartitionNames;
+            Map<PartitionName, AmzaSyncPartitionConfig> whitelistPartitionNames;
             if (syncWhitelist.equals("*")) {
                 whitelistPartitionNames = null;
             } else {
                 String[] splitWhitelist = syncWhitelist.split("\\s*,\\s*");
-                Builder<PartitionName, PartitionName> builder = ImmutableMap.builder();
+                Builder<PartitionName, AmzaSyncPartitionConfig> builder = ImmutableMap.builder();
                 for (String s : splitWhitelist) {
                     if (!s.isEmpty()) {
                         if (s.contains(":")) {
                             String[] parts = s.split(":");
-                            PartitionName fromTenantId = extractPartition(parts[0].trim());
-                            PartitionName toTenantId = extractPartition(parts[1].trim());
-                            builder.put(fromTenantId, toTenantId);
+                            PartitionName from = extractPartition(parts[0].trim());
+                            PartitionName to = extractPartition(parts[1].trim());
+                            builder.put(from, new AmzaSyncPartitionConfig(from, to));
                         } else {
                             PartitionName partitionName = extractPartition(s.trim());
-                            builder.put(partitionName, partitionName);
+                            builder.put(partitionName, new AmzaSyncPartitionConfig(partitionName, partitionName));
                         }
                     }
                 }
                 whitelistPartitionNames = builder.build();
             }
 
+            if (whitelistPartitionNames != null && whitelistPartitionNames.isEmpty()) {
+                syncPartitionConfigStorage.multiPutIfAbsent("default", whitelistPartitionNames);
+
+                String[] parts = syncConfig.getSyncSenderSchemeHostPort().split(":");
+                String scheme = parts[0];
+                String host = parts[1];
+                int port = Integer.parseInt(parts[2]);
+
+                AmzaSyncSenderConfig senderConfig = new AmzaSyncSenderConfig(
+                    "default",
+                    syncConfig.getSyncSenderEnabled(),
+                    scheme,
+                    host,
+                    port,
+                    syncConfig.getSyncSenderSocketTimeout(),
+                    syncConfig.getSyncRingStripes(),
+                    syncConfig.getSyncThreadCount(),
+                    syncConfig.getSyncIntervalMillis(),
+                    syncConfig.getSyncBatchSize(),
+                    syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
+                    syncConfig.getSyncSenderOAuthConsumerKey(),
+                    syncConfig.getSyncSenderOAuthConsumerSecret(),
+                    syncConfig.getSyncSenderOAuthConsumerMethod(),
+                    syncConfig.getSyncSenderAllowSelfSignedCerts());
+
+                senderConfigStorage.multiPutIfAbsent(ImmutableMap.of("default", senderConfig));
+            }
+
+
             if (syncConfig.getSyncSenderEnabled()) {
-                syncSender = new AmzaSyncSenderInitializer().initialize(syncConfig,
-                    amzaClientAquariumProvider,
+                ExecutorService executorService = Executors.newCachedThreadPool();
+                syncSenders = new AmzaSyncSenders(executorService,
                     amzaClientProvider,
+                    amzaClientAquariumProvider,
+                    interner,
                     mapper,
-                    whitelistPartitionNames,
-                    interner);
+                    senderConfigStorage,
+                    syncPartitionConfigStorage,
+                    30_000); // TODO config
+
             }
             if (syncConfig.getSyncReceiverEnabled()) {
                 syncReceiver = new AmzaSyncReceiver(amzaClientProvider);
             }
 
             amzaClientAquariumProvider.start();
-            if (syncSender != null) {
-                syncSender.start();
+            if (syncSenders != null) {
+                syncSenders.start();
             }
 
             SoyRendererConfig rendererConfig = deployable.config(SoyRendererConfig.class);
@@ -226,7 +279,7 @@ public class AmzaSyncMain {
             SoyRenderer renderer = new SoyRendererInitializer().initialize(rendererConfig);
 
             AmzaSyncUIService amzaSyncUIService = new AmzaSyncUIServiceInitializer().initialize(renderer,
-                syncSender,
+                syncSenders,
                 syncConfig.getSyncSenderEnabled(),
                 syncConfig.getSyncReceiverEnabled(),
                 mapper);
@@ -249,8 +302,8 @@ public class AmzaSyncMain {
 
             deployable.addEndpoints(AmzaSyncEndpoints.class);
             deployable.addInjectables(BAInterner.class, interner);
-            if (syncSender != null) {
-                deployable.addInjectables(AmzaSyncSender.class, syncSender);
+            if (syncSenders != null) {
+                deployable.addInjectables(AmzaSyncSenders.class, syncSenders);
             }
 
             deployable.addEndpoints(AmzaSyncUIEndpoints.class);

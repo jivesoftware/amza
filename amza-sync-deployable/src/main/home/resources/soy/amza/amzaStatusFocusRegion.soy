@@ -18,6 +18,7 @@
                 <table class="table table-condensed">
                     <thead>
                         <tr>
+                            <th>Sender</th>
                             <th>To</th>
                             <th>Cursor</th>
                         </tr>
@@ -25,6 +26,7 @@
                     <tbody>
                         {foreach $p in $progress}
                             <tr>
+                                <td>{$p.sender}</td>
                                 <td>{$p.toPartition}</td>
                                 <td>{$p.cursor}</td>
                             </tr>

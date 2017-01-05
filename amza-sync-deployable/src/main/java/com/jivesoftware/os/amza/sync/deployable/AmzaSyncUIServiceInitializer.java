@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 public class AmzaSyncUIServiceInitializer {
 
     public AmzaSyncUIService initialize(SoyRenderer renderer,
-        AmzaSyncSender syncSender,
+        AmzaSyncSenders syncSenders,
         boolean senderEnabled,
         boolean receiverEnabled,
         ObjectMapper mapper)
@@ -21,6 +21,6 @@ public class AmzaSyncUIServiceInitializer {
             new HeaderRegion("soy.amza.chrome.headerRegion", renderer),
             new AmzaAdminRegion("soy.amza.page.adminRegion", renderer, senderEnabled, receiverEnabled),
             new AmzaStatusRegion("soy.amza.page.statusRegion", renderer,
-                new AmzaStatusFocusRegion("soy.amza.page.statusFocusRegion", renderer, syncSender, mapper)));
+                new AmzaStatusFocusRegion("soy.amza.page.statusFocusRegion", renderer, syncSenders, mapper)));
     }
 }

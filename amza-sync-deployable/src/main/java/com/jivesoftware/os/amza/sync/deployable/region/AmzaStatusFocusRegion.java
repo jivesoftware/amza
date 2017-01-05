@@ -7,6 +7,7 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
+import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenders;
 import com.jivesoftware.os.amza.ui.region.Region;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -25,17 +26,17 @@ public class AmzaStatusFocusRegion implements Region<PartitionName> {
 
     private final String template;
     private final SoyRenderer renderer;
-    private final AmzaSyncSender syncSender;
+    private final AmzaSyncSenders syncSenders;
     private final ObjectMapper mapper;
 
     public AmzaStatusFocusRegion(String template,
         SoyRenderer renderer,
-        AmzaSyncSender syncSender,
+        AmzaSyncSenders syncSenders,
         ObjectMapper mapper) {
 
         this.template = template;
         this.renderer = renderer;
-        this.syncSender = syncSender;
+        this.syncSenders = syncSenders;
         this.mapper = mapper;
     }
 
@@ -47,20 +48,25 @@ public class AmzaStatusFocusRegion implements Region<PartitionName> {
         data.put("partitionBase64", partitionName.toBase64());
         try {
             List<Map<String, Object>> progress = Lists.newArrayList();
-            if (syncSender != null) {
-                syncSender.streamCursors(partitionName, null, (toPartitionName, cursor) -> {
-                    String toPartition = new String(toPartitionName.getRingName(), StandardCharsets.UTF_8)
-                        + '/' + new String(toPartitionName.getName(), StandardCharsets.UTF_8);
-                    Map<String, String> cursorData = Maps.newHashMap();
-                    for (Entry<RingMember, Long> entry : cursor.entrySet()) {
-                        cursorData.put(entry.getKey().getMember(), entry.getValue().toString());
-                    }
+            if (syncSenders != null) {
 
-                    progress.add(ImmutableMap.of(
-                        "toPartition", toPartition,
-                        "cursor", mapper.writeValueAsString(cursorData)));
-                    return true;
-                });
+                for (AmzaSyncSender syncSender : syncSenders.getActiveSenders()) {
+                    syncSender.streamCursors(partitionName, null, (toPartitionName, cursor) -> {
+                        String toPartition = new String(toPartitionName.getRingName(), StandardCharsets.UTF_8)
+                            + '/' + new String(toPartitionName.getName(), StandardCharsets.UTF_8);
+                        Map<String, String> cursorData = Maps.newHashMap();
+                        for (Entry<RingMember, Long> entry : cursor.entrySet()) {
+                            cursorData.put(entry.getKey().getMember(), entry.getValue().toString());
+                        }
+
+                        progress.add(ImmutableMap.of(
+                            "sender", syncSender.getName(),
+                            "toPartition", toPartition,
+                            "cursor", mapper.writeValueAsString(cursorData)));
+                        return true;
+                    });
+                }
+
             } else {
                 data.put("warning", "Sync sender is not enabled");
             }

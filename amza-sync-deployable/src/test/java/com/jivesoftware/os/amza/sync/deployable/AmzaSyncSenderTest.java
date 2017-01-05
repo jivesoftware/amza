@@ -86,7 +86,9 @@ public class AmzaSyncSenderTest {
             }
         };
 
-        AmzaSyncSender syncSender = new AmzaSyncSender(amzaClientAquariumProvider,
+
+        AmzaSyncSender syncSender = new AmzaSyncSender("default",
+            amzaClientAquariumProvider,
             1,
             Executors.newSingleThreadExecutor(),
             1,
@@ -94,7 +96,8 @@ public class AmzaSyncSenderTest {
             partitionClientProvider,
             syncClient,
             new ObjectMapper(),
-            ImmutableMap.of(partitionName, partitionName),
+            (name) -> ImmutableMap.of(partitionName,
+                new AmzaSyncPartitionConfig(partitionName, partitionName)),
             1_000,
             new BAInterner());
 

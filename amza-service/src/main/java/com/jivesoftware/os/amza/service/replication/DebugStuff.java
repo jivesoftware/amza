@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.api.BAInterner;
 import java.util.Arrays;
 
 /**
@@ -23,7 +22,7 @@ public class DebugStuff {
             System.out.println("isSelf: " + isSelf);
             System.out.println("ackRingMember: " + ackRingMember);
             return true;
-        }, new BAInterner());
+        });
     }
 
 

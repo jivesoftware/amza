@@ -109,7 +109,7 @@ public class PartitionComposter implements RowChanges {
                         byte[] dirtyBytes = dirtyPartitionName.toBytes();
                         dirtyPartitions.put(dirtyBytes, dirtyBytes);
                         return true;
-                    }, interner);
+                    });
             }
         }
     }

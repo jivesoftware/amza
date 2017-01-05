@@ -50,7 +50,7 @@ class AmzaStateStorage implements StateStorage<Long> {
                         (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                             State state = State.fromSerializedForm(value[0]);
                             return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, valueTimestamp, valueVersion);
-                        }, interner);
+                        });
                 }
                 return true;
             }, true);

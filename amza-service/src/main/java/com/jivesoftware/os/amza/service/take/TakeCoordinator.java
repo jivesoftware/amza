@@ -287,6 +287,7 @@ public class TakeCoordinator {
         int ringHash,
         RingSupplier ringSupplier) throws InterruptedException {
 
+        LOG.inc("WTF>get");
         TakeRingCoordinator ringCoordinator = stackCache == null ? null : stackCache.get(ringHash, ringName, 0, ringName.length);
         if (ringCoordinator == null) {
             ringCoordinator = takeRingCoordinators.computeIfAbsent(ringName,
@@ -307,6 +308,7 @@ public class TakeCoordinator {
                     }
                 });
             if (stackCache != null) {
+                LOG.inc("WTF>put");
                 stackCache.put(ringHash, ringName, ringCoordinator);
             }
         }

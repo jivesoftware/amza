@@ -236,13 +236,15 @@ public class TakeCoordinator {
         }
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         for (Session session : takeSessions.values()) {
-            synchronized (session.dirtySet) {
-                Set<VersionedPartitionName> dirtySet = session.dirtySet.get();
-                if (dirtySet == null) {
-                    dirtySet = Sets.newHashSet();
-                    session.dirtySet.set(dirtySet);
+            if (system && session.system || !system && !session.system) {
+                synchronized (session.dirtySet) {
+                    Set<VersionedPartitionName> dirtySet = session.dirtySet.get();
+                    if (dirtySet == null) {
+                        dirtySet = Sets.newHashSet();
+                        session.dirtySet.set(dirtySet);
+                    }
+                    dirtySet.add(versionedPartitionName);
                 }
-                dirtySet.add(versionedPartitionName);
             }
         }
         awakeRemoteTakers(ring, system);

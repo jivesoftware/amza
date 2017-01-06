@@ -11,7 +11,7 @@
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
-        <leaps-n-bounds.version>0.190</leaps-n-bounds.version>
+        <leaps-n-bounds.version>0.192</leaps-n-bounds.version>
         <jive.utils.version>0.110</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.23</mlogger.version>

@@ -220,28 +220,30 @@ public class AmzaSyncMain {
                 syncPartitionConfigStorage.multiPutIfAbsent("default", whitelistPartitionNames);
 
                 String[] parts = syncConfig.getSyncSenderSchemeHostPort().split(":");
-                String scheme = parts[0];
-                String host = parts[1];
-                int port = Integer.parseInt(parts[2]);
+                if (parts != null && parts.length == 3) {
+                    String scheme = parts[0];
+                    String host = parts[1];
+                    int port = Integer.parseInt(parts[2]);
 
-                AmzaSyncSenderConfig senderConfig = new AmzaSyncSenderConfig(
-                    "default",
-                    syncConfig.getSyncSenderEnabled(),
-                    scheme,
-                    host,
-                    port,
-                    syncConfig.getSyncSenderSocketTimeout(),
-                    syncConfig.getSyncRingStripes(),
-                    syncConfig.getSyncThreadCount(),
-                    syncConfig.getSyncIntervalMillis(),
-                    syncConfig.getSyncBatchSize(),
-                    syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
-                    syncConfig.getSyncSenderOAuthConsumerKey(),
-                    syncConfig.getSyncSenderOAuthConsumerSecret(),
-                    syncConfig.getSyncSenderOAuthConsumerMethod(),
-                    syncConfig.getSyncSenderAllowSelfSignedCerts());
+                    AmzaSyncSenderConfig senderConfig = new AmzaSyncSenderConfig(
+                        "default",
+                        syncConfig.getSyncSenderEnabled(),
+                        scheme,
+                        host,
+                        port,
+                        syncConfig.getSyncSenderSocketTimeout(),
+                        syncConfig.getSyncRingStripes(),
+                        syncConfig.getSyncThreadCount(),
+                        syncConfig.getSyncIntervalMillis(),
+                        syncConfig.getSyncBatchSize(),
+                        syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
+                        syncConfig.getSyncSenderOAuthConsumerKey(),
+                        syncConfig.getSyncSenderOAuthConsumerSecret(),
+                        syncConfig.getSyncSenderOAuthConsumerMethod(),
+                        syncConfig.getSyncSenderAllowSelfSignedCerts());
 
-                senderConfigStorage.multiPutIfAbsent(ImmutableMap.of("default", senderConfig));
+                    senderConfigStorage.multiPutIfAbsent(ImmutableMap.of("default", senderConfig));
+                }
             }
 
 

@@ -7,7 +7,6 @@ import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -22,8 +21,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static com.jivesoftware.os.amza.api.partition.Consistency.quorum;
 
 /**
  *
@@ -72,6 +69,10 @@ public class TakeFullySystemReady implements AmzaSystemReady {
                 sickThreads.sick(e);
             }
         });
+    }
+
+    public boolean isReady() {
+        return ready.get() & tookFully.get();
     }
 
     public void tookFully(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {

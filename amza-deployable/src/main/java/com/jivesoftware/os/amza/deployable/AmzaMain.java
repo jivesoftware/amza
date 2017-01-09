@@ -30,6 +30,7 @@ import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
+import com.jivesoftware.os.routing.bird.endpoints.base.FullyOnlineVersion;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
 import com.jivesoftware.os.routing.bird.endpoints.base.LoadBalancerHealthCheckEndpoints;
@@ -49,6 +50,8 @@ import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 import org.merlin.config.defaults.LongDefault;
 import org.merlin.config.defaults.StringDefault;
 
@@ -78,6 +81,7 @@ public class AmzaMain {
 
             deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("Amza", "main", "/amza/ui"))));
 
+
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));
             deployable.addHealthCheck(new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)));
@@ -86,9 +90,18 @@ public class AmzaMain {
                 new FileDescriptorCountHealthChecker(deployable.config(FileDescriptorCountHealthChecker.FileDescriptorCountHealthCheckerConfig.class)));
             deployable.addHealthCheck(serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
-            deployable.buildManageServer().start();
+
 
             InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
+            AtomicReference<Callable<Boolean>> isReady = new AtomicReference<>(()-> false);
+            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion)() -> {
+                if (serviceStartupHealthCheck.startupHasSucceeded() && isReady.get().call()) {
+                    return instanceConfig.getVersion();
+                } else {
+                    return null;
+                }
+            });
+            deployable.buildManageServer().start();
 
             AmzaConfig amzaConfig = deployable.config(AmzaConfig.class);
 
@@ -184,6 +197,7 @@ public class AmzaMain {
             deployable.buildServer().start();
             clientHealthProvider.start();
             serviceStartupHealthCheck.success();
+            isReady.set(lifecycle::isReady);
 
         } catch (Throwable t) {
             serviceStartupHealthCheck.info("Encountered the following failure during startup.", t);

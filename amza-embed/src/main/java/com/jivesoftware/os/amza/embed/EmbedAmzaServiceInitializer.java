@@ -348,6 +348,10 @@ public class EmbedAmzaServiceInitializer {
                 System.out.println("-----------------------------------------------------------------------");
             }
         }
+
+        public boolean isReady() {
+            return amzaService.isReady();
+        }
     }
 
 }

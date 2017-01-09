@@ -93,9 +93,9 @@ public class AmzaMain {
 
 
             InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
-            AtomicReference<Callable<Boolean>> isReady = new AtomicReference<>(()-> false);
+            AtomicReference<Callable<Boolean>> isAmzaReady = new AtomicReference<>(()-> false);
             deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion)() -> {
-                if (serviceStartupHealthCheck.startupHasSucceeded() && isReady.get().call()) {
+                if (serviceStartupHealthCheck.startupHasSucceeded() && isAmzaReady.get().call()) {
                     return instanceConfig.getVersion();
                 } else {
                     return null;
@@ -196,8 +196,8 @@ public class AmzaMain {
 
             deployable.buildServer().start();
             clientHealthProvider.start();
+            isAmzaReady.set(lifecycle::isReady);
             serviceStartupHealthCheck.success();
-            isReady.set(lifecycle::isReady);
 
         } catch (Throwable t) {
             serviceStartupHealthCheck.info("Encountered the following failure during startup.", t);

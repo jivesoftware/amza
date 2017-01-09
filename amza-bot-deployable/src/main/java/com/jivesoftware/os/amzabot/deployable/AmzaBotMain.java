@@ -33,6 +33,7 @@ import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import com.jivesoftware.os.routing.bird.deployable.config.extractor.ConfigBinder;
+import com.jivesoftware.os.routing.bird.endpoints.base.FullyOnlineVersion;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
@@ -48,7 +49,6 @@ import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProv
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
-
 import java.io.File;
 import java.util.Arrays;
 import java.util.UUID;
@@ -86,6 +86,14 @@ public class AmzaBotMain {
                 amzaBotHealthCheck,
                 serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
+
+            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion)() -> {
+                if (serviceStartupHealthCheck.startupHasSucceeded()) {
+                    return instanceConfig.getVersion();
+                } else {
+                    return null;
+                }
+            });
             deployable.buildManageServer().start();
 
             HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceConfig.getInstanceKey(),

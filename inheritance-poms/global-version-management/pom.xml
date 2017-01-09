@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.688</version>
+        <version>0.689</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
@@ -15,7 +15,7 @@
         <jive.utils.version>0.110</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.23</mlogger.version>
-        <routing.bird.version>0.164</routing.bird.version>
+        <routing.bird.version>0.168</routing.bird.version>
         <aquarium.version>0.31</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
@@ -498,20 +498,6 @@
                                 </configuration>
                             </execution>
                         </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>format</id>
-            <properties>
-                <include>**/*.java</include>
-            </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>com.googlecode.maven-java-formatter-plugin</groupId>
-                        <artifactId>maven-java-formatter-plugin</artifactId>
                     </plugin>
                 </plugins>
             </build>

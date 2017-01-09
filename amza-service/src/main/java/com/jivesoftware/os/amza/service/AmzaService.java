@@ -243,6 +243,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         });
     }
 
+    public boolean isReady() {
+        return systemReady.isReady();
+    }
+
     @Override
     public long getTimestamp(long timestampId, long deltaMillis) throws Exception {
         if (timestampId <= 0) {

@@ -313,8 +313,8 @@ public class RowChangeTaker implements RowChanges {
         private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
         private final RingMember remoteRingMember;
         private final boolean system;
-        private final long sessionId;
 
+        private final AtomicLong activeSessionId = new AtomicLong(-1);
         private final Map<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = Maps.newConcurrentMap();
         private final Map<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = Maps.newConcurrentMap();
         private final AtomicLong ping = new AtomicLong();
@@ -329,7 +329,6 @@ public class RowChangeTaker implements RowChanges {
             this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
             this.remoteRingMember = remoteRingMember;
             this.system = system;
-            this.sessionId = sessionIdProvider.nextId();
         }
 
         public void dispose() {
@@ -345,6 +344,8 @@ public class RowChangeTaker implements RowChanges {
                     }
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
                     amzaStats.longPolled(remoteRingMember);
+                    long sessionId = sessionIdProvider.nextId();
+                    activeSessionId.set(sessionId);
                     availableRowsTaker.availableRowsStream(amzaRingReader.getRingMember(),
                         amzaRingReader.getRingHost(),
                         remoteRingMember,
@@ -445,6 +446,7 @@ public class RowChangeTaker implements RowChanges {
             RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
             RowsTaker rowsTaker = system ? systemRowsTaker : stripedRowsTaker;
 
+            long sessionId = activeSessionId.get();
             if (pong.get() < ping.get() - pongIntervalMillis) {
                 if (rowsTaker.pong(localRingMember, remoteRingMember, remoteRingHost, sessionId)) {
                     pong.set(System.currentTimeMillis());

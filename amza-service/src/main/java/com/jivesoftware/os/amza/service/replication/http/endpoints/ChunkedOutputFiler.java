@@ -23,7 +23,7 @@ import org.glassfish.jersey.server.ChunkedOutput;
 /**
  * @author jonathan.colt
  */
-class ChunkedOutputFiler implements IWriteable {
+public class ChunkedOutputFiler implements IWriteable {
 
     private final int bufferSize;
     private final HeapFiler filer;

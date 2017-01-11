@@ -42,6 +42,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
 import org.glassfish.jersey.server.ChunkedOutput;
+import org.glassfish.jersey.server.LatchChunkedOutput;
 import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
@@ -120,34 +121,25 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
 
-        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-
+        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
         new Thread(() -> {
-            try {
+            chunkedOutput.await("availableRowsStream", () -> {
                 amzaStats.availableRowsStream.increment();
-                amzaInstance.availableRowsStream(
-                    system,
-                    chunkedOutput::write,
-                    new RingMember(ringMemberString),
-                    new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
-                    takeSessionId,
-                    timeoutMillis);
-            } catch (Exception x) {
-                LOG.warn("Failed to stream available rows", x);
-            } finally {
                 try {
-                    if (!chunkedOutput.isClosed()) {
-                        chunkedOutput.close();
-                    }
-                } catch (IOException x) {
-                    LOG.warn("Failed to close stream for available rows", x);
+                    amzaInstance.availableRowsStream(
+                        system,
+                        chunkedOutput::write,
+                        new RingMember(ringMemberString),
+                        new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
+                        takeSessionId,
+                        timeoutMillis);
+                    return null;
+                } finally {
+                    amzaStats.availableRowsStream.decrement();
                 }
-                amzaStats.availableRowsStream.decrement();
-            }
+            });
         }, "available-" + ringMemberString + "-" + (system ? "system" : "striped")).start();
-
         return chunkedOutput;
-
     }
 
     @POST

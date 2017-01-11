@@ -58,7 +58,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.StreamingOutput;
-import org.glassfish.jersey.server.ChunkedOutput;
+import org.glassfish.jersey.server.LatchChunkedOutput;
 import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
@@ -102,19 +102,9 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
             RingTopology ringTopology = client.configPartition(partitionName, partitionProperties, ringSize);
-            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-            PartitionName effectivelyFinalPartitionName = partitionName;
-            chunkExecutors.submit(() -> {
-                ChunkedOutputFiler out = null;
-                try {
-                    out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                    client.configPartition(ringTopology, out);
-                    out.flush(true);
-                } catch (Exception x) {
-                    LOG.warn("Failed to stream ring", x);
-                } finally {
-                    closeStreams(effectivelyFinalPartitionName, "configPartition", null, out);
-                }
+            LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
+            chunkedOutput.submit(chunkExecutors, partitionName, "configPartition", null, 4096, (partitionName1, in, out) -> {
+                client.configPartition(ringTopology, out);
             });
             return chunkedOutput;
         } catch (Exception e) {
@@ -254,10 +244,9 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         } catch (Exception x) {
-            LOG.error("Failure while getting paritionName {}", new Object[] { partitionName }, x);
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
-
 
         StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
@@ -267,21 +256,9 @@ public class AmzaClientRestEndpoints {
             return stateMessageCauseToResponse(stateMessageCause);
         }
 
-        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-        PartitionName effectivelyFinalPartitionName = partitionName;
-        chunkExecutors.submit(() -> {
-            FilerInputStream in = null;
-            ChunkedOutputFiler out = null;
-            try {
-                in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.get(effectivelyFinalPartitionName, Consistency.none, in, out);
-                out.flush(true);
-            } catch (Exception x) {
-                LOG.warn("Failed to stream gets", x);
-            } finally {
-                closeStreams(effectivelyFinalPartitionName, "get", in, out);
-            }
+        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
+        chunkedOutput.submit(chunkExecutors, partitionName, "get", new FilerInputStream(inputStream), 4096, (partitionName1, in, out) -> {
+            client.get(partitionName1, Consistency.none, in, out);
         });
         return chunkedOutput;
     }
@@ -300,7 +277,7 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         } catch (Exception x) {
-            LOG.error("Failure while getting paritionName {}", new Object[] { partitionName }, x);
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
 
@@ -337,20 +314,9 @@ public class AmzaClientRestEndpoints {
             closeStreams(partitionName, "scan", in, null);
         }
 
-        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-        PartitionName effectivelyFinalPartitionName = partitionName;
-        chunkExecutors.submit(() -> {
-            ChunkedOutputFiler out = null;
-            try {
-                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.scan(effectivelyFinalPartitionName, ranges, out, hydrateValues);
-                out.flush(true);
-
-            } catch (Exception x) {
-                LOG.warn("Failed to stream scan", x);
-            } finally {
-                closeStreams(effectivelyFinalPartitionName, "scan", null, out);
-            }
+        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
+        chunkedOutput.submit(chunkExecutors, partitionName, "scan", null, 4096, (partitionName1, in1, out) -> {
+            client.scan(partitionName1, ranges, out, hydrateValues);
         });
         return chunkedOutput;
     }
@@ -369,7 +335,7 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         } catch (Exception x) {
-            LOG.error("Failure while getting paritionName {}", new Object[] { partitionName }, x);
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
 
@@ -438,25 +404,13 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         } catch (Exception x) {
-            LOG.error("Failure while getting paritionName {}", new Object[] { partitionName }, x);
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
 
-        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-        PartitionName effectivelyFinalPartitionName = partitionName;
-        chunkExecutors.submit(() -> {
-            FilerInputStream in = null;
-            ChunkedOutputFiler out = null;
-            try {
-                in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.takeFromTransactionId(effectivelyFinalPartitionName, limit, in, out);
-                out.flush(true);
-            } catch (Exception x) {
-                LOG.warn("Failed to stream takeFromTransactionId", x);
-            } finally {
-                closeStreams(effectivelyFinalPartitionName, "takeFromTransactionId", in, out);
-            }
+        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
+        chunkedOutput.submit(chunkExecutors, partitionName, "takeFromTransactionId", new FilerInputStream(inputStream), 4096, (partitionName1, in, out) -> {
+            client.takeFromTransactionId(partitionName1, limit, in, out);
         });
         return chunkedOutput;
     }
@@ -473,27 +427,15 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         } catch (Exception x) {
-            LOG.error("Failure while getting paritionName {}", new Object[] { partitionName }, x);
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
 
-        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-        PartitionName effectivelyFinalPartitionName = partitionName;
-        chunkExecutors.submit(() -> {
-
-            FilerInputStream in = null;
-            ChunkedOutputFiler out = null;
-            try {
-                in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(4096, chunkedOutput); // TODO config ?? or caller
-                client.takePrefixFromTransactionId(effectivelyFinalPartitionName, limit, in, out);
-                out.flush(true);
-            } catch (Exception x) {
-                LOG.warn("Failed to stream takePrefixFromTransactionId", x);
-            } finally {
-                closeStreams(effectivelyFinalPartitionName, "takePrefixFromTransactionId", in, out);
-            }
-        });
+        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
+        chunkedOutput.submit(chunkExecutors, partitionName, "takePrefixFromTransactionId", new FilerInputStream(inputStream), 4096,
+            (partitionName1, in, out) -> {
+                client.takePrefixFromTransactionId(partitionName1, limit, in, out);
+            });
         return chunkedOutput;
     }
 
@@ -549,7 +491,7 @@ public class AmzaClientRestEndpoints {
         try {
             partitionName = PartitionName.fromBase64(base64PartitionName, interner);
         } catch (Exception x) {
-            LOG.error("Failure while getting paritionName {}", new Object[] { partitionName }, x);
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
 

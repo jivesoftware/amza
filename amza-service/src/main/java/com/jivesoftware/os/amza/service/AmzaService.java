@@ -523,6 +523,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
+        String sharedKey,
         long heartbeatIntervalMillis) throws Exception {
 
         ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId, false);
@@ -535,6 +536,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             partitionStripeProvider,
             remoteRingMember,
             takeSessionId,
+            sharedKey,
             heartbeatIntervalMillis,
             (partitionName, txId) -> {
                 dos.write(1);
@@ -569,6 +571,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
+        String sharedKey,
         long timeoutMillis,
         AvailableStream availableStream,
         Callable<Void> deliverCallback,
@@ -579,6 +582,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             partitionStripeProvider,
             remoteRingMember,
             takeSessionId,
+            sharedKey,
             timeoutMillis,
             availableStream,
             deliverCallback,
@@ -589,9 +593,16 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public void rowsStream(DataOutputStream dos,
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
+        long takeSessionId,
+        String sharedKey,
         long localTxId,
         long remoteLeadershipToken,
         long limit) throws Exception {
+
+        if (!takeCoordinator.isValidSession(remoteRingMember, takeSessionId, sharedKey)) {
+            LOG.warn("Denied stale rowsStream from:{} session:{}", remoteRingMember, takeSessionId);
+            throw new IllegalStateException("Attempted to take with invalid session");
+        }
 
         partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(), (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
@@ -738,6 +749,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
+        String sharedKey,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
         long leadershipToken) throws Exception {
@@ -746,20 +758,23 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(), (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
             if (versionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
+                takeCoordinator.rowsTaken(remoteRingMember, takeSessionId, sharedKey, txPartitionStripe, versionedAquarium, localTxId);
             }
             return null;
         });
     }
 
     @Override
-    public void pong(RingMember remoteRingMember, long takeSessionId) throws Exception {
-        takeCoordinator.pong(remoteRingMember, takeSessionId);
+    public void pong(RingMember remoteRingMember, long takeSessionId, String sharedKey) throws Exception {
+        takeCoordinator.pong(remoteRingMember, takeSessionId, sharedKey);
     }
 
     @Override
-    public void invalidate(RingMember remoteRingMember, long takeSessionId, VersionedPartitionName versionedPartitionName) throws Exception {
-        takeCoordinator.invalidate(ringStoreReader, remoteRingMember, takeSessionId, versionedPartitionName);
+    public void invalidate(RingMember remoteRingMember,
+        long takeSessionId,
+        String takeSharedKey,
+        VersionedPartitionName versionedPartitionName) throws Exception {
+        takeCoordinator.invalidate(ringStoreReader, remoteRingMember, takeSessionId, takeSharedKey, versionedPartitionName);
     }
 
     public void compactAllTombstones() throws Exception {

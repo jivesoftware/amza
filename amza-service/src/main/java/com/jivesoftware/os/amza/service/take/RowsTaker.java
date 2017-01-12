@@ -27,6 +27,8 @@ public interface RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
+        long takeSessionId,
+        String takeSharedKey,
         long remoteTxId,
         long localLeadershipToken,
         long limit,
@@ -57,16 +59,18 @@ public interface RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
+        String takeSharedKey,
         VersionedPartitionName versionedPartitionName,
         long txId,
         long localLeadershipToken);
 
-    boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId);
+    boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId, String takeSharedKey);
 
     boolean invalidate(RingMember localRingMember,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
+        String takeSharedKey,
         VersionedPartitionName remoteVersionedPartitionName);
 
 }

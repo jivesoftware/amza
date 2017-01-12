@@ -58,6 +58,7 @@ import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.ClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
+import com.jivesoftware.os.routing.bird.http.client.OAuthSignerProvider;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
@@ -177,8 +178,16 @@ public class EmbedAmzaServiceInitializer {
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
 
-        TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
-        TenantAwareHttpClient<String> systemRingClient = tenantRoutingHttpClientInitializer.builder(
+        TenantRoutingHttpClientInitializer<String> nonSigningClientInitializer = new TenantRoutingHttpClientInitializer<>(new OAuthSignerProvider(() -> null));
+        TenantAwareHttpClient<String> systemTakeClient = nonSigningClientInitializer.builder(
+            deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
+            clientHealthProvider)
+            .deadAfterNErrors(10)
+            .checkDeadEveryNMillis(10_000)
+            .maxConnections(1_000)
+            .socketTimeoutInMillis(60_000)
+            .build(); // TODO expose to conf
+        TenantAwareHttpClient<String> stripedTakeClient = nonSigningClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
             clientHealthProvider)
             .deadAfterNErrors(10)
@@ -187,9 +196,10 @@ public class EmbedAmzaServiceInitializer {
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
 
-        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemRingClient, mapper, baInterner);
+        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemTakeClient, mapper, baInterner);
+        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, baInterner);
 
-
+        TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
         TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
             clientHealthProvider)
@@ -199,8 +209,7 @@ public class EmbedAmzaServiceInitializer {
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
 
-        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, ringClient, mapper, baInterner);
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner);
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner, mapper);
         AquariumStats aquariumStats = new AquariumStats();
 
         TriggerTimeoutHealthCheck quorumTimeoutHealthCheck = new TriggerTimeoutHealthCheck(() -> amzaStats.getGrandTotal().quorumTimeouts.longValue(),

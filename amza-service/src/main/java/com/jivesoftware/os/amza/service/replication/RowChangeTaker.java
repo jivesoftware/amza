@@ -37,6 +37,8 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.math.BigInteger;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -69,6 +71,7 @@ public class RowChangeTaker implements RowChanges {
     private final TakeFullySystemReady systemReady;
     private final RingHost ringHost;
     private final RowsTaker systemRowsTaker;
+    private final RowsTaker stripedRowsTaker;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AvailableRowsTaker availableRowsTaker;
     private final SystemPartitionCommitChanges systemPartitionCommitChanges;
@@ -87,7 +90,6 @@ public class RowChangeTaker implements RowChanges {
     private final ExecutorService cyaThreadPool;
 
     private final ExecutorService stripedRowTakerThreadPool;
-    private final RowsTaker stripedRowsTaker;
 
     private final Object[] stripedConsumerLocks;
     private final Object systemConsumerLock = new Object();
@@ -103,10 +105,10 @@ public class RowChangeTaker implements RowChanges {
         TakeFullySystemReady systemReady,
         RingHost ringHost,
         RowsTaker systemRowsTaker,
+        RowsTaker stripedRowsTaker,
         PartitionStripeProvider partitionStripeProvider,
         AvailableRowsTaker availableRowsTaker,
         ExecutorService rowTakerThreadPool,
-        RowsTaker rowsTaker,
         SystemPartitionCommitChanges systemPartitionCommitChanges,
         StripedPartitionCommitChanges stripedPartitionCommitChanges,
         OrderIdProvider sessionIdProvider,
@@ -124,10 +126,10 @@ public class RowChangeTaker implements RowChanges {
         this.systemReady = systemReady;
         this.ringHost = ringHost;
         this.systemRowsTaker = systemRowsTaker;
+        this.stripedRowsTaker = stripedRowsTaker;
         this.partitionStripeProvider = partitionStripeProvider;
         this.availableRowsTaker = availableRowsTaker;
         this.stripedRowTakerThreadPool = rowTakerThreadPool;
-        this.stripedRowsTaker = rowsTaker;
         this.systemPartitionCommitChanges = systemPartitionCommitChanges;
         this.stripedPartitionCommitChanges = stripedPartitionCommitChanges;
         this.sessionIdProvider = sessionIdProvider;
@@ -299,10 +301,12 @@ public class RowChangeTaker implements RowChanges {
     private static class SessionedTxId {
 
         private final long sessionId;
+        private final String sharedKey;
         private final long txId;
 
-        public SessionedTxId(long sessionId, long txId) {
+        public SessionedTxId(long sessionId, String sharedKey, long txId) {
             this.sessionId = sessionId;
+            this.sharedKey = sharedKey;
             this.txId = txId;
         }
     }
@@ -315,6 +319,7 @@ public class RowChangeTaker implements RowChanges {
         private final boolean system;
 
         private final AtomicLong activeSessionId = new AtomicLong(-1);
+        private final AtomicReference<String> activeSharedKey = new AtomicReference<>();
         private final Map<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = Maps.newConcurrentMap();
         private final Map<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = Maps.newConcurrentMap();
         private final AtomicLong ping = new AtomicLong();
@@ -345,13 +350,16 @@ public class RowChangeTaker implements RowChanges {
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
                     amzaStats.longPolled(remoteRingMember);
                     long sessionId = sessionIdProvider.nextId();
+                    String sharedKey = new BigInteger(130, new SecureRandom()).toString(32);
                     activeSessionId.set(sessionId);
+                    activeSharedKey.set(sharedKey);
                     availableRowsTaker.availableRowsStream(amzaRingReader.getRingMember(),
                         amzaRingReader.getRingHost(),
                         remoteRingMember,
                         remoteRingHost,
                         system,
                         sessionId,
+                        sharedKey,
                         longPollTimeoutMillis,
                         (remoteVersionedPartitionName, txId) -> {
                             amzaStats.longPollAvailables(remoteRingMember);
@@ -369,6 +377,7 @@ public class RowChangeTaker implements RowChanges {
                                     remoteRingMember,
                                     remoteRingHost,
                                     sessionId,
+                                    sharedKey,
                                     remoteVersionedPartitionName);
                                 LOG.info("Not a member of ring invalidated:{} local:{} remote:{} txId:{} partition:{}",
                                     invalidated, ringHost, remoteRingHost, txId, remoteVersionedPartitionName);
@@ -378,7 +387,7 @@ public class RowChangeTaker implements RowChanges {
                             // rows to take
                             availablePartitionTxIds.compute(remoteVersionedPartitionName, (key, existing) -> {
                                 if (existing == null || sessionId > existing.sessionId || sessionId == existing.sessionId && txId > existing.txId) {
-                                    return new SessionedTxId(sessionId, txId);
+                                    return new SessionedTxId(sessionId, sharedKey, txId);
                                 } else {
                                     return existing;
                                 }
@@ -448,7 +457,7 @@ public class RowChangeTaker implements RowChanges {
 
             long sessionId = activeSessionId.get();
             if (pong.get() < ping.get() - pongIntervalMillis) {
-                if (rowsTaker.pong(localRingMember, remoteRingMember, remoteRingHost, sessionId)) {
+                if (rowsTaker.pong(localRingMember, remoteRingMember, remoteRingHost, sessionId, activeSharedKey.get())) {
                     pong.set(System.currentTimeMillis());
                 } else {
                     LOG.warn("Failed sending pong to member:{} session:{}", remoteRingMember, sessionId);
@@ -521,6 +530,7 @@ public class RowChangeTaker implements RowChanges {
                         remoteRingMember,
                         remoteRingHost,
                         sessionedTxId.sessionId,
+                        sessionedTxId.sharedKey,
                         remoteVersionedPartitionName,
                         highwater[0],
                         -1);
@@ -541,6 +551,7 @@ public class RowChangeTaker implements RowChanges {
                         remoteRingMember,
                         remoteRingHost,
                         sessionedTxId.sessionId,
+                        sessionedTxId.sharedKey,
                         sessionedTxId.txId,
                         remoteVersionedPartitionName,
                         rowsTaker,
@@ -597,6 +608,7 @@ public class RowChangeTaker implements RowChanges {
         private final RingMember remoteRingMember;
         private final RingHost remoteRingHost;
         private final long takeSessionId;
+        private final String takeSharedKey;
         private final AtomicLong takeToTxId;
         private final VersionedPartitionName remoteVersionedPartitionName;
         private final RowsTaker rowsTaker;
@@ -612,6 +624,7 @@ public class RowChangeTaker implements RowChanges {
             RingMember remoteRingMember,
             RingHost remoteRingHost,
             long takeSessionId,
+            String takeSharedKey,
             long takeToTxId,
             VersionedPartitionName remoteVersionedPartitionName,
             RowsTaker rowsTaker,
@@ -625,6 +638,7 @@ public class RowChangeTaker implements RowChanges {
             this.remoteRingMember = remoteRingMember;
             this.remoteRingHost = remoteRingHost;
             this.takeSessionId = takeSessionId;
+            this.takeSharedKey = takeSharedKey;
             this.takeToTxId = new AtomicLong(takeToTxId);
             this.remoteVersionedPartitionName = remoteVersionedPartitionName;
             this.rowsTaker = rowsTaker;
@@ -689,6 +703,8 @@ public class RowChangeTaker implements RowChanges {
                                     remoteRingMember,
                                     remoteRingHost,
                                     remoteVersionedPartitionName,
+                                    takeSessionId,
+                                    takeSharedKey,
                                     highwaterMark,
                                     leadershipToken,
                                     rowsTakerLimit,
@@ -788,6 +804,7 @@ public class RowChangeTaker implements RowChanges {
                                     remoteRingMember,
                                     remoteRingHost,
                                     takeSessionId,
+                                    takeSharedKey,
                                     remoteVersionedPartitionName,
                                     Math.max(highwaterMark, takeRowStream.largestFlushedTxId()),
                                     leadershipToken);

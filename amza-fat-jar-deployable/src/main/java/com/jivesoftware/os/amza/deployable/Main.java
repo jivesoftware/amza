@@ -242,7 +242,7 @@ public class Main {
             .socketTimeoutInMillis(60_000)
             .build(); //TODO expose to conf
 
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(httpClient, interner); // TODO config
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(httpClient, interner, mapper); // TODO config
         AquariumStats aquariumStats = new AquariumStats();
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,

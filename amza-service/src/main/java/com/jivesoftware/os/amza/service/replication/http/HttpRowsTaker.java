@@ -75,6 +75,8 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
+        long takeSessionId,
+        String takeSharedKey,
         long remoteTxId,
         long localLeadershipToken,
         long limit,
@@ -84,14 +86,16 @@ public class HttpRowsTaker implements RowsTaker {
         try {
             String endpoint = "/amza/rows/stream/" + localRingMember.getMember()
                 + "/" + remoteVersionedPartitionName.toBase64()
+                + "/" + takeSessionId
                 + "/" + remoteTxId
                 + "/" + localLeadershipToken
                 + "/" + limit;
+            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
             httpStreamResponse = ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "rowsStream",
                 httpClient -> {
-                    HttpStreamResponse response = httpClient.streamingPost(endpoint, "{}", null);
+                    HttpStreamResponse response = httpClient.streamingPost(endpoint, sharedKeyJson, null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }
@@ -119,6 +123,7 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
+        String takeSharedKey,
         VersionedPartitionName versionedPartitionName,
         long txId,
         long localLeadershipToken) {
@@ -128,11 +133,12 @@ public class HttpRowsTaker implements RowsTaker {
                 + "/" + versionedPartitionName.toBase64()
                 + "/" + txId
                 + "/" + localLeadershipToken;
+            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
             return ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "rowsTaken",
                 httpClient -> {
-                    HttpResponse response = httpClient.postJson(endpoint, "{}", null);
+                    HttpResponse response = httpClient.postJson(endpoint, sharedKeyJson, null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }
@@ -150,14 +156,15 @@ public class HttpRowsTaker implements RowsTaker {
     }
 
     @Override
-    public boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId) {
+    public boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId, String takeSharedKey) {
         try {
             String endpoint = "/amza/pong/" + localRingMember.getMember() + "/" + takeSessionId;
+            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
             return ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "rowsTaken",
                 httpClient -> {
-                    HttpResponse response = httpClient.postJson(endpoint, "{}", null);
+                    HttpResponse response = httpClient.postJson(endpoint, sharedKeyJson, null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }
@@ -181,14 +188,16 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
+        String takeSharedKey,
         VersionedPartitionName remoteVersionedPartitionName) {
         try {
             String endpoint = "/amza/invalidate/" + localRingMember.getMember() + "/" + takeSessionId + "/" + remoteVersionedPartitionName.toBase64();
+            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
             return ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "invalidate",
                 httpClient -> {
-                    HttpResponse response = httpClient.postJson(endpoint, "{}", null);
+                    HttpResponse response = httpClient.postJson(endpoint, sharedKeyJson, null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }

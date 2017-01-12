@@ -38,22 +38,26 @@ public interface AmzaInstance {
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
+        String sharedKey,
         long timeoutMillis) throws Exception;
 
     void rowsStream(DataOutputStream dos,
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
+        long takeSessionId,
+        String sharedKey,
         long localTxId,
         long leadershipToken,
         long limit) throws Exception;
 
     void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
+        String sharedKey,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
         long leadershipToken) throws Exception;
 
-    void pong(RingMember remoteRingMember, long takeSessionId) throws Exception;
+    void pong(RingMember remoteRingMember, long takeSessionId, String sharedKey) throws Exception;
 
-    void invalidate(RingMember ringMember, long takeSessionId, VersionedPartitionName versionedPartitionName) throws Exception;
+    void invalidate(RingMember ringMember, long takeSessionId, String sharedKey, VersionedPartitionName versionedPartitionName) throws Exception;
 }

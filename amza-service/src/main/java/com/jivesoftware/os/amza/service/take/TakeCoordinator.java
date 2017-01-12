@@ -28,6 +28,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.math.BigInteger;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -367,6 +369,7 @@ public class TakeCoordinator {
         PartitionStripeProvider partitionStripeProvider,
         RingMember remoteRingMember,
         long takeSessionId,
+        String sharedKey,
         long heartbeatIntervalMillis,
         AvailableStream availableStream,
         Callable<Void> deliverCallback,
@@ -374,7 +377,7 @@ public class TakeCoordinator {
 
 
         SessionKey sessionKey = new SessionKey(remoteRingMember, takeSessionId);
-        Session session = takeSessions.computeIfAbsent(sessionKey, sessionKey1 -> new Session(System.currentTimeMillis(), system));
+        Session session = takeSessions.computeIfAbsent(sessionKey, sessionKey1 -> new Session(System.currentTimeMillis(), system, sharedKey));
         synchronized (session.sessionThread) {
             session.sessionThread.set(Thread.currentThread());
         }
@@ -547,47 +550,69 @@ public class TakeCoordinator {
 
     }
 
+    public boolean isValidSession(RingMember remoteRingMember, long takeSessionId, String sharedKey) {
+        Session session = takeSessions.get(new SessionKey(remoteRingMember, takeSessionId));
+        return (session != null && session.sharedKey.equals(sharedKey));
+    }
+
     public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
+        String sharedKey,
         TxPartitionStripe txPartitionStripe,
         VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
 
-        byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
-        TakeRingCoordinator ring = getCoordinator(versionedAquarium.getVersionedPartitionName());
-        if (ring != null) {
-            ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
+        Session session = takeSessions.get(new SessionKey(remoteRingMember, takeSessionId));
+        if (session != null && session.sharedKey.equals(sharedKey)) {
+            TakeRingCoordinator ring = getCoordinator(versionedAquarium.getVersionedPartitionName());
+            if (ring != null) {
+                ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
+            }
+            pongInternal(System.currentTimeMillis(), session);
+            amzaStats.acks(remoteRingMember, versionedAquarium.getVersionedPartitionName().getPartitionName(), 1, localTxId);
+        } else {
+            LOG.warn("Ignored stale rowsTaken from:{} session:{}", remoteRingMember, takeSessionId);
         }
-        pong(remoteRingMember, takeSessionId);
-        amzaStats.acks(remoteRingMember, versionedAquarium.getVersionedPartitionName().getPartitionName(), 1, localTxId);
     }
 
-    public void pong(RingMember remoteRingMember, long takeSessionId) {
+    public void pong(RingMember remoteRingMember, long takeSessionId, String sharedKey) {
         SessionKey sessionKey = new SessionKey(remoteRingMember, takeSessionId);
         long pongTime = System.currentTimeMillis();
         Session session = takeSessions.get(sessionKey);
-        if (session != null) {
-            long checkPongTime = session.lastPongTime.get();
-            while (pongTime > checkPongTime) {
-                if (session.lastPongTime.compareAndSet(checkPongTime, pongTime)) {
-                    break;
-                }
-                checkPongTime = session.lastPongTime.get();
+        if (session != null && session.sharedKey.equals(sharedKey)) {
+            pongInternal(pongTime, session);
+        } else {
+            LOG.warn("Ignored stale pong from:{} session:{}", remoteRingMember, takeSessionId);
+        }
+    }
+
+    private void pongInternal(long pongTime, Session session) {
+        long checkPongTime = session.lastPongTime.get();
+        while (pongTime > checkPongTime) {
+            if (session.lastPongTime.compareAndSet(checkPongTime, pongTime)) {
+                break;
             }
+            checkPongTime = session.lastPongTime.get();
         }
     }
 
     public void invalidate(AmzaRingReader ringReader,
         RingMember remoteRingMember,
         long takeSessionId,
+        String sharedKey,
         VersionedPartitionName versionedPartitionName) throws Exception {
         LOG.info("Received request to invalidate ring from member:{} session:{} partition:{}", remoteRingMember, takeSessionId, versionedPartitionName);
-        byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
-        TakeRingCoordinator ringCoordinator = getCoordinator(versionedPartitionName);
-        if (ringCoordinator != null) {
-            boolean system = versionedPartitionName.getPartitionName().isSystemPartition();
-            RingTopology ring = ringReader.getRing(ringName, system ? -1 : 0);
-            ringCoordinator.cya(ring);
+        Session session = takeSessions.get(new SessionKey(remoteRingMember, takeSessionId));
+        if (session != null && session.sharedKey.equals(sharedKey)) {
+            byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
+            TakeRingCoordinator ringCoordinator = getCoordinator(versionedPartitionName);
+            if (ringCoordinator != null) {
+                boolean system = versionedPartitionName.getPartitionName().isSystemPartition();
+                RingTopology ring = ringReader.getRing(ringName, system ? -1 : 0);
+                ringCoordinator.cya(ring);
+            }
+        } else {
+            LOG.warn("Ignored stale invalidate from:{} session:{} partition:{}", remoteRingMember, takeSessionId, versionedPartitionName);
         }
     }
 
@@ -630,15 +655,17 @@ public class TakeCoordinator {
 
         private final long startTime;
         private final boolean system;
+        private final String sharedKey;
 
         private final AtomicLong lastPingTime = new AtomicLong(-1);
         private final AtomicLong lastPongTime = new AtomicLong(-1);
         private final AtomicReference<Thread> sessionThread = new AtomicReference<>();
         private final AtomicReference<Set<VersionedPartitionName>> dirtySet = new AtomicReference<>();
 
-        public Session(long startTime, boolean system) {
+        public Session(long startTime, boolean system, String sharedKey) {
             this.startTime = startTime;
             this.system = system;
+            this.sharedKey = sharedKey;
         }
     }
 }

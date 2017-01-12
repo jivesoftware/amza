@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.replication.http;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -39,11 +40,14 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     private final TenantAwareHttpClient<String> ringClient;
     private final StreamingTakesConsumer streamingTakesConsumer;
+    private final ObjectMapper mapper;
 
     public HttpAvailableRowsTaker(TenantAwareHttpClient<String> ringClient,
-        BAInterner interner) {
+        BAInterner interner,
+        ObjectMapper mapper) {
         this.ringClient = ringClient;
         this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.mapper = mapper;
     }
 
     @Override
@@ -53,6 +57,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         RingHost remoteRingHost,
         boolean system,
         long takeSessionId,
+        String takeSharedKey,
         long timeoutMillis,
         AvailableStream availableStream,
         PingStream pingStream) throws Exception {
@@ -64,11 +69,12 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
             + "/" + localTimestampedRingHost.timestampId
             + "/" + takeSessionId
             + "/" + timeoutMillis;
+        String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
         HttpStreamResponse httpStreamResponse = ringClient.call("",
             new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
             "availableRowsStream",
             httpClient -> {
-                HttpStreamResponse response = httpClient.streamingPost(endpoint, "{}", null);
+                HttpStreamResponse response = httpClient.streamingPost(endpoint, sharedKeyJson, null);
                 if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                     throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                 }

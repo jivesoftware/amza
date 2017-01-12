@@ -279,6 +279,7 @@ public class EmbedAmzaServiceInitializer {
             -1);
 
         if (authEnabled) {
+            deployable.addNoAuth("/amza/rows/stream/*", "/amza/rows/taken/*", "/amza/pong/*", "/amza/invalidate/*");
             deployable.addRouteOAuth("/amza/*");
         } else {
             deployable.addNoAuth("/amza/*");

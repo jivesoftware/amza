@@ -240,12 +240,12 @@ public class AmzaSyncMain {
                         scheme,
                         host,
                         port,
-                        syncConfig.getSyncSenderSocketTimeout(),
-                        syncConfig.getSyncRingStripes(),
-                        syncConfig.getSyncThreadCount(),
+                        //syncConfig.getSyncSenderSocketTimeout(),
+                        //syncConfig.getSyncRingStripes(),
+                        //syncConfig.getSyncThreadCount(),
                         syncConfig.getSyncIntervalMillis(),
                         syncConfig.getSyncBatchSize(),
-                        syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
+                        //syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
                         syncConfig.getSyncSenderOAuthConsumerKey(),
                         syncConfig.getSyncSenderOAuthConsumerSecret(),
                         syncConfig.getSyncSenderOAuthConsumerMethod(),
@@ -258,7 +258,8 @@ public class AmzaSyncMain {
 
             if (syncConfig.getSyncSenderEnabled()) {
                 ExecutorService executorService = Executors.newCachedThreadPool();
-                syncSenders = new AmzaSyncSenders(executorService,
+                syncSenders = new AmzaSyncSenders(syncConfig,
+                    executorService,
                     amzaClientProvider,
                     amzaClientAquariumProvider,
                     interner,

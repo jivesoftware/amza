@@ -33,6 +33,7 @@ public class AmzaSyncSenders {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Map<String, AmzaSyncSender> senders = Maps.newConcurrentMap();
 
+    private final AmzaSyncConfig syncConfig;
     private final ExecutorService executorService;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaClientAquariumProvider clientAquariumProvider;
@@ -43,7 +44,8 @@ public class AmzaSyncSenders {
     private final long ensureSendersInterval;
     private final ExecutorService ensureSenders = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("ensure-sender-%d").build());
 
-    public AmzaSyncSenders(ExecutorService executorService,
+    public AmzaSyncSenders(AmzaSyncConfig syncConfig,
+        ExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaClientAquariumProvider clientAquariumProvider,
         BAInterner interner,
@@ -51,6 +53,7 @@ public class AmzaSyncSenders {
         AmzaSyncSenderConfigProvider syncSenderConfigProvider,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         long ensureSendersInterval) {
+        this.syncConfig = syncConfig;
 
         this.executorService = executorService;
         this.partitionClientProvider = partitionClientProvider;
@@ -83,9 +86,9 @@ public class AmzaSyncSenders {
                                 amzaSyncSender = new AmzaSyncSender(
                                     senderConfig.name,
                                     clientAquariumProvider,
-                                    senderConfig.ringStripes,
+                                    syncConfig.getSyncRingStripes(),
                                     executorService,
-                                    senderConfig.threadCount,
+                                    syncConfig.getSyncThreadCount(),
                                     senderConfig.syncIntervalMillis,
                                     partitionClientProvider,
                                     amzaSyncClient(senderConfig),
@@ -157,7 +160,7 @@ public class AmzaSyncSenders {
             authSigner,
             host,
             port,
-            config.senderSocketTimeout);
+            syncConfig.getSyncSenderSocketTimeout());
 
         return new HttpAmzaSyncClient(requestHelper,
             "/api/sync/v1/commit/rows",

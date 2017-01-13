@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.sync.deployable;
+package com.jivesoftware.os.amza.sync.api;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

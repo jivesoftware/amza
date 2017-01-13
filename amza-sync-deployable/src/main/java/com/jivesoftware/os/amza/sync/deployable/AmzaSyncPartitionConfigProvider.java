@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import java.util.Map;
 
 /**

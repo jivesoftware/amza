@@ -28,6 +28,8 @@ import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.amza.sync.deployable.endpoints.AmzaSyncApiEndpoints;
 import com.jivesoftware.os.amza.sync.deployable.endpoints.AmzaSyncEndpoints;
 import com.jivesoftware.os.amza.sync.deployable.oauth.AmzaSyncOAuthValidatorInitializer;
@@ -321,6 +323,8 @@ public class AmzaSyncMain {
                 deployable.addEndpoints(AmzaSyncApiEndpoints.class);
                 deployable.addInjectables(AmzaSyncReceiver.class, syncReceiver);
             }
+            deployable.addInjectables(AmzaSyncSenderConfigStorage.class, senderConfigStorage);
+            deployable.addInjectables(AmzaSyncPartitionConfigStorage.class, syncPartitionConfigStorage);
 
             deployable.buildServer().start();
             clientHealthProvider.start();

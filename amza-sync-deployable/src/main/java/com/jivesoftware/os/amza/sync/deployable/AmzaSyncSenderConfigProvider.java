@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
+import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import java.util.Map;
 
 /**

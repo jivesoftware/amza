@@ -23,6 +23,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -230,7 +231,7 @@ public class AmzaSyncSender {
         LOG.info("Syncing stripe:{}", stripe);
         int partitionCount = 0;
         int rowCount = 0;
-        Map<PartitionName, AmzaSyncPartitionConfig> partitions;
+        Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> partitions;
         if (syncPartitionConfigProvider != null) {
             partitions = syncPartitionConfigProvider.getAll(name);
         } else {
@@ -238,12 +239,12 @@ public class AmzaSyncSender {
             LOG.warn("Syncing all partitions is not supported yet");
             List<PartitionName> allPartitions = Lists.newArrayList(); //TODO partitionClientProvider.getAllPartitionNames();
             for (PartitionName partitionName : allPartitions) {
-                partitions.put(partitionName, new AmzaSyncPartitionConfig(partitionName, partitionName));
+                partitions.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig());
             }
         }
-        for (Entry<PartitionName, AmzaSyncPartitionConfig> entry : partitions.entrySet()) {
-            PartitionName fromPartitionName = entry.getKey();
-            PartitionName toPartitionName = entry.getValue().to;
+        for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> entry : partitions.entrySet()) {
+            PartitionName fromPartitionName = entry.getKey().from;
+            PartitionName toPartitionName = entry.getKey().to;
             if (!ensurePartition(fromPartitionName, toPartitionName) || !isElected(stripe)) {
                 break;
             }
@@ -251,7 +252,7 @@ public class AmzaSyncSender {
             if (partitionStripe == stripe) {
                 partitionCount++;
 
-                int synced = syncPartition(fromPartitionName, entry.getValue(), stripe);
+                int synced = syncPartition(entry.getKey(), entry.getValue(), stripe);
                 if (synced > 0) {
                     LOG.info("Synced stripe:{} tenantId:{} rows:{}", stripe, fromPartitionName, synced);
                 }
@@ -282,10 +283,10 @@ public class AmzaSyncSender {
         return true;
     }
 
-    private int syncPartition(PartitionName fromPartitionName, AmzaSyncPartitionConfig toPartitionConfig, int stripe) throws Exception {
-        PartitionName toPartitionName = toPartitionConfig.to;
-        Cursor cursor = getPartitionCursor(fromPartitionName, toPartitionName);
-        PartitionClient fromClient = partitionClientProvider.getPartition(fromPartitionName);
+    private int syncPartition(AmzaSyncPartitionTuple partitionTuple, AmzaSyncPartitionConfig toPartitionConfig, int stripe) throws Exception {
+        PartitionName toPartitionName = partitionTuple.to;
+        Cursor cursor = getPartitionCursor(partitionTuple.from, toPartitionName);
+        PartitionClient fromClient = partitionClientProvider.getPartition(partitionTuple.from);
         if (!isElected(stripe)) {
             return 0;
         }
@@ -324,7 +325,7 @@ public class AmzaSyncSender {
                 }
             }
 
-            savePartitionCursor(fromPartitionName, toPartitionName, cursor);
+            savePartitionCursor(partitionTuple.from, toPartitionName, cursor);
             if (rows.isEmpty()) {
                 break;
             }

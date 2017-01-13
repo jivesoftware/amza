@@ -29,6 +29,7 @@ import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.amza.sync.deployable.endpoints.AmzaSyncApiEndpoints;
 import com.jivesoftware.os.amza.sync.deployable.endpoints.AmzaSyncEndpoints;
@@ -202,22 +203,22 @@ public class AmzaSyncMain {
             AmzaSyncReceiver syncReceiver = null;
 
             String syncWhitelist = syncConfig.getSyncSenderWhitelist().trim();
-            Map<PartitionName, AmzaSyncPartitionConfig> whitelistPartitionNames;
+            Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> whitelistPartitionNames;
             if (syncWhitelist.equals("*")) {
                 whitelistPartitionNames = null;
             } else {
                 String[] splitWhitelist = syncWhitelist.split("\\s*,\\s*");
-                Builder<PartitionName, AmzaSyncPartitionConfig> builder = ImmutableMap.builder();
+                Builder<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> builder = ImmutableMap.builder();
                 for (String s : splitWhitelist) {
                     if (!s.isEmpty()) {
                         if (s.contains(":")) {
                             String[] parts = s.split(":");
                             PartitionName from = extractPartition(parts[0].trim());
                             PartitionName to = extractPartition(parts[1].trim());
-                            builder.put(from, new AmzaSyncPartitionConfig(from, to));
+                            builder.put(new AmzaSyncPartitionTuple(from,to), new AmzaSyncPartitionConfig());
                         } else {
                             PartitionName partitionName = extractPartition(s.trim());
-                            builder.put(partitionName, new AmzaSyncPartitionConfig(partitionName, partitionName));
+                            builder.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig());
                         }
                     }
                 }

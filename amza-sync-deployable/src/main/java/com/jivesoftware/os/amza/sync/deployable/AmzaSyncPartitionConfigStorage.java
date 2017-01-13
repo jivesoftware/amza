@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
@@ -76,14 +77,14 @@ public class AmzaSyncPartitionConfigStorage implements AmzaSyncPartitionConfigPr
     }
 
     private PartitionName partitionName(String senderName) {
-        byte[] nameAsBytes = ("amza-sync-partition-config-" + senderName).getBytes(StandardCharsets.UTF_8);
+        byte[] nameAsBytes = ("amza-sync-partitions-config-" + senderName).getBytes(StandardCharsets.UTF_8);
         return new PartitionName(false, nameAsBytes, nameAsBytes);
     }
 
-    public void multiPutIfAbsent(String senderName, Map<PartitionName, AmzaSyncPartitionConfig> whitelistTenantIds) throws Exception {
-        Map<PartitionName, AmzaSyncPartitionConfig> got = multiGet(senderName, whitelistTenantIds.keySet());
-        Map<PartitionName, AmzaSyncPartitionConfig> put = Maps.newHashMap();
-        for (Entry<PartitionName, AmzaSyncPartitionConfig> entry : whitelistTenantIds.entrySet()) {
+    public void multiPutIfAbsent(String senderName, Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> whitelistTenantIds) throws Exception {
+        Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> got = multiGet(senderName, whitelistTenantIds.keySet());
+        Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> put = Maps.newHashMap();
+        for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> entry : whitelistTenantIds.entrySet()) {
             if (!got.containsKey(entry.getKey())) {
                 put.put(entry.getKey(), entry.getValue());
             }
@@ -93,15 +94,15 @@ public class AmzaSyncPartitionConfigStorage implements AmzaSyncPartitionConfigPr
         }
     }
 
-    public void multiPut(String senderName, Map<PartitionName, AmzaSyncPartitionConfig> configs) throws Exception {
+    public void multiPut(String senderName, Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> configs) throws Exception {
 
-        PartitionClient partition = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
+        PartitionClient client = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
         long now = System.currentTimeMillis();
-        partition.commit(Consistency.leader_quorum,
+        client.commit(Consistency.leader_quorum,
             null,
             (stream) -> {
-                for (Entry<PartitionName, AmzaSyncPartitionConfig> configEntry : configs.entrySet()) {
-                    stream.commit(configEntry.getKey().toBytes(), mapper.writeValueAsBytes(configEntry.getValue()), now, false);
+                for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> e : configs.entrySet()) {
+                    stream.commit(AmzaSyncPartitionTuple.toBytes(e.getKey()), mapper.writeValueAsBytes(e.getValue()), now, false);
                 }
                 return true;
             },
@@ -113,15 +114,15 @@ public class AmzaSyncPartitionConfigStorage implements AmzaSyncPartitionConfigPr
 
     }
 
-    public void multiRemove(String senderName, List<PartitionName> partitionNames) throws Exception {
+    public void multiRemove(String senderName, List<AmzaSyncPartitionTuple> tupleNames) throws Exception {
 
-        PartitionClient partition = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
+        PartitionClient client = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
         long now = System.currentTimeMillis();
-        partition.commit(Consistency.leader_quorum,
+        client.commit(Consistency.leader_quorum,
             null,
             (stream) -> {
-                for (PartitionName partitionName : partitionNames) {
-                    stream.commit(partitionName.toBytes(), null, now, true);
+                for (AmzaSyncPartitionTuple tupleName : tupleNames) {
+                    stream.commit(AmzaSyncPartitionTuple.toBytes(tupleName), null, now, true);
                 }
                 return true;
             },
@@ -129,21 +130,21 @@ public class AmzaSyncPartitionConfigStorage implements AmzaSyncPartitionConfigPr
             abandonSolutionAfterNMillis,
             Optional.empty());
 
-        LOG.info("Removed {} configs.", partitionNames.size());
+        LOG.info("Removed {} configs.", tupleNames.size());
 
     }
 
-    public Map<PartitionName, AmzaSyncPartitionConfig> multiGet(String senderName, Collection<PartitionName> partitionNames) throws Exception {
-        if (partitionNames.isEmpty()) {
+    public Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> multiGet(String senderName, Collection<AmzaSyncPartitionTuple> tupleNames) throws Exception {
+        if (tupleNames.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<PartitionName, AmzaSyncPartitionConfig> got = Maps.newConcurrentMap();
-        PartitionClient partition = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
-        partition.get(Consistency.leader_quorum,
+        Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> got = Maps.newConcurrentMap();
+        PartitionClient client = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
+        client.get(Consistency.leader_quorum,
             null,
             (keyStream) -> {
-                for (PartitionName partitionName : partitionNames) {
-                    if (!keyStream.stream(partitionName.toBytes())) {
+                for (AmzaSyncPartitionTuple tupleName : tupleNames) {
+                    if (!keyStream.stream(AmzaSyncPartitionTuple.toBytes(tupleName))) {
                         return false;
                     }
                 }
@@ -151,7 +152,7 @@ public class AmzaSyncPartitionConfigStorage implements AmzaSyncPartitionConfigPr
             },
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
-                    got.put(PartitionName.fromBytes(key, 0, interner), mapper.readValue(value, AmzaSyncPartitionConfig.class));
+                    got.put(AmzaSyncPartitionTuple.fromBytes(key, 0, interner), mapper.readValue(value, AmzaSyncPartitionConfig.class));
                 }
                 return true;
             },
@@ -166,15 +167,15 @@ public class AmzaSyncPartitionConfigStorage implements AmzaSyncPartitionConfigPr
         return got;
     }
 
-    public Map<PartitionName, AmzaSyncPartitionConfig> getAll(String senderName) throws Exception {
-        Map<PartitionName, AmzaSyncPartitionConfig> got = Maps.newConcurrentMap();
-        PartitionClient partition = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
-        partition.scan(Consistency.leader_quorum,
+    public Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> getAll(String senderName) throws Exception {
+        Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> got = Maps.newConcurrentMap();
+        PartitionClient client = clientProvider.getPartition(partitionName(senderName), 3, partitionProperties);
+        client.scan(Consistency.leader_quorum,
             false,
             null,
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
-                    got.put(PartitionName.fromBytes(key, 0, interner), mapper.readValue(value, AmzaSyncPartitionConfig.class));
+                    got.put(AmzaSyncPartitionTuple.fromBytes(key, 0, interner), mapper.readValue(value, AmzaSyncPartitionConfig.class));
                 }
                 return true;
             },

@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
-import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import java.util.Map;
 
 /**
@@ -9,5 +9,5 @@ import java.util.Map;
  */
 public interface AmzaSyncPartitionConfigProvider {
 
-     Map<PartitionName, AmzaSyncPartitionConfig> getAll(String senderName) throws Exception;
+     Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> getAll(String senderName) throws Exception;
 }

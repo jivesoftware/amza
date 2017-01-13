@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.client.test.InMemoryPartitionClient;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.aquarium.AquariumStats;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -98,8 +99,8 @@ public class AmzaSyncSenderTest {
             partitionClientProvider,
             syncClient,
             new ObjectMapper(),
-            (name) -> ImmutableMap.of(partitionName,
-                new AmzaSyncPartitionConfig(partitionName, partitionName)),
+            (name) -> ImmutableMap.of(new AmzaSyncPartitionTuple(partitionName, partitionName),
+                new AmzaSyncPartitionConfig()),
             1_000,
             new BAInterner());
 

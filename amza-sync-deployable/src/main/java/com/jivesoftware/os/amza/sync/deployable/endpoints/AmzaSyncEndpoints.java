@@ -17,17 +17,20 @@ package com.jivesoftware.os.amza.sync.deployable.endpoints;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncPartitionConfigStorage;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
-import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderConfigStorage;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
 import java.util.Map;
+import java.util.Map.Entry;
 import javax.inject.Singleton;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -57,7 +60,7 @@ public class AmzaSyncEndpoints {
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
     public AmzaSyncEndpoints(@Context AmzaSyncSenderConfigStorage configStorage,
-        @Context  AmzaSyncPartitionConfigStorage partitionConfigStorage,
+        @Context AmzaSyncPartitionConfigStorage partitionConfigStorage,
         @Context AmzaSyncSender syncSender,
         @Context BAInterner interner) {
 
@@ -114,9 +117,13 @@ public class AmzaSyncEndpoints {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getSyncing(@PathParam("syncspaceName") String syncspaceName) {
         try {
-            Map<PartitionName, AmzaSyncPartitionConfig> all = partitionConfigStorage.getAll(syncspaceName);
+            Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> all = partitionConfigStorage.getAll(syncspaceName);
             if (all != null && !all.isEmpty()) {
-                return Response.ok(all.values()).build();
+                Map<String, AmzaSyncPartitionConfig> map = Maps.newHashMap();
+                for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> a : all.entrySet()) {
+                    map.put(AmzaSyncPartitionTuple.toKeyString(a.getKey()), a.getValue());
+                }
+                return Response.ok(map).build();
             }
             return Response.noContent().entity("{}").build();
         } catch (Exception e) {
@@ -134,7 +141,7 @@ public class AmzaSyncEndpoints {
         try {
             PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
             PartitionName to = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            partitionConfigStorage.multiPut(syncspaceName, ImmutableMap.of(from,new AmzaSyncPartitionConfig(from,to)));
+            partitionConfigStorage.multiPut(syncspaceName, ImmutableMap.of(new AmzaSyncPartitionTuple(from, to), new AmzaSyncPartitionConfig()));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
             LOG.error("Failed to add.", e);
@@ -151,7 +158,7 @@ public class AmzaSyncEndpoints {
         try {
             PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
             PartitionName to = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            partitionConfigStorage.multiRemove(syncspaceName, ImmutableList.of(from));
+            partitionConfigStorage.multiRemove(syncspaceName, ImmutableList.of(new AmzaSyncPartitionTuple(from, to)));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
             LOG.error("Failed to get.", e);

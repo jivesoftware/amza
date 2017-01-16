@@ -22,12 +22,17 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.sync.api.AmzaConfigMarshaller;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
@@ -103,7 +108,7 @@ public class AmzaSyncMain {
                 new FileDescriptorCountHealthChecker(deployable.config(FileDescriptorCountHealthChecker.FileDescriptorCountHealthCheckerConfig.class)));
             deployable.addHealthCheck(serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
-            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion)() -> {
+            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion) () -> {
                 if (serviceStartupHealthCheck.startupHasSucceeded()) {
                     return instanceConfig.getVersion();
                 } else {
@@ -185,17 +190,103 @@ public class AmzaSyncMain {
             miruSyncMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
             miruSyncMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+            AmzaConfigMarshaller<String> stringMarshaller = new AmzaConfigMarshaller<String>() {
+                @Override
+                public String fromBytes(byte[] bytes) throws Exception {
+                    return new String(bytes, StandardCharsets.UTF_8);
+                }
 
-            AmzaSyncSenderConfigStorage senderConfigStorage = new AmzaSyncSenderConfigStorage(interner,
-                miruSyncMapper,
-                amzaClient,
-                30_000L // TODO config
+                @Override
+                public byte[] toBytes(String value) throws Exception {
+                    return value == null ? null : value.getBytes(StandardCharsets.UTF_8);
+                }
+            };
+
+            AmzaConfigMarshaller<AmzaSyncSenderConfig> amzaSyncSenderConfigMarshaller = new AmzaConfigMarshaller<AmzaSyncSenderConfig>() {
+                @Override
+                public AmzaSyncSenderConfig fromBytes(byte[] bytes) throws Exception {
+                    return mapper.readValue(bytes,AmzaSyncSenderConfig.class);
+                }
+
+                @Override
+                public byte[] toBytes(AmzaSyncSenderConfig value) throws Exception {
+                    return mapper.writeValueAsBytes(value);
+                }
+            };
+
+            AmzaClientProvider clientProvider = new AmzaClientProvider<>(
+                new HttpPartitionClientFactory(interner),
+                new HttpPartitionHostsProvider(interner, amzaClient, mapper),
+                new RingHostHttpClientProvider(amzaClient),
+                Executors.newCachedThreadPool(), //TODO expose to conf?
+                30_000L, // TODO config
+                -1,
+                -1);
+
+
+            AmzaSyncSenderConfigStorage senderConfigStorage = new AmzaSyncSenderConfigStorage(
+                clientProvider,
+                "amza-sync-sender-config",
+                new PartitionProperties(Durability.fsync_async,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    false,
+                    Consistency.leader_quorum,
+                    true,
+                    true,
+                    false,
+                    RowType.snappy_primary,
+                    "lab",
+                    -1,
+                    null,
+                    -1,
+                    -1),
+                stringMarshaller,
+                amzaSyncSenderConfigMarshaller
             );
 
-            AmzaSyncPartitionConfigStorage syncPartitionConfigStorage = new AmzaSyncPartitionConfigStorage(interner,
-                miruSyncMapper,
-                amzaClient,
-                30_000L // TODO config
+            AmzaConfigMarshaller<AmzaSyncPartitionTuple> tupleMarshaller = new AmzaConfigMarshaller<AmzaSyncPartitionTuple>() {
+                @Override
+                public AmzaSyncPartitionTuple fromBytes(byte[] bytes) throws Exception {
+                    return AmzaSyncPartitionTuple.fromBytes(bytes, 0, interner);
+                }
+
+                @Override
+                public byte[] toBytes(AmzaSyncPartitionTuple value) throws Exception {
+                    return AmzaSyncPartitionTuple.toBytes(value);
+                }
+            };
+
+            AmzaConfigMarshaller<AmzaSyncPartitionConfig> partitionConfigMarshaller = new AmzaConfigMarshaller<AmzaSyncPartitionConfig>() {
+                @Override
+                public AmzaSyncPartitionConfig fromBytes(byte[] bytes) throws Exception {
+                    return mapper.readValue(bytes,AmzaSyncPartitionConfig.class);
+                }
+
+                @Override
+                public byte[] toBytes(AmzaSyncPartitionConfig value) throws Exception {
+                    return mapper.writeValueAsBytes(value);
+                }
+            };
+
+
+            AmzaSyncPartitionConfigStorage syncPartitionConfigStorage = new AmzaSyncPartitionConfigStorage(
+                clientProvider,
+                "amza-sync-partitions-config-",
+                new PartitionProperties(Durability.fsync_async,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    false,
+                    Consistency.leader_quorum,
+                    true,
+                    true,
+                    false,
+                    RowType.snappy_primary,
+                    "lab",
+                    -1,
+                    null,
+                    -1,
+                    -1),
+                tupleMarshaller,
+                partitionConfigMarshaller
             );
 
 
@@ -215,7 +306,7 @@ public class AmzaSyncMain {
                             String[] parts = s.split(":");
                             PartitionName from = extractPartition(parts[0].trim());
                             PartitionName to = extractPartition(parts[1].trim());
-                            builder.put(new AmzaSyncPartitionTuple(from,to), new AmzaSyncPartitionConfig());
+                            builder.put(new AmzaSyncPartitionTuple(from, to), new AmzaSyncPartitionConfig());
                         } else {
                             PartitionName partitionName = extractPartition(s.trim());
                             builder.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig());

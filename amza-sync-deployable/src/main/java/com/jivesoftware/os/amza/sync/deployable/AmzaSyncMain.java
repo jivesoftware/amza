@@ -18,8 +18,6 @@ package com.jivesoftware.os.amza.sync.deployable;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -80,7 +78,6 @@ import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescripto
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -292,60 +289,6 @@ public class AmzaSyncMain {
 
             AmzaSyncSenders syncSenders = null;
             AmzaSyncReceiver syncReceiver = null;
-
-            String syncWhitelist = syncConfig.getSyncSenderWhitelist().trim();
-            Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> whitelistPartitionNames;
-            if (syncWhitelist.equals("*")) {
-                whitelistPartitionNames = null;
-            } else {
-                String[] splitWhitelist = syncWhitelist.split("\\s*,\\s*");
-                Builder<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> builder = ImmutableMap.builder();
-                for (String s : splitWhitelist) {
-                    if (!s.isEmpty()) {
-                        if (s.contains(":")) {
-                            String[] parts = s.split(":");
-                            PartitionName from = extractPartition(parts[0].trim());
-                            PartitionName to = extractPartition(parts[1].trim());
-                            builder.put(new AmzaSyncPartitionTuple(from, to), new AmzaSyncPartitionConfig());
-                        } else {
-                            PartitionName partitionName = extractPartition(s.trim());
-                            builder.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig());
-                        }
-                    }
-                }
-                whitelistPartitionNames = builder.build();
-            }
-
-            if (whitelistPartitionNames != null && whitelistPartitionNames.isEmpty()) {
-                syncPartitionConfigStorage.multiPutIfAbsent("default", whitelistPartitionNames);
-
-                String[] parts = syncConfig.getSyncSenderSchemeHostPort().split(":");
-                if (parts != null && parts.length == 3) {
-                    String scheme = parts[0];
-                    String host = parts[1];
-                    int port = Integer.parseInt(parts[2]);
-
-                    AmzaSyncSenderConfig senderConfig = new AmzaSyncSenderConfig(
-                        "default",
-                        syncConfig.getSyncSenderEnabled(),
-                        scheme,
-                        host,
-                        port,
-                        //syncConfig.getSyncSenderSocketTimeout(),
-                        //syncConfig.getSyncRingStripes(),
-                        //syncConfig.getSyncThreadCount(),
-                        syncConfig.getSyncIntervalMillis(),
-                        syncConfig.getSyncBatchSize(),
-                        //syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
-                        syncConfig.getSyncSenderOAuthConsumerKey(),
-                        syncConfig.getSyncSenderOAuthConsumerSecret(),
-                        syncConfig.getSyncSenderOAuthConsumerMethod(),
-                        syncConfig.getSyncSenderAllowSelfSignedCerts());
-
-                    senderConfigStorage.multiPutIfAbsent(ImmutableMap.of("default", senderConfig));
-                }
-            }
-
 
             if (syncConfig.getSyncSenderEnabled()) {
                 ExecutorService executorService = Executors.newCachedThreadPool();

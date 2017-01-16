@@ -128,7 +128,7 @@ public class AmzaSyncSender {
             }
 
             for (int i = 0; i < syncRingStripes; i++) {
-                amzaClientAquariumProvider.register("sync-"+name+"-stripe-" + i);
+                amzaClientAquariumProvider.register("sync-" + name + "-stripe-" + i);
             }
         }
     }
@@ -207,7 +207,7 @@ public class AmzaSyncSender {
     }
 
     private LivelyEndState livelyEndState(int syncStripe) throws Exception {
-        return amzaClientAquariumProvider.livelyEndState("sync-"+name+"-stripe-" + syncStripe);
+        return amzaClientAquariumProvider.livelyEndState("sync-" + name + "-stripe-" + syncStripe);
     }
 
     private int threadIndex(int syncStripe) {
@@ -219,8 +219,8 @@ public class AmzaSyncSender {
     }
 
     private PartitionName cursorName() {
-        byte[] name = ("amza-sync-cursor").getBytes(StandardCharsets.UTF_8);
-        return new PartitionName(false, name, name);
+        byte[] nameBytes = ("amza-sync-cursor-" + name).getBytes(StandardCharsets.UTF_8);
+        return new PartitionName(false, nameBytes, nameBytes);
     }
 
     private void syncStripe(int stripe) throws Exception {

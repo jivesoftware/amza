@@ -4,18 +4,11 @@ import org.merlin.config.Config;
 import org.merlin.config.defaults.BooleanDefault;
 import org.merlin.config.defaults.IntDefault;
 import org.merlin.config.defaults.LongDefault;
-import org.merlin.config.defaults.StringDefault;
 
 public interface AmzaSyncConfig extends Config {
 
     @BooleanDefault(false)
     boolean getSyncSenderEnabled();
-
-    @StringDefault("")
-    String getSyncSenderWhitelist();
-
-    @StringDefault("")
-    String getSyncSenderSchemeHostPort();
 
     @IntDefault(60_000)
     int getSyncSenderSocketTimeout();
@@ -29,29 +22,11 @@ public interface AmzaSyncConfig extends Config {
     @IntDefault(4)
     int getSyncThreadCount();
 
-    @LongDefault(15_000)
-    long getSyncIntervalMillis();
-
-    @IntDefault(10_000)
-    int getSyncBatchSize();
-
     @IntDefault(16)
     int getAmzaCallerThreadPoolSize();
 
     @LongDefault(60_000)
     long getAmzaAwaitLeaderElectionForNMillis();
-
-    @StringDefault("")
-    String getSyncSenderOAuthConsumerKey();
-
-    @StringDefault("")
-    String getSyncSenderOAuthConsumerSecret();
-
-    @StringDefault("")
-    String getSyncSenderOAuthConsumerMethod();
-
-    @BooleanDefault(false)
-    boolean getSyncSenderAllowSelfSignedCerts();
 
     @BooleanDefault(false)
     boolean getUseClientSolutionLog();

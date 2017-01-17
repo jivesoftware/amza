@@ -23,6 +23,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncStatus;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncPartitionConfigStorage;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderConfigStorage;
@@ -112,7 +113,6 @@ public class AmzaSyncEndpoints {
         }
     }
 
-
     @GET
     @Path("/list/{syncspaceName}")
     @Produces(MediaType.APPLICATION_JSON)
@@ -127,6 +127,27 @@ public class AmzaSyncEndpoints {
                 return Response.ok(map).build();
             }
             return Response.ok("{}").build();
+        } catch (Exception e) {
+            LOG.error("Failed to get.", e);
+            return Response.serverError().build();
+        }
+    }
+
+    @GET
+    @Path("/cursors/{syncspaceName}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getCursors(@PathParam("syncspaceName") String syncspaceName) {
+        try {
+            AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
+            Map<String, AmzaSyncStatus> map = Maps.newHashMap();
+            if (sender != null) {
+                sender.streamCursors(null, null, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
+                    map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
+                        new AmzaSyncStatus(timestamp, cursor.taking));
+                    return true;
+                });
+            }
+            return Response.ok(map).build();
         } catch (Exception e) {
             LOG.error("Failed to get.", e);
             return Response.serverError().build();

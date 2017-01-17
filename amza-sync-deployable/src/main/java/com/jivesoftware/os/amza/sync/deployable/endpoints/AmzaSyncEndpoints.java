@@ -125,7 +125,7 @@ public class AmzaSyncEndpoints {
                 }
                 return Response.ok(map).build();
             }
-            return Response.noContent().entity("{}").build();
+            return Response.ok("{}").build();
         } catch (Exception e) {
             LOG.error("Failed to get.", e);
             return Response.serverError().build();
@@ -152,7 +152,7 @@ public class AmzaSyncEndpoints {
     @DELETE
     @Path("/delete/{syncspaceName}/{fromPartitionNameBase64}/{toPartitionNameBase64}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response delete(@PathParam("syncspace") String syncspaceName,
+    public Response delete(@PathParam("syncspaceName") String syncspaceName,
         @PathParam("fromPartitionNameBase64") String fromPartitionNameBase64,
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
         try {

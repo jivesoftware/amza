@@ -5,5 +5,12 @@ package com.jivesoftware.os.amza.sync.api;
  */
 public class AmzaSyncPartitionConfig {
 
+    public boolean placeholder;
 
+    public AmzaSyncPartitionConfig() {
+    }
+
+    public AmzaSyncPartitionConfig(boolean placeholder) {
+        this.placeholder = placeholder;
+    }
 }

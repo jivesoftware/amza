@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.PeekingIterator;
 import com.jivesoftware.os.amza.api.PartitionClient;
@@ -24,14 +25,16 @@ public class AmzaSyncReceiver {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final PartitionClientProvider partitionClientProvider;
+    private final boolean useSolutionLog;
 
     private final Map<PartitionName, Consistency> consistencyCache = Maps.newConcurrentMap();
 
     private final long additionalSolverAfterNMillis = 10_000; //TODO expose to conf?
     private final long abandonSolutionAfterNMillis = 60_000; //TODO expose to conf?
 
-    public AmzaSyncReceiver(PartitionClientProvider partitionClientProvider) {
+    public AmzaSyncReceiver(PartitionClientProvider partitionClientProvider, boolean useSolutionLog) {
         this.partitionClientProvider = partitionClientProvider;
+        this.useSolutionLog = useSolutionLog;
     }
 
     public void commitRows(PartitionName partitionName, List<Row> rows) throws Exception {
@@ -53,7 +56,11 @@ public class AmzaSyncReceiver {
         }
 
         PeekingIterator<Row> iter = Iterators.peekingIterator(rows.iterator());
+        Optional<List<String>> solutionLog = useSolutionLog ? Optional.of(Lists.newArrayList()) : Optional.empty();
+        int[] batch = { 0 };
         while (iter.hasNext()) {
+            batch[0]++;
+            solutionLog.ifPresent(log -> log.add("Batch " + batch[0]));
             byte[] prefix = iter.peek().prefix;
             client.commit(consistency, prefix,
                 commitKeyValueStream -> {
@@ -70,7 +77,7 @@ public class AmzaSyncReceiver {
                 },
                 additionalSolverAfterNMillis,
                 abandonSolutionAfterNMillis,
-                Optional.empty());
+                solutionLog);
         }
     }
 

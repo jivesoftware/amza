@@ -16,11 +16,11 @@ public interface AmzaSyncConfig extends Config {
     @BooleanDefault(false)
     boolean getSyncReceiverEnabled();
 
-    @IntDefault(16)
-    int getSyncRingStripes();
+    @IntDefault(24)
+    int getSyncSendersThreadCount();
 
-    @IntDefault(4)
-    int getSyncThreadCount();
+    @IntDefault(16)
+    int getSyncSenderRingStripes();
 
     @IntDefault(16)
     int getAmzaCallerThreadPoolSize();

@@ -13,10 +13,12 @@ import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.OAuthSigner;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import oauth.signpost.commonshttp.CommonsHttpOAuthConsumer;
 import oauth.signpost.signature.HmacSha1MessageSigner;
@@ -34,7 +36,7 @@ public class AmzaSyncSenders {
     private final Map<String, AmzaSyncSender> senders = Maps.newConcurrentMap();
 
     private final AmzaSyncConfig syncConfig;
-    private final ExecutorService executorService;
+    private final ScheduledExecutorService executorService;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaClientAquariumProvider clientAquariumProvider;
     private final BAInterner interner;
@@ -45,7 +47,7 @@ public class AmzaSyncSenders {
     private final ExecutorService ensureSenders = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("ensure-sender-%d").build());
 
     public AmzaSyncSenders(AmzaSyncConfig syncConfig,
-        ExecutorService executorService,
+        ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaClientAquariumProvider clientAquariumProvider,
         BAInterner interner,
@@ -65,8 +67,16 @@ public class AmzaSyncSenders {
         this.ensureSendersInterval = ensureSendersInterval;
     }
 
+    public Collection<String> getSyncspaces() {
+        return senders.keySet();
+    }
+
     public Collection<AmzaSyncSender> getActiveSenders() {
         return senders.values();
+    }
+
+    public AmzaSyncSender getSender(String syncspaceName) {
+        return senders.get(syncspaceName);
     }
 
     public void start() {
@@ -77,29 +87,35 @@ public class AmzaSyncSenders {
                         Map<String, AmzaSyncSenderConfig> all = syncSenderConfigProvider.getAll();
                         for (Entry<String, AmzaSyncSenderConfig> entry : all.entrySet()) {
                             AmzaSyncSender amzaSyncSender = senders.get(entry.getKey());
-                            if (amzaSyncSender != null) {
-                                // TODO see if config changes and if so teardown and restart?
-                            } else {
-
-                                AmzaSyncSenderConfig senderConfig = entry.getValue();
-
+                            AmzaSyncSenderConfig senderConfig = entry.getValue();
+                            if (amzaSyncSender != null && amzaSyncSender.configHasChanged(senderConfig)) {
+                                amzaSyncSender.stop();
+                                amzaSyncSender = null;
+                            }
+                            if (amzaSyncSender == null) {
                                 amzaSyncSender = new AmzaSyncSender(
-                                    senderConfig.name,
+                                    senderConfig,
                                     clientAquariumProvider,
-                                    syncConfig.getSyncRingStripes(),
+                                    syncConfig.getSyncSenderRingStripes(),
                                     executorService,
-                                    syncConfig.getSyncThreadCount(),
-                                    senderConfig.syncIntervalMillis,
                                     partitionClientProvider,
                                     amzaSyncClient(senderConfig),
                                     mapper,
                                     syncPartitionConfigProvider,
-                                    senderConfig.batchSize,
                                     interner
                                 );
 
                                 senders.put(entry.getKey(), amzaSyncSender);
                                 amzaSyncSender.start();
+                            }
+                        }
+
+                        // stop any senders that are no longer registered
+                        for (Iterator<Entry<String, AmzaSyncSender>> iterator = senders.entrySet().iterator(); iterator.hasNext(); ) {
+                            Entry<String, AmzaSyncSender> entry = iterator.next();
+                            if (!all.containsKey(entry.getKey())) {
+                                entry.getValue().stop();
+                                iterator.remove();
                             }
                         }
 

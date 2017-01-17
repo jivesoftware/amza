@@ -11,13 +11,13 @@ sync.statusFocus = {
     init: function () {
     },
 
-    reset: function(ele, partition) {
+    reset: function(ele, syncspace, partition) {
         var $button = $(ele);
         $button.attr('disabled', 'disabled');
         var value = $button.val();
         $.ajax({
             type: "POST",
-            url: "/amza/sync/reset/" + partition,
+            url: "/amza/sync/reset/" + syncspace + "/" + partition,
             data: {},
             //contentType: "application/json",
             success: function () {

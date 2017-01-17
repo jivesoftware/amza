@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.sync.deployable.region.AmzaStatusRegionInput;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
@@ -55,17 +56,19 @@ public class AmzaSyncUIEndpoints {
     }
 
     @GET
-    @Path("/status/{ringName}/{partitionName}")
+    @Path("/status/{syncspaceName}/{ringName}/{partitionName}")
     @Produces(MediaType.TEXT_HTML)
-    public Response getStatus(@PathParam("ringName") String ringName,
+    public Response getStatus(@PathParam("syncspaceName") String syncspaceName,
+        @PathParam("ringName") String ringName,
         @PathParam("partitionName") String partitionName) {
         try {
-            String rendered = syncUIService.renderStatus(new PartitionName(false,
+            String rendered = syncUIService.renderStatus(new AmzaStatusRegionInput(syncspaceName,
+                new PartitionName(false,
                 ringName.getBytes(StandardCharsets.UTF_8),
-                partitionName.getBytes(StandardCharsets.UTF_8)));
+                partitionName.getBytes(StandardCharsets.UTF_8))));
             return Response.ok(rendered).build();
         } catch (Throwable t) {
-            LOG.error("Failed to getStatus({}, {})", new Object[] { ringName, partitionName }, t);
+            LOG.error("Failed to getStatus({}, {}, {})", new Object[] { syncspaceName, ringName, partitionName }, t);
             return Response.serverError().build();
         }
     }

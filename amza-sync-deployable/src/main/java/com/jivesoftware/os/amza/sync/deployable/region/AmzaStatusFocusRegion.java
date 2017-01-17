@@ -13,6 +13,8 @@ import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -46,6 +48,8 @@ public class AmzaStatusFocusRegion implements Region<AmzaStatusRegionInput> {
         String syncspaceName = input.syncspaceName;
         PartitionName partitionName = input.partitionName;
 
+        SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy hh:mm:ss z");
+
         Map<String, Object> data = Maps.newHashMap();
         data.put("syncspaceName", syncspaceName);
         data.put("partitionBase64", partitionName.toBase64());
@@ -54,17 +58,19 @@ public class AmzaStatusFocusRegion implements Region<AmzaStatusRegionInput> {
             if (syncSenders != null) {
                 AmzaSyncSender syncSender = syncSenders.getSender(input.syncspaceName);
                 if (syncSender != null) {
-                    syncSender.streamCursors(partitionName, null, (toPartitionName, cursor) -> {
+                    syncSender.streamCursors(partitionName, null, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
                         String toPartition = new String(toPartitionName.getRingName(), StandardCharsets.UTF_8)
                             + '/' + new String(toPartitionName.getName(), StandardCharsets.UTF_8);
                         Map<String, String> cursorData = Maps.newHashMap();
-                        for (Entry<RingMember, Long> entry : cursor.entrySet()) {
+                        for (Entry<RingMember, Long> entry : cursor.memberTxIds.entrySet()) {
                             cursorData.put(entry.getKey().getMember(), entry.getValue().toString());
                         }
 
                         progress.add(ImmutableMap.of(
                             "sender", syncSender.getConfig().name,
                             "toPartition", toPartition,
+                            "time", dateFormat.format(new Date(timestamp)),
+                            "taking", cursor.taking,
                             "cursor", mapper.writeValueAsString(cursorData)));
                         return true;
                     });

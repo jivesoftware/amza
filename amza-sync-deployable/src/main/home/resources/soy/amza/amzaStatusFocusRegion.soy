@@ -21,6 +21,8 @@
                         <tr>
                             <th>Sender</th>
                             <th>To</th>
+                            <th>Time</th>
+                            <th>Taking</th>
                             <th>Cursor</th>
                         </tr>
                     </thead>
@@ -29,18 +31,20 @@
                             <tr>
                                 <td>{$p.sender}</td>
                                 <td>{$p.toPartition}</td>
+                                <td>{$p.time}</td>
+                                <td>{$p.taking}</td>
                                 <td>{$p.cursor}</td>
                             </tr>
                             {if isLast($p)}
                                 <tr>
-                                    <td colspan="3">
+                                    <td colspan="5">
                                         <input class="btn btn-default" type="button" value="Reset" onclick="if (confirm('Are you sure you want to reset progress?')) sync.statusFocus.reset(this, '{$syncspaceName}', '{$partitionBase64}'); return false"/>
                                     </td>
                                 </tr>
                             {/if}
                         {ifempty}
                             <tr>
-                                <td colspan="3">No progress found</td>
+                                <td colspan="5">No progress found</td>
                             </tr>
                         {/foreach}
                     </tbody>

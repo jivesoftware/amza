@@ -30,7 +30,6 @@ import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -39,7 +38,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.jetbrains.annotations.NotNull;
 
 /**
  *
@@ -134,22 +132,23 @@ public class AmzaSyncSender {
     }
 
     public interface ProgressStream {
-        boolean stream(PartitionName toPartitionName, Cursor cursor) throws Exception;
+        boolean stream(PartitionName fromPartitionName, PartitionName toPartitionName, long timestamp, Cursor cursor) throws Exception;
     }
 
     public void streamCursors(PartitionName fromPartitionName, PartitionName toPartitionName, ProgressStream stream) throws Exception {
         PartitionClient cursorClient = cursorClient();
-        byte[] fromKey = cursorKey(fromPartitionName, toPartitionName);
-        byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
+        byte[] fromKey = fromPartitionName == null ? null : cursorKey(fromPartitionName, toPartitionName);
+        byte[] toKey = fromPartitionName == null ? null : WALKey.prefixUpperExclusive(fromKey);
         cursorClient.scan(Consistency.leader_quorum, true,
             prefixedKeyRangeStream -> {
                 return prefixedKeyRangeStream.stream(null, fromKey, null, toKey);
             },
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
-                    PartitionName partitionName = cursorToPartitionName(key);
-                    Cursor cursor = mapper.readValue(value, SerializableCursor.class).toCursor();
-                    return stream.stream(partitionName, cursor);
+                    PartitionName from = cursorKeyFromPartitionName(key);
+                    PartitionName to = cursorKeyToPartitionName(key);
+                    Cursor cursor = cursorFromValue(value, interner);
+                    return stream.stream(from, to, timestamp, cursor);
                 }
                 return true;
             },
@@ -209,7 +208,7 @@ public class AmzaSyncSender {
     }
 
     private PartitionName cursorName() {
-        byte[] nameBytes = ("amza-sync-cursor-" + config.name).getBytes(StandardCharsets.UTF_8);
+        byte[] nameBytes = ("amza-sync-cursor-v2-" + config.name).getBytes(StandardCharsets.UTF_8);
         return new PartitionName(false, nameBytes, nameBytes);
     }
 
@@ -285,14 +284,15 @@ public class AmzaSyncSender {
         }
 
         int synced = 0;
-        while (true) {
+        boolean taking = true;
+        while (taking) {
             List<Row> rows = Lists.newArrayListWithExpectedSize(config.batchSize);
             TakeResult takeResult = fromClient.takeFromTransactionId(null,
-                cursor,
+                cursor.memberTxIds,
                 config.batchSize,
                 highwater -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
-                        cursor.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
+                        cursor.memberTxIds.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
                     }
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
@@ -311,17 +311,15 @@ public class AmzaSyncSender {
                 synced += rows.size();
             }
 
-            cursor.merge(takeResult.tookFrom, takeResult.lastTxId, Math::max);
+            cursor.memberTxIds.merge(takeResult.tookFrom, takeResult.lastTxId, Math::max);
             if (takeResult.tookToEnd != null) {
                 for (WALHighwater.RingMemberHighwater ringMemberHighwater : takeResult.tookToEnd.ringMemberHighwater) {
-                    cursor.merge(ringMemberHighwater.ringMember, ringMemberHighwater.transactionId, Math::max);
+                    cursor.memberTxIds.merge(ringMemberHighwater.ringMember, ringMemberHighwater.transactionId, Math::max);
                 }
+                taking = false;
             }
 
             savePartitionCursor(partitionTuple.from, toPartitionName, cursor);
-            if (rows.isEmpty()) {
-                break;
-            }
         }
 
         return synced;
@@ -330,12 +328,12 @@ public class AmzaSyncSender {
     private Cursor getPartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName) throws Exception {
         PartitionClient cursorClient = cursorClient();
         byte[] cursorKey = cursorKey(fromPartitionName, toPartitionName);
-        SerializableCursor[] result = new SerializableCursor[1];
+        Cursor[] result = new Cursor[1];
         cursorClient.get(Consistency.leader_quorum, null,
             unprefixedWALKeyStream -> unprefixedWALKeyStream.stream(cursorKey),
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
-                    result[0] = mapper.readValue(value, SerializableCursor.class);
+                    result[0] = cursorFromValue(value, interner);
                 }
                 return true;
             },
@@ -343,18 +341,66 @@ public class AmzaSyncSender {
             abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             Optional.empty());
-        return result[0] != null ? result[0].toCursor() : new Cursor();
+        return result[0] != null ? result[0] : new Cursor(true, Maps.newHashMap());
     }
 
     private void savePartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Cursor cursor) throws Exception {
         PartitionClient cursorClient = cursorClient();
         byte[] cursorKey = cursorKey(fromPartitionName, toPartitionName);
-        byte[] value = mapper.writeValueAsBytes(SerializableCursor.fromCursor(cursor));
+        byte[] value = valueFromCursor(cursor);
         cursorClient.commit(Consistency.leader_quorum, null,
             commitKeyValueStream -> commitKeyValueStream.commit(cursorKey, value, -1, false),
             additionalSolverAfterNMillis,
             abandonSolutionAfterNMillis,
             Optional.empty());
+    }
+
+    private static byte[] valueFromCursor(Cursor cursor) {
+        int valueLength = 1 + 1 + 2;
+        for (RingMember ringMember : cursor.memberTxIds.keySet()) {
+            valueLength += 2 + ringMember.sizeInBytes() + 8;
+        }
+
+        byte[] value = new byte[1 + 1 + 2 + valueLength];
+        value[0] = 1; // version
+        value[1] = (byte) (cursor.taking ? 1 : 0);
+        UIO.unsignedShortBytes(cursor.memberTxIds.size(), value, 2);
+        int o = 4;
+        for (Entry<RingMember, Long> entry : cursor.memberTxIds.entrySet()) {
+            int memberLength = entry.getKey().sizeInBytes();
+            UIO.unsignedShortBytes(memberLength, value, o);
+            o += 2;
+            entry.getKey().toBytes(value, o);
+            o += memberLength;
+            UIO.longBytes(entry.getValue(), value, o);
+            o += 8;
+        }
+        return value;
+    }
+
+    private static Cursor cursorFromValue(byte[] value, BAInterner interner) throws InterruptedException {
+        if (value[0] == 1) {
+            boolean taking = value[1] == 1;
+
+            int memberTxIdsLength = UIO.bytesUnsignedShort(value, 2);
+            int o = 4;
+
+            Map<RingMember, Long> memberTxIds = Maps.newHashMap();
+            for (int i = 0; i < memberTxIdsLength; i++) {
+                int memberLength = UIO.bytesUnsignedShort(value, o);
+                o += 2;
+                RingMember member = RingMember.fromBytes(value, o, memberLength, interner);
+                o += memberLength;
+                long txId = UIO.bytesLong(value, o);
+                memberTxIds.put(member, txId);
+                o += 8;
+            }
+
+            return new Cursor(taking, memberTxIds);
+        } else {
+            LOG.error("Unsupported cursor version {}", value[0]);
+            return null;
+        }
     }
 
     private byte[] cursorKey(PartitionName fromPartitionName, PartitionName toPartitionName) {
@@ -376,30 +422,18 @@ public class AmzaSyncSender {
         }
     }
 
-    private PartitionName cursorToPartitionName(byte[] key) throws InterruptedException {
+    private PartitionName cursorKeyFromPartitionName(byte[] key) throws InterruptedException {
+        int fromPartitionLength = UIO.bytesUnsignedShort(key, 0);
+        byte[] fromPartitionBytes = new byte[fromPartitionLength];
+        UIO.readBytes(key, 2, fromPartitionBytes);
+        return PartitionName.fromBytes(fromPartitionBytes, 0, interner);
+    }
+
+    private PartitionName cursorKeyToPartitionName(byte[] key) throws InterruptedException {
         int fromPartitionLength = UIO.bytesUnsignedShort(key, 0);
         int toPartitionLength = UIO.bytesUnsignedShort(key, 2 + fromPartitionLength);
         byte[] toPartitionBytes = new byte[toPartitionLength];
         UIO.readBytes(key, 2 + fromPartitionLength + 2, toPartitionBytes);
         return PartitionName.fromBytes(toPartitionBytes, 0, interner);
-    }
-
-    private static class SerializableCursor extends HashMap<String, Long> {
-
-        public static SerializableCursor fromCursor(Cursor cursor) {
-            SerializableCursor serializableCursor = new SerializableCursor();
-            for (Entry<RingMember, Long> entry : cursor.entrySet()) {
-                serializableCursor.put(entry.getKey().getMember(), entry.getValue());
-            }
-            return serializableCursor;
-        }
-
-        public Cursor toCursor() {
-            Cursor cursor = new Cursor();
-            for (Entry<String, Long> entry : entrySet()) {
-                cursor.put(new RingMember(entry.getKey()), entry.getValue());
-            }
-            return cursor;
-        }
     }
 }

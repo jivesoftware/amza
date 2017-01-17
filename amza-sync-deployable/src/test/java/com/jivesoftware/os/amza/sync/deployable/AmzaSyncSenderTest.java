@@ -122,8 +122,10 @@ public class AmzaSyncSenderTest {
         Cursor cursor = awaitCursor(partitionName, syncSender, ringMember, largestTxId.get(), failAfter);
 
         Assert.assertNotNull(cursor);
-        Assert.assertTrue(cursor.containsKey(ringMember));
-        Assert.assertEquals(cursor.get(ringMember).longValue(), 10L);
+        Assert.assertTrue(cursor.taking);
+        Assert.assertNotNull(cursor.memberTxIds);
+        Assert.assertTrue(cursor.memberTxIds.containsKey(ringMember));
+        Assert.assertEquals(cursor.memberTxIds.get(ringMember).longValue(), 10L);
         Assert.assertEquals(rowCount[0], 10);
 
         rowCount[0] = 0;
@@ -132,8 +134,10 @@ public class AmzaSyncSenderTest {
         cursor = awaitCursor(partitionName, syncSender, ringMember, largestTxId.get(), failAfter);
 
         Assert.assertNotNull(cursor);
-        Assert.assertTrue(cursor.containsKey(ringMember));
-        Assert.assertEquals(cursor.get(ringMember).longValue(), 20L);
+        Assert.assertTrue(cursor.taking);
+        Assert.assertNotNull(cursor.memberTxIds);
+        Assert.assertTrue(cursor.memberTxIds.containsKey(ringMember));
+        Assert.assertEquals(cursor.memberTxIds.get(ringMember).longValue(), 20L);
         Assert.assertEquals(rowCount[0], 10);
     }
 
@@ -174,12 +178,12 @@ public class AmzaSyncSenderTest {
         long failAfter) throws Exception {
         Cursor[] cursor = new Cursor[1];
         while (true) {
-            syncSender.streamCursors(partitionName, partitionName, (toPartitionName, cursor1) -> {
+            syncSender.streamCursors(partitionName, partitionName, (fromPartitionName, toPartitionName, timestamp, cursor1) -> {
                 Assert.assertEquals(toPartitionName, partitionName);
                 cursor[0] = cursor1;
                 return true;
             });
-            Long gotTransactionId = cursor[0] == null ? null : cursor[0].get(awaitRingMember);
+            Long gotTransactionId = cursor[0] == null ? null : cursor[0].memberTxIds.get(awaitRingMember);
             if (gotTransactionId != null && gotTransactionId >= awaitTransactionId) {
                 break;
             }

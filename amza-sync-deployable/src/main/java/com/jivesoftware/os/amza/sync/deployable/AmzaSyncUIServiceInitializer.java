@@ -19,7 +19,7 @@ public class AmzaSyncUIServiceInitializer {
         return new AmzaSyncUIService(
             renderer,
             new HeaderRegion("soy.amza.chrome.headerRegion", renderer),
-            new AmzaAdminRegion("soy.amza.page.adminRegion", renderer, senderEnabled, receiverEnabled),
+            new AmzaAdminRegion("soy.amza.page.adminRegion", renderer, senderEnabled, receiverEnabled, syncSenders),
             new AmzaStatusRegion("soy.amza.page.statusRegion", renderer,
                 new AmzaStatusFocusRegion("soy.amza.page.statusFocusRegion", renderer, syncSenders, mapper), syncSenders));
     }

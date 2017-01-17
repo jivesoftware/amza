@@ -3,6 +3,7 @@
 /**
  * Status focus page
  *
+ * @param syncspaceName
  * @param partitionBase64
  * @param? error
  * @param? progress
@@ -18,6 +19,7 @@
                 <table class="table table-condensed">
                     <thead>
                         <tr>
+                            <th>Sync Space</th>
                             <th>Sender</th>
                             <th>To</th>
                             <th>Cursor</th>
@@ -26,20 +28,21 @@
                     <tbody>
                         {foreach $p in $progress}
                             <tr>
+                                <td>{$p.syncspace}</td>
                                 <td>{$p.sender}</td>
                                 <td>{$p.toPartition}</td>
                                 <td>{$p.cursor}</td>
                             </tr>
                             {if isLast($p)}
                                 <tr>
-                                    <td colspan="2">
-                                        <input class="btn btn-default" type="button" value="Reset" onclick="if (confirm('Are you sure you want to reset progress?')) sync.statusFocus.reset(this, '{$partitionBase64}'); return false"/>
+                                    <td colspan="4">
+                                        <input class="btn btn-default" type="button" value="Reset" onclick="if (confirm('Are you sure you want to reset progress?')) sync.statusFocus.reset(this, '{$syncspaceName}', '{$partitionBase64}'); return false"/>
                                     </td>
                                 </tr>
                             {/if}
                         {ifempty}
                             <tr>
-                                <td colspan="2">No progress found</td>
+                                <td colspan="4">No progress found</td>
                             </tr>
                         {/foreach}
                     </tbody>

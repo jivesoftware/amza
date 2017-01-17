@@ -20,7 +20,7 @@ import java.util.Map.Entry;
 /**
  *
  */
-public class AmzaStatusFocusRegion implements Region<PartitionName> {
+public class AmzaStatusFocusRegion implements Region<AmzaStatusRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -41,16 +41,19 @@ public class AmzaStatusFocusRegion implements Region<PartitionName> {
     }
 
     @Override
-    public String render(PartitionName partitionName) {
-        Map<String, Object> data = Maps.newHashMap();
+    public String render(AmzaStatusRegionInput input) {
 
-        data.put("partition", partitionName.toString());
+        String syncspaceName = input.syncspaceName;
+        PartitionName partitionName = input.partitionName;
+
+        Map<String, Object> data = Maps.newHashMap();
+        data.put("syncspaceName", syncspaceName);
         data.put("partitionBase64", partitionName.toBase64());
         try {
             List<Map<String, Object>> progress = Lists.newArrayList();
             if (syncSenders != null) {
-
-                for (AmzaSyncSender syncSender : syncSenders.getActiveSenders()) {
+                AmzaSyncSender syncSender = syncSenders.getSender(input.syncspaceName);
+                if (syncSender != null) {
                     syncSender.streamCursors(partitionName, null, (toPartitionName, cursor) -> {
                         String toPartition = new String(toPartitionName.getRingName(), StandardCharsets.UTF_8)
                             + '/' + new String(toPartitionName.getName(), StandardCharsets.UTF_8);
@@ -60,13 +63,12 @@ public class AmzaStatusFocusRegion implements Region<PartitionName> {
                         }
 
                         progress.add(ImmutableMap.of(
-                            "sender", syncSender.getName(),
+                            "sender", syncSender.getConfig().name,
                             "toPartition", toPartition,
                             "cursor", mapper.writeValueAsString(cursorData)));
                         return true;
                     });
                 }
-
             } else {
                 data.put("warning", "Sync sender is not enabled");
             }

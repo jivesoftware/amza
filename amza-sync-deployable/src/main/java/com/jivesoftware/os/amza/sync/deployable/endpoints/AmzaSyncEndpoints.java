@@ -15,8 +15,6 @@
  */
 package com.jivesoftware.os.amza.sync.deployable.endpoints;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -28,6 +26,7 @@ import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncPartitionConfigStorage;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderConfigStorage;
+import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenders;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -56,19 +55,19 @@ public class AmzaSyncEndpoints {
 
     private final AmzaSyncSenderConfigStorage configStorage;
     private final AmzaSyncPartitionConfigStorage partitionConfigStorage;
-    private final AmzaSyncSender syncSender;
+    private final AmzaSyncSenders syncSenders;
     private final BAInterner interner;
 
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
     public AmzaSyncEndpoints(@Context AmzaSyncSenderConfigStorage configStorage,
         @Context AmzaSyncPartitionConfigStorage partitionConfigStorage,
-        @Context AmzaSyncSender syncSender,
+        @Context AmzaSyncSenders syncSenders,
         @Context BAInterner interner) {
 
         this.configStorage = configStorage;
         this.partitionConfigStorage = partitionConfigStorage;
-        this.syncSender = syncSender;
+        this.syncSenders = syncSenders;
         this.interner = interner;
     }
 
@@ -168,27 +167,16 @@ public class AmzaSyncEndpoints {
         }
     }
 
-
-    @GET
-    @Path("/")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response get() {
-        try {
-            return responseHelper.jsonResponse("Success");
-        } catch (Exception e) {
-            LOG.error("Failed to get.", e);
-            return Response.serverError().build();
-        }
-    }
-
     @POST
-    @Path("/reset/{partitionNameBase64}")
+    @Path("/reset/{syncspaceName}/{partitionNameBase64}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response postReset(@PathParam("partitionNameBase64") String partitionNameBase64) {
+    public Response postReset(@PathParam("syncspaceName") String syncspaceName,
+        @PathParam("partitionNameBase64") String partitionNameBase64) {
         try {
-            if (syncSender != null) {
+            if (syncSenders != null) {
                 PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
-                boolean result = syncSender.resetCursors(partitionName);
+                AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
+                boolean result = sender != null && sender.resetCursors(partitionName);
                 return Response.ok(result).build();
             } else {
                 return Response.status(Status.SERVICE_UNAVAILABLE).entity("Sender is not enabled").build();

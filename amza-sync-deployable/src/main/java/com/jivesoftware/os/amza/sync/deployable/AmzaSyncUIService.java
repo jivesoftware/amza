@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.sync.deployable;
 
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.sync.deployable.region.AmzaStatusRegionInput;
 import com.jivesoftware.os.amza.ui.region.ChromeRegion;
 import com.jivesoftware.os.amza.ui.region.HeaderRegion;
 import com.jivesoftware.os.amza.ui.region.ManagePlugin;
@@ -17,7 +18,7 @@ public class AmzaSyncUIService {
     private final SoyRenderer renderer;
     private final HeaderRegion headerRegion;
     private final PageRegion<Void> adminRegion;
-    private final PageRegion<PartitionName> statusRegion;
+    private final PageRegion<AmzaStatusRegionInput> statusRegion;
 
     private final List<ManagePlugin> plugins = Lists.newCopyOnWriteArrayList();
 
@@ -25,7 +26,7 @@ public class AmzaSyncUIService {
         SoyRenderer renderer,
         HeaderRegion headerRegion,
         PageRegion<Void> adminRegion,
-        PageRegion<PartitionName> statusRegion) {
+        PageRegion<AmzaStatusRegionInput> statusRegion) {
         this.renderer = renderer;
         this.headerRegion = headerRegion;
         this.adminRegion = adminRegion;
@@ -40,7 +41,7 @@ public class AmzaSyncUIService {
         return chrome(adminRegion).render(null);
     }
 
-    public String renderStatus(PartitionName partitionName) {
-        return chrome(statusRegion).render(partitionName);
+    public String renderStatus(AmzaStatusRegionInput input) {
+        return chrome(statusRegion).render(input);
     }
 }

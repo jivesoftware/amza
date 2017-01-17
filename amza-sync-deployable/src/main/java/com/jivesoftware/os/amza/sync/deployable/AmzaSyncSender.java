@@ -24,6 +24,7 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
+import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -34,8 +35,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jetbrains.annotations.NotNull;
 
 /**
  *
@@ -44,25 +48,19 @@ public class AmzaSyncSender {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private static final PartitionProperties PROGRESS_PROPERTIES = new PartitionProperties(Durability.fsync_async,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        false, Consistency.leader_quorum, true, true, false, RowType.primary, "lab", 8, null, -1, -1);
-
     private static final PartitionProperties CURSOR_PROPERTIES = new PartitionProperties(Durability.fsync_async,
         0, 0, 0, 0, 0, 0, 0, 0,
         false, Consistency.leader_quorum, true, true, false, RowType.primary, "lab", 8, null, -1, -1);
 
-    private final String name;
+    private final AmzaSyncSenderConfig config;
     private final AmzaClientAquariumProvider amzaClientAquariumProvider;
     private final int syncRingStripes;
-    private final ExecutorService executorService;
-    private final int syncThreadCount;
-    private final long syncIntervalMillis;
+    private final ScheduledExecutorService executorService;
+    private final ScheduledFuture[] syncFutures;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaSyncClient toSyncClient;
     private final ObjectMapper mapper;
     private final AmzaSyncPartitionConfigProvider syncPartitionConfigProvider;
-    private final int batchSize;
     private final BAInterner interner;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -72,70 +70,66 @@ public class AmzaSyncSender {
     private final long abandonLeaderSolutionAfterNMillis = 30_000; //TODO expose to conf?
     private final long abandonSolutionAfterNMillis = 60_000; //TODO expose to conf?
 
-    public AmzaSyncSender(String name,
+    public AmzaSyncSender(AmzaSyncSenderConfig config,
         AmzaClientAquariumProvider amzaClientAquariumProvider,
         int syncRingStripes,
-        ExecutorService executorService,
-        int syncThreadCount,
-        long syncIntervalMillis,
+        ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaSyncClient toSyncClient,
         ObjectMapper mapper,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
-        int batchSize,
         BAInterner interner) {
 
-        this.name = name;
+        this.config = config;
         this.amzaClientAquariumProvider = amzaClientAquariumProvider;
         this.syncRingStripes = syncRingStripes;
         this.executorService = executorService;
-        this.syncThreadCount = syncThreadCount;
-        this.syncIntervalMillis = syncIntervalMillis;
+        this.syncFutures = new ScheduledFuture[syncRingStripes];
         this.partitionClientProvider = partitionClientProvider;
         this.toSyncClient = toSyncClient;
         this.mapper = mapper;
         this.syncPartitionConfigProvider = syncPartitionConfigProvider;
-        this.batchSize = batchSize;
         this.interner = interner;
     }
 
-    public String getName() {
-        return name;
+    public AmzaSyncSenderConfig getConfig() {
+        return config;
+    }
+
+    public boolean configHasChanged(AmzaSyncSenderConfig senderConfig) {
+        return !config.equals(senderConfig);
+    }
+
+    private String aquariumName(int syncStripe) {
+        return "amza-sync-" + config.name + "-stripe-" + syncStripe;
     }
 
     public void start() {
         if (running.compareAndSet(false, true)) {
-            for (int i = 0; i < syncThreadCount; i++) {
-                int index = i;
-                executorService.submit(() -> {
-                    while (running.get()) {
-                        try {
-                            for (int j = 0; j < syncRingStripes; j++) {
-                                if (threadIndex(j) == index) {
-                                    syncStripe(j);
-                                }
-                            }
-                            Thread.sleep(syncIntervalMillis);
-                        } catch (InterruptedException e) {
-                            LOG.info("Sync thread {} was interrupted", index);
-                        } catch (Throwable t) {
-                            LOG.error("Failure in sync thread {}", new Object[] { index }, t);
-                            Thread.sleep(syncIntervalMillis);
-                        }
-                    }
-                    return null;
-                });
+            for (int i = 0; i < syncRingStripes; i++) {
+                amzaClientAquariumProvider.register(aquariumName(i));
             }
 
             for (int i = 0; i < syncRingStripes; i++) {
-                amzaClientAquariumProvider.register("sync-" + name + "-stripe-" + i);
+                int index = i;
+                syncFutures[i] = executorService.scheduleWithFixedDelay(() -> {
+                    try {
+                        syncStripe(index);
+                    } catch (InterruptedException e) {
+                        LOG.info("Sync thread {} was interrupted", index);
+                    } catch (Throwable t) {
+                        LOG.error("Failure in sync thread {}", new Object[] { index }, t);
+                    }
+                }, 0, config.syncIntervalMillis, TimeUnit.MILLISECONDS);
             }
         }
     }
 
     public void stop() {
         if (running.compareAndSet(true, false)) {
-            executorService.shutdownNow();
+            for (int i = 0; i < syncRingStripes; i++) {
+                syncFutures[i].cancel(true);
+            }
         }
     }
 
@@ -207,11 +201,7 @@ public class AmzaSyncSender {
     }
 
     private LivelyEndState livelyEndState(int syncStripe) throws Exception {
-        return amzaClientAquariumProvider.livelyEndState("sync-" + name + "-stripe-" + syncStripe);
-    }
-
-    private int threadIndex(int syncStripe) {
-        return syncStripe % syncThreadCount;
+        return amzaClientAquariumProvider.livelyEndState(aquariumName(syncStripe));
     }
 
     private PartitionClient cursorClient() throws Exception {
@@ -219,7 +209,7 @@ public class AmzaSyncSender {
     }
 
     private PartitionName cursorName() {
-        byte[] nameBytes = ("amza-sync-cursor-" + name).getBytes(StandardCharsets.UTF_8);
+        byte[] nameBytes = ("amza-sync-cursor-" + config.name).getBytes(StandardCharsets.UTF_8);
         return new PartitionName(false, nameBytes, nameBytes);
     }
 
@@ -233,7 +223,7 @@ public class AmzaSyncSender {
         int rowCount = 0;
         Map<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> partitions;
         if (syncPartitionConfigProvider != null) {
-            partitions = syncPartitionConfigProvider.getAll(name);
+            partitions = syncPartitionConfigProvider.getAll(config.name);
         } else {
             partitions = Maps.newHashMap();
             LOG.warn("Syncing all partitions is not supported yet");
@@ -293,10 +283,10 @@ public class AmzaSyncSender {
 
         int synced = 0;
         while (true) {
-            List<Row> rows = Lists.newArrayListWithExpectedSize(batchSize);
+            List<Row> rows = Lists.newArrayListWithExpectedSize(config.batchSize);
             TakeResult takeResult = fromClient.takeFromTransactionId(null,
                 cursor,
-                batchSize,
+                config.batchSize,
                 highwater -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         cursor.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);

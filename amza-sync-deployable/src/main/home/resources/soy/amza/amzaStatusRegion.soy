@@ -3,6 +3,8 @@
 /**
  * Status page
  *
+ * @param syncspaces
+ * @param? syncspaceName
  * @param? ringName
  * @param? partitionName
  * @param? statusFocusRegion
@@ -15,16 +17,42 @@
             <form id="partitionPickerForm" class="j-form" data-active-class="btn-default" data-input-el="#partitionPicker" data-form-el="#partitionPickerForm"
                 data-jive-ui="jive/ui/typeahead/partition_typeahead" method="post" name="partitionPickerForm" action="#"
                 //TODO wire this up correctly
-                onsubmit="location.href='/ui/status/'+document.getElementById('ringNamePicker').value+'/'+document.getElementById('partitionNamePicker').value+'#focus'; return false">
-                <input type="text" autocomplete="off" role="combobox" style="width:360px; padding-left:10px;"
-                    class="j-ringName-autocomplete j-autocomplete-input j-ui-elem" placeholder="Ring Name" value="{$ringName?:''}"
-                    name="ringName" id="ringNamePicker" data-original-title="" title="">
-                &nbsp;
-                <input type="text" autocomplete="off" role="combobox" style="width:360px; padding-left:10px;"
-                    class="j-partitionName-autocomplete j-autocomplete-input j-ui-elem" placeholder="Partition Name" value="{$partitionName?:''}"
-                    name="partitionName" id="partitionNamePicker" data-original-title="" title="">
-                &nbsp;
-                <input type="submit" value="Find Progress">
+                onsubmit="location.href='/ui/status/'+document.getElementById('syncspaceNamePicker').value+'/'+document.getElementById('ringNamePicker').value+'/'+document.getElementById('partitionNamePicker').value+'#focus'; return false">
+                <table class="table table-condensed">
+                    <tbody>
+                        <tr>
+                            <td>Sync Space</td>
+                            <td>
+                                <select class="form-control" placeholder="type" name="syncspaceName" id="syncspaceNamePicker" title="">
+                                    {foreach $s in $syncspaces}
+                                        <option value="$s">{$s}</option>
+                                    {/foreach}
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Ring Name</td>
+                            <td>
+                                <input type="text" autocomplete="off" role="combobox" style="width:360px; padding-left:10px;"
+                                    class="j-ringName-autocomplete j-autocomplete-input j-ui-elem" placeholder="Ring Name" value="{$ringName?:''}"
+                                    name="ringName" id="ringNamePicker" data-original-title="" title="">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Partition Name</td>
+                            <td>
+                                <input type="text" autocomplete="off" role="combobox" style="width:360px; padding-left:10px;"
+                                    class="j-partitionName-autocomplete j-autocomplete-input j-ui-elem" placeholder="Partition Name" value="{$partitionName?:''}"
+                                    name="partitionName" id="partitionNamePicker" data-original-title="" title="">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">
+                                <input type="submit" value="Find Progress">
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </form>
         </div>
     </div>

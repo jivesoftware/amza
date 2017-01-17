@@ -16,6 +16,9 @@ public interface AmzaSyncConfig extends Config {
     @BooleanDefault(false)
     boolean getSyncReceiverEnabled();
 
+    @BooleanDefault(false)
+    boolean getSyncReceiverUseSolutionLog();
+
     @IntDefault(24)
     int getSyncSendersThreadCount();
 

@@ -131,7 +131,7 @@ public class AmzaSyncMain {
                 clientHealthProvider)
                 .deadAfterNErrors(10)
                 .checkDeadEveryNMillis(10_000)
-                .socketTimeoutInMillis(10_000)
+                .socketTimeoutInMillis(60_000)
                 .build(); // TODO expose to conf
 
             ObjectMapper mapper = new ObjectMapper();
@@ -304,7 +304,7 @@ public class AmzaSyncMain {
 
             }
             if (syncConfig.getSyncReceiverEnabled()) {
-                syncReceiver = new AmzaSyncReceiver(amzaClientProvider);
+                syncReceiver = new AmzaSyncReceiver(amzaClientProvider, syncConfig.getSyncReceiverUseSolutionLog());
             }
 
             amzaClientAquariumProvider.start();

@@ -3,6 +3,7 @@
 /**
  * @param? sender
  * @param? receiver
+ * @param? senders
  */
 {template .adminRegion}
 
@@ -13,4 +14,40 @@
             <h4>Receiver: {if $receiver}enabled{else}disabled{/if}</h4>
         </div>
     </div>
+
+    {if $senders}
+        <div class="panel panel-default">
+            <div class="panel-heading">Senders</div>
+            <div class="panel-body">
+                <table class="table table-condensed">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Enabled</th>
+                            <th>Host</th>
+                            <th>Self-signed Certs</th>
+                            <th>Interval</th>
+                            <th>Batch Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {foreach $s in $senders}
+                            <tr>
+                                <td>{$s.name}</td>
+                                <td>{$s.enabled}</td>
+                                <td>{$s.scheme}://{$s.host}:{$s.port}</td>
+                                <td>{$s.allowSelfSignedCerts}</td>
+                                <td>{$s.syncIntervalMillis}</td>
+                                <td>{$s.batchSize}</td>
+                            </tr>
+                        {ifempty}
+                            <tr>
+                                <td colspan="6">No senders found</td>
+                            </tr>
+                        {/foreach}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {/if}
 {/template}

@@ -233,13 +233,16 @@ public class AmzaSyncSender {
             }
         }
         for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> entry : partitions.entrySet()) {
-            PartitionName fromPartitionName = entry.getKey().from;
-            PartitionName toPartitionName = entry.getKey().to;
-            if (!ensurePartition(fromPartitionName, toPartitionName) || !isElected(stripe)) {
+            if (!isElected(stripe)) {
                 break;
             }
+            PartitionName fromPartitionName = entry.getKey().from;
+            PartitionName toPartitionName = entry.getKey().to;
             int partitionStripe = Math.abs(fromPartitionName.hashCode() % syncRingStripes);
             if (partitionStripe == stripe) {
+                if (!ensurePartition(fromPartitionName, toPartitionName) || !isElected(stripe)) {
+                    break;
+                }
                 partitionCount++;
 
                 int synced = syncPartition(entry.getKey(), entry.getValue(), stripe);

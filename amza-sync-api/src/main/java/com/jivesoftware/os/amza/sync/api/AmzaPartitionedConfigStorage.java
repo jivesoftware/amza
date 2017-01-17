@@ -145,7 +145,7 @@ public class AmzaPartitionedConfigStorage<K, V> {
         PartitionClient client = clientProvider.getPartition(partitionName(senderName), ringSize, partitionProperties);
         client.scan(Consistency.leader_quorum,
             false,
-            null,
+            stream -> stream.stream(null, null, null, null),
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
                     got.put(keyMarshaller.fromBytes(key), valueMarshaller.fromBytes(value));

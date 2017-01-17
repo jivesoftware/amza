@@ -74,7 +74,7 @@ public class AmzaStatusFocusRegion implements Region<AmzaStatusRegionInput> {
             }
             data.put("progress", progress);
         } catch (Exception e) {
-            log.error("Unable to get progress for tenant: {}", new Object[] { partitionName }, e);
+            log.error("Unable to get progress for syncspace:{} partition:{}", new Object[] { input.syncspaceName, input.partitionName }, e);
         }
 
         return renderer.render(template, data);

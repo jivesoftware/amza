@@ -26,7 +26,7 @@
                                 <select class="form-control" placeholder="type" style="width:360px; padding-left:10px;"
                                     name="syncspaceName" id="syncspaceNamePicker" title="">
                                     {foreach $s in $syncspaces}
-                                        <option value="$s" {if $s == $syncspaceName}selected="selected"{/if}>{$s}</option>
+                                        <option value="{$s}" {if $s == $syncspaceName}selected="selected"{/if}>{$s}</option>
                                     {/foreach}
                                 </select>
                             </td>

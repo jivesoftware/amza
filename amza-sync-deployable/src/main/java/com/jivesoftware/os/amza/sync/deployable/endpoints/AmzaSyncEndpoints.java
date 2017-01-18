@@ -162,7 +162,7 @@ public class AmzaSyncEndpoints {
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
         try {
             PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            PartitionName to = PartitionName.fromBase64(fromPartitionNameBase64, interner);
+            PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
             partitionConfigStorage.multiPut(syncspaceName, ImmutableMap.of(new AmzaSyncPartitionTuple(from, to), new AmzaSyncPartitionConfig()));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
@@ -179,7 +179,7 @@ public class AmzaSyncEndpoints {
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
         try {
             PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            PartitionName to = PartitionName.fromBase64(fromPartitionNameBase64, interner);
+            PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
             partitionConfigStorage.multiRemove(syncspaceName, ImmutableList.of(new AmzaSyncPartitionTuple(from, to)));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {

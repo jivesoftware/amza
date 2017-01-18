@@ -461,8 +461,13 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
     }
 
     private WALHighwater readHighwaters(FilerInputStream inputStream, byte[] intLongBuffer) throws Exception {
-        List<RingMemberHighwater> walHighwaters = new ArrayList<>();
         int length = UIO.readInt(inputStream, "length", intLongBuffer);
+        if (length == 0) {
+            // did not take to end
+            return null;
+        }
+
+        List<RingMemberHighwater> walHighwaters = new ArrayList<>();
         for (int i = 0; i < length; i++) {
             byte[] ringMemberBytes = UIO.readByteArray(inputStream, "ringMember", intLongBuffer);
             RingMember ringMember = RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner);

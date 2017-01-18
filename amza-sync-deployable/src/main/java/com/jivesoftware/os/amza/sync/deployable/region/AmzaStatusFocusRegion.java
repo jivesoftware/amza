@@ -48,7 +48,7 @@ public class AmzaStatusFocusRegion implements Region<AmzaStatusRegionInput> {
         String syncspaceName = input.syncspaceName;
         PartitionName partitionName = input.partitionName;
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy hh:mm:ss z");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy H:mm:ss z");
 
         Map<String, Object> data = Maps.newHashMap();
         data.put("syncspaceName", syncspaceName);

@@ -285,6 +285,7 @@ public class AmzaSyncSender {
 
         int synced = 0;
         boolean taking = true;
+        cursor.taking.set(true);
         while (taking) {
             List<Row> rows = Lists.newArrayListWithExpectedSize(config.batchSize);
             TakeResult takeResult = fromClient.takeFromTransactionId(null,
@@ -317,6 +318,7 @@ public class AmzaSyncSender {
                     cursor.memberTxIds.merge(ringMemberHighwater.ringMember, ringMemberHighwater.transactionId, Math::max);
                 }
                 taking = false;
+                cursor.taking.set(false);
             }
 
             savePartitionCursor(partitionTuple.from, toPartitionName, cursor);
@@ -363,7 +365,7 @@ public class AmzaSyncSender {
 
         byte[] value = new byte[1 + 1 + 2 + valueLength];
         value[0] = 1; // version
-        value[1] = (byte) (cursor.taking ? 1 : 0);
+        value[1] = (byte) (cursor.taking.get() ? 1 : 0);
         UIO.unsignedShortBytes(cursor.memberTxIds.size(), value, 2);
         int o = 4;
         for (Entry<RingMember, Long> entry : cursor.memberTxIds.entrySet()) {

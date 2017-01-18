@@ -70,7 +70,7 @@ public class AmzaStatusFocusRegion implements Region<AmzaStatusRegionInput> {
                             "sender", syncSender.getConfig().name,
                             "toPartition", toPartition,
                             "time", dateFormat.format(new Date(timestamp)),
-                            "taking", cursor.taking,
+                            "taking", cursor.taking.get(),
                             "cursor", mapper.writeValueAsString(cursorData)));
                         return true;
                     });

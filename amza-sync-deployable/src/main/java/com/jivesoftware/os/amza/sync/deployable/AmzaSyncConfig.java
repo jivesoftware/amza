@@ -25,7 +25,7 @@ public interface AmzaSyncConfig extends Config {
     @IntDefault(24)
     int getSyncSendersThreadCount();
 
-    @IntDefault(16)
+    @IntDefault(128)
     int getSyncSenderRingStripes();
 
     @IntDefault(16)

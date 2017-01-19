@@ -286,13 +286,15 @@ public class AmzaSyncMain {
                 partitionConfigMarshaller
             );
 
+            AmzaSyncStats stats = new AmzaSyncStats();
 
             AmzaSyncSenders syncSenders = null;
             AmzaSyncReceiver syncReceiver = null;
 
             if (syncConfig.getSyncSenderEnabled()) {
                 ScheduledExecutorService executorService = Executors.newScheduledThreadPool(syncConfig.getSyncSendersThreadCount());
-                syncSenders = new AmzaSyncSenders(syncConfig,
+                syncSenders = new AmzaSyncSenders(stats,
+                    syncConfig,
                     executorService,
                     amzaClientProvider,
                     amzaClientAquariumProvider,
@@ -326,6 +328,7 @@ public class AmzaSyncMain {
 
             AmzaSyncUIService amzaSyncUIService = new AmzaSyncUIServiceInitializer().initialize(renderer,
                 syncSenders,
+                stats,
                 syncConfig.getSyncSenderEnabled(),
                 syncConfig.getSyncReceiverEnabled(),
                 mapper);
@@ -359,6 +362,7 @@ public class AmzaSyncMain {
                 deployable.addEndpoints(AmzaSyncApiEndpoints.class);
                 deployable.addInjectables(AmzaSyncReceiver.class, syncReceiver);
             }
+            deployable.addInjectables(ObjectMapper.class, mapper);
             deployable.addInjectables(AmzaSyncSenderConfigStorage.class, senderConfigStorage);
             deployable.addInjectables(AmzaSyncPartitionConfigStorage.class, syncPartitionConfigStorage);
 

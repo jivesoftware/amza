@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.sync.deployable.endpoints;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -23,6 +24,7 @@ import com.jivesoftware.os.amza.sync.deployable.Rows;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
+import java.io.InputStream;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -32,6 +34,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.xerial.snappy.SnappyInputStream;
 
 
 /**
@@ -44,21 +47,31 @@ public class AmzaSyncApiEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaSyncReceiver syncReceiver;
+    private final ObjectMapper mapper;
     private final BAInterner interner;
 
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
-    public AmzaSyncApiEndpoints(@Context AmzaSyncReceiver syncReceiver, @Context BAInterner interner) {
+    public AmzaSyncApiEndpoints(@Context AmzaSyncReceiver syncReceiver, @Context ObjectMapper mapper, @Context BAInterner interner) {
         this.syncReceiver = syncReceiver;
+        this.mapper = mapper;
         this.interner = interner;
     }
 
     @POST
     @Path("/commit/rows/{partitionNameBase64}")
-    @Consumes(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_JSON)
     public Response commitRows(@PathParam("partitionNameBase64") String partitionNameBase64,
-        Rows rows) throws Exception {
+        InputStream inputStream) throws Exception {
+        Rows rows;
+        try {
+            rows = mapper.readValue(new SnappyInputStream(inputStream), Rows.class);
+        } catch (Exception x) {
+            LOG.error("Failed decompressing commitRows({})",
+                new Object[] { partitionNameBase64 }, x);
+            return responseHelper.errorResponse("Server error", x);
+        }
         try {
             PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
             syncReceiver.commitRows(partitionName, rows);

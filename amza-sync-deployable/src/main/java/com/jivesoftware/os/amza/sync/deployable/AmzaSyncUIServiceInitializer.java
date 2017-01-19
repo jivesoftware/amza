@@ -11,6 +11,7 @@ public class AmzaSyncUIServiceInitializer {
 
     public AmzaSyncUIService initialize(SoyRenderer renderer,
         AmzaSyncSenders syncSenders,
+        AmzaSyncStats stats,
         boolean senderEnabled,
         boolean receiverEnabled,
         ObjectMapper mapper)
@@ -19,7 +20,7 @@ public class AmzaSyncUIServiceInitializer {
         return new AmzaSyncUIService(
             renderer,
             new HeaderRegion("soy.amza.chrome.headerRegion", renderer),
-            new AmzaAdminRegion("soy.amza.page.adminRegion", renderer, senderEnabled, receiverEnabled, syncSenders),
+            new AmzaAdminRegion("soy.amza.page.adminRegion", renderer, stats, senderEnabled, receiverEnabled, syncSenders),
             new AmzaStatusRegion("soy.amza.page.statusRegion", renderer,
                 new AmzaStatusFocusRegion("soy.amza.page.statusFocusRegion", renderer, syncSenders, mapper), syncSenders));
     }

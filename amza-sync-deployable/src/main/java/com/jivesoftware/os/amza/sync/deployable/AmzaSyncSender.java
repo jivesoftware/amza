@@ -319,7 +319,9 @@ public class AmzaSyncSender {
             }
             if (!rows.isEmpty()) {
                 long ingressLatency = System.currentTimeMillis() - start;
+                stats.ingressed("sender/sync/bytes", bytesCount.longValue(), 0);
                 stats.ingressed(statsBytes, bytesCount.longValue(), ingressLatency);
+                stats.ingressed("sender/sync/count", rows.size(), 0);
                 stats.ingressed(statsCount, rows.size(), ingressLatency);
                 start = System.currentTimeMillis();
 
@@ -327,7 +329,9 @@ public class AmzaSyncSender {
                 synced += rows.size();
 
                 long egressLatency = System.currentTimeMillis() - start;
+                stats.egressed("sender/sync/bytes", bytesCount.longValue(), 0);
                 stats.egressed(statsBytes, bytesCount.longValue(), egressLatency);
+                stats.egressed("sender/sync/count", rows.size(), 0);
                 stats.egressed(statsCount, rows.size(), egressLatency);
             }
 

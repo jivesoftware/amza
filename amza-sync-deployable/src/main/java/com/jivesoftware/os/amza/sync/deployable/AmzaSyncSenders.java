@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.OAuthSigner;
@@ -35,6 +36,7 @@ public class AmzaSyncSenders {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Map<String, AmzaSyncSender> senders = Maps.newConcurrentMap();
 
+    private final AmzaSyncStats stats;
     private final AmzaSyncConfig syncConfig;
     private final ScheduledExecutorService executorService;
     private final PartitionClientProvider partitionClientProvider;
@@ -46,7 +48,8 @@ public class AmzaSyncSenders {
     private final long ensureSendersInterval;
     private final ExecutorService ensureSenders = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("ensure-sender-%d").build());
 
-    public AmzaSyncSenders(AmzaSyncConfig syncConfig,
+    public AmzaSyncSenders(AmzaSyncStats stats,
+        AmzaSyncConfig syncConfig,
         ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaClientAquariumProvider clientAquariumProvider,
@@ -55,6 +58,7 @@ public class AmzaSyncSenders {
         AmzaSyncSenderConfigProvider syncSenderConfigProvider,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         long ensureSendersInterval) {
+        this.stats = stats;
         this.syncConfig = syncConfig;
 
         this.executorService = executorService;
@@ -94,6 +98,7 @@ public class AmzaSyncSenders {
                             }
                             if (amzaSyncSender == null) {
                                 amzaSyncSender = new AmzaSyncSender(
+                                    stats,
                                     senderConfig,
                                     clientAquariumProvider,
                                     syncConfig.getSyncSenderRingStripes(),
@@ -171,14 +176,15 @@ public class AmzaSyncSenders {
             oAuthConsumer.setTokenWithSecret(consumerKey, consumerSecret);
             return oAuthConsumer.sign(request);
         };
-        HttpRequestHelper requestHelper = HttpRequestHelperUtils.buildRequestHelper(sslEnable,
+        HttpClient httpClient = HttpRequestHelperUtils.buildHttpClient(sslEnable,
             config.allowSelfSignedCerts,
             authSigner,
             host,
             port,
             syncConfig.getSyncSenderSocketTimeout());
 
-        return new HttpAmzaSyncClient(requestHelper,
+        return new HttpAmzaSyncClient(httpClient,
+            mapper,
             "/api/sync/v1/commit/rows",
             "/api/sync/v1/ensure/partition");
     }

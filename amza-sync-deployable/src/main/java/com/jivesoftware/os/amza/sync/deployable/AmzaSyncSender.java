@@ -38,6 +38,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  *
@@ -50,6 +51,7 @@ public class AmzaSyncSender {
         0, 0, 0, 0, 0, 0, 0, 0,
         false, Consistency.leader_quorum, true, true, false, RowType.primary, "lab", 8, null, -1, -1);
 
+    private final AmzaSyncStats stats;
     private final AmzaSyncSenderConfig config;
     private final AmzaClientAquariumProvider amzaClientAquariumProvider;
     private final int syncRingStripes;
@@ -68,7 +70,8 @@ public class AmzaSyncSender {
     private final long abandonLeaderSolutionAfterNMillis = 30_000; //TODO expose to conf?
     private final long abandonSolutionAfterNMillis = 60_000; //TODO expose to conf?
 
-    public AmzaSyncSender(AmzaSyncSenderConfig config,
+    public AmzaSyncSender(AmzaSyncStats stats,
+        AmzaSyncSenderConfig config,
         AmzaClientAquariumProvider amzaClientAquariumProvider,
         int syncRingStripes,
         ScheduledExecutorService executorService,
@@ -77,6 +80,7 @@ public class AmzaSyncSender {
         ObjectMapper mapper,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         BAInterner interner) {
+        this.stats = stats;
 
         this.config = config;
         this.amzaClientAquariumProvider = amzaClientAquariumProvider;
@@ -283,11 +287,16 @@ public class AmzaSyncSender {
             return 0;
         }
 
+        String readableFromTo = PartitionName.toHumanReadableString(partitionTuple.from) + '/' + PartitionName.toHumanReadableString(partitionTuple.to);
+        String statsBytes = "sender/sync/" + readableFromTo + "/bytes";
+        String statsCount = "sender/sync/" + readableFromTo + "/count";
         int synced = 0;
         boolean taking = true;
         cursor.taking.set(true);
         while (taking) {
+            MutableLong bytesCount = new MutableLong();
             List<Row> rows = Lists.newArrayListWithExpectedSize(config.batchSize);
+            long start = System.currentTimeMillis();
             TakeResult takeResult = fromClient.takeFromTransactionId(null,
                 cursor.memberTxIds,
                 config.batchSize,
@@ -298,6 +307,7 @@ public class AmzaSyncSender {
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
+                    bytesCount.add(key.length + value.length);
                     return TxResult.MORE;
                 },
                 additionalSolverAfterNMillis,
@@ -308,8 +318,17 @@ public class AmzaSyncSender {
                 return synced;
             }
             if (!rows.isEmpty()) {
+                long ingressLatency = System.currentTimeMillis() - start;
+                stats.ingressed(statsBytes, bytesCount.longValue(), ingressLatency);
+                stats.ingressed(statsCount, rows.size(), ingressLatency);
+                start = System.currentTimeMillis();
+
                 toSyncClient.commitRows(toPartitionName, rows);
                 synced += rows.size();
+
+                long egressLatency = System.currentTimeMillis() - start;
+                stats.egressed(statsBytes, bytesCount.longValue(), egressLatency);
+                stats.egressed(statsCount, rows.size(), egressLatency);
             }
 
             cursor.memberTxIds.merge(takeResult.tookFrom, takeResult.lastTxId, Math::max);

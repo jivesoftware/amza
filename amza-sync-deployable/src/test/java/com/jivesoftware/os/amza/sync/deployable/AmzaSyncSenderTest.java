@@ -92,6 +92,7 @@ public class AmzaSyncSenderTest {
 
 
         AmzaSyncSender syncSender = new AmzaSyncSender(
+            new AmzaSyncStats(),
             new AmzaSyncSenderConfig("default",
                 true,
                 "", "", -1,

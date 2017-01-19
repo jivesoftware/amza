@@ -21,6 +21,7 @@ import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class PartitionName implements Comparable<PartitionName> {
@@ -81,9 +82,9 @@ public class PartitionName implements Comparable<PartitionName> {
         throw new RuntimeException("Invalid version:" + bytes[0]);
     }
 
-    static private byte[] copy(byte[] bytes,int offest,int length) {
+    static private byte[] copy(byte[] bytes, int offest, int length) {
         byte[] copy = new byte[length];
-        System.arraycopy(bytes,offest,copy,0,length);
+        System.arraycopy(bytes, offest, copy, 0, length);
         return copy;
     }
 
@@ -102,6 +103,14 @@ public class PartitionName implements Comparable<PartitionName> {
 
     public static PartitionName fromBase64(String base64, BAInterner interner) throws InterruptedException {
         return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
+    }
+
+    public static String toHumanReadableString(PartitionName partitionName) {
+        if (Arrays.equals(partitionName.getRingName(), partitionName.getName())) {
+            return new String(partitionName.getRingName(), StandardCharsets.UTF_8) + "::..";
+        } else {
+            return new String(partitionName.getRingName(), StandardCharsets.UTF_8) + "::" + new String(partitionName.getName(), StandardCharsets.UTF_8);
+        }
     }
 
     public boolean isSystemPartition() {

@@ -181,7 +181,7 @@ public class AmzaSyncMain {
                 100L, //TODO config
                 1_000L, //TODO config
                 10_000L,//TODO config
-                syncConfig.getUseClientSolutionLog());
+                syncConfig.getAquariumUseSolutionLog());
 
             ObjectMapper miruSyncMapper = new ObjectMapper();
             miruSyncMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);

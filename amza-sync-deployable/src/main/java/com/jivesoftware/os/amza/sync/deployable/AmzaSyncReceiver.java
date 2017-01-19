@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -13,6 +14,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,28 +58,35 @@ public class AmzaSyncReceiver {
         }
 
         PeekingIterator<Row> iter = Iterators.peekingIterator(rows.iterator());
-        Optional<List<String>> solutionLog = useSolutionLog ? Optional.of(Lists.newArrayList()) : Optional.empty();
+        Optional<List<String>> solutionLog = useSolutionLog ? Optional.of(Collections.synchronizedList(Lists.newArrayList())) : Optional.empty();
         int[] batch = { 0 };
-        while (iter.hasNext()) {
-            batch[0]++;
-            solutionLog.ifPresent(log -> log.add("Batch " + batch[0]));
-            byte[] prefix = iter.peek().prefix;
-            client.commit(consistency, prefix,
-                commitKeyValueStream -> {
-                    while (iter.hasNext()) {
-                        byte[] peek = iter.peek().prefix;
-                        if ((prefix == null && peek == null) || (prefix != null && peek != null && Arrays.equals(prefix, peek))) {
-                            Row row = iter.next();
-                            commitKeyValueStream.commit(row.key, row.value, row.valueTimestamp, row.valueTombstoned);
-                        } else {
-                            break;
+        try {
+            while (iter.hasNext()) {
+                batch[0]++;
+                solutionLog.ifPresent(log -> log.add("Batch " + batch[0]));
+                byte[] prefix = iter.peek().prefix;
+                client.commit(consistency, prefix,
+                    commitKeyValueStream -> {
+                        while (iter.hasNext()) {
+                            byte[] peek = iter.peek().prefix;
+                            if ((prefix == null && peek == null) || (prefix != null && peek != null && Arrays.equals(prefix, peek))) {
+                                Row row = iter.next();
+                                commitKeyValueStream.commit(row.key, row.value, row.valueTimestamp, row.valueTombstoned);
+                            } else {
+                                break;
+                            }
                         }
-                    }
-                    return true;
-                },
-                additionalSolverAfterNMillis,
-                abandonSolutionAfterNMillis,
-                solutionLog);
+                        return true;
+                    },
+                    additionalSolverAfterNMillis,
+                    abandonSolutionAfterNMillis,
+                    solutionLog);
+            }
+        } catch (Exception e) {
+            if (solutionLog.isPresent()) {
+                LOG.error("Commit failure for {}, solution log:\n - {}", partitionName, Joiner.on("\n - ").join(solutionLog.get()));
+            }
+            throw e;
         }
     }
 

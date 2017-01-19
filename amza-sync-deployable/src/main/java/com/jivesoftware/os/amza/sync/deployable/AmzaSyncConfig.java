@@ -19,6 +19,9 @@ public interface AmzaSyncConfig extends Config {
     @BooleanDefault(false)
     boolean getSyncReceiverUseSolutionLog();
 
+    @BooleanDefault(false)
+    boolean getAquariumUseSolutionLog();
+
     @IntDefault(24)
     int getSyncSendersThreadCount();
 
@@ -30,7 +33,4 @@ public interface AmzaSyncConfig extends Config {
 
     @LongDefault(60_000)
     long getAmzaAwaitLeaderElectionForNMillis();
-
-    @BooleanDefault(false)
-    boolean getUseClientSolutionLog();
 }

@@ -307,7 +307,7 @@ public class AmzaSyncSender {
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
-                    bytesCount.add(key.length + value.length);
+                    bytesCount.add((key == null ? 0 : key.length) + (value == null ? 0 : value.length));
                     return TxResult.MORE;
                 },
                 additionalSolverAfterNMillis,

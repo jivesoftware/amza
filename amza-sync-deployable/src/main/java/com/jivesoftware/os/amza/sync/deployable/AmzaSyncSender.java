@@ -243,7 +243,10 @@ public class AmzaSyncSender {
             PartitionName toPartitionName = entry.getKey().to;
             int partitionStripe = Math.abs(fromPartitionName.hashCode() % syncRingStripes);
             if (partitionStripe == stripe) {
-                if (!ensurePartition(fromPartitionName, toPartitionName) || !isElected(stripe)) {
+                if (!ensurePartition(fromPartitionName, toPartitionName)) {
+                    continue;
+                }
+                if (!isElected(stripe)) {
                     break;
                 }
                 partitionCount++;
@@ -256,6 +259,13 @@ public class AmzaSyncSender {
             }
         }
         LOG.info("Synced stripe:{} partitions:{} rows:{}", stripe, partitionCount, rowCount);
+    }
+
+    public static void main(String[] args) {
+        byte[] bytes = "follow-fc9be4a1-92da-4976-9ef8-dc9b41a13267".getBytes(StandardCharsets.UTF_8);
+        System.out.println(new PartitionName(false, bytes, bytes));
+        System.out.println(new PartitionName(false, bytes, bytes).hashCode());
+        System.out.println(new PartitionName(false, bytes, bytes).hashCode() % 128);
     }
 
     private boolean ensurePartition(PartitionName fromPartitionName, PartitionName toPartitionName) throws Exception {

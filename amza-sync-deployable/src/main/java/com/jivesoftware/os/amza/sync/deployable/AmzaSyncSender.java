@@ -317,7 +317,11 @@ public class AmzaSyncSender {
             if (!isElected(stripe)) {
                 return synced;
             }
-            if (!rows.isEmpty()) {
+            if (rows.isEmpty()) {
+                //TODO we would prefer to check tookToEnd, but api limitation means an empty partition is indistinguishable from a partial take
+                taking = false;
+                cursor.taking.set(false);
+            } else {
                 long ingressLatency = System.currentTimeMillis() - start;
                 stats.ingressed("sender/sync/bytes", bytesCount.longValue(), 0);
                 stats.ingressed(statsBytes, bytesCount.longValue(), ingressLatency);

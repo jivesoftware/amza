@@ -30,7 +30,7 @@ import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
-import com.jivesoftware.os.amza.sync.api.AmzaConfigMarshaller;
+import com.jivesoftware.os.amza.client.collection.AmzaMarshaller;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
@@ -187,7 +187,7 @@ public class AmzaSyncMain {
             miruSyncMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
             miruSyncMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-            AmzaConfigMarshaller<String> stringMarshaller = new AmzaConfigMarshaller<String>() {
+            AmzaMarshaller<String> stringMarshaller = new AmzaMarshaller<String>() {
                 @Override
                 public String fromBytes(byte[] bytes) throws Exception {
                     return new String(bytes, StandardCharsets.UTF_8);
@@ -199,7 +199,7 @@ public class AmzaSyncMain {
                 }
             };
 
-            AmzaConfigMarshaller<AmzaSyncSenderConfig> amzaSyncSenderConfigMarshaller = new AmzaConfigMarshaller<AmzaSyncSenderConfig>() {
+            AmzaMarshaller<AmzaSyncSenderConfig> amzaSyncSenderConfigMarshaller = new AmzaMarshaller<AmzaSyncSenderConfig>() {
                 @Override
                 public AmzaSyncSenderConfig fromBytes(byte[] bytes) throws Exception {
                     return mapper.readValue(bytes,AmzaSyncSenderConfig.class);
@@ -221,7 +221,7 @@ public class AmzaSyncMain {
                 -1);
 
 
-            AmzaSyncSenderConfigStorage senderConfigStorage = new AmzaSyncSenderConfigStorage(
+            AmzaSyncSenderMap senderConfigStorage = new AmzaSyncSenderMap(
                 clientProvider,
                 "amza-sync-sender-config",
                 new PartitionProperties(Durability.fsync_async,
@@ -241,7 +241,7 @@ public class AmzaSyncMain {
                 amzaSyncSenderConfigMarshaller
             );
 
-            AmzaConfigMarshaller<AmzaSyncPartitionTuple> tupleMarshaller = new AmzaConfigMarshaller<AmzaSyncPartitionTuple>() {
+            AmzaMarshaller<AmzaSyncPartitionTuple> tupleMarshaller = new AmzaMarshaller<AmzaSyncPartitionTuple>() {
                 @Override
                 public AmzaSyncPartitionTuple fromBytes(byte[] bytes) throws Exception {
                     return AmzaSyncPartitionTuple.fromBytes(bytes, 0, interner);
@@ -253,7 +253,7 @@ public class AmzaSyncMain {
                 }
             };
 
-            AmzaConfigMarshaller<AmzaSyncPartitionConfig> partitionConfigMarshaller = new AmzaConfigMarshaller<AmzaSyncPartitionConfig>() {
+            AmzaMarshaller<AmzaSyncPartitionConfig> partitionConfigMarshaller = new AmzaMarshaller<AmzaSyncPartitionConfig>() {
                 @Override
                 public AmzaSyncPartitionConfig fromBytes(byte[] bytes) throws Exception {
                     return mapper.readValue(bytes,AmzaSyncPartitionConfig.class);
@@ -363,7 +363,7 @@ public class AmzaSyncMain {
                 deployable.addInjectables(AmzaSyncReceiver.class, syncReceiver);
             }
             deployable.addInjectables(ObjectMapper.class, mapper);
-            deployable.addInjectables(AmzaSyncSenderConfigStorage.class, senderConfigStorage);
+            deployable.addInjectables(AmzaSyncSenderMap.class, senderConfigStorage);
             deployable.addInjectables(AmzaSyncPartitionConfigStorage.class, syncPartitionConfigStorage);
 
             deployable.buildServer().start();

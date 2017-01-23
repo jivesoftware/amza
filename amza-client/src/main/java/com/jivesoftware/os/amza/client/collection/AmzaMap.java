@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.sync.api;
+package com.jivesoftware.os.amza.client.collection;
 
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.PartitionClient;
@@ -21,7 +21,7 @@ import java.util.Optional;
 /**
  * Created by jonathan.colt on 1/16/17.
  */
-public class AmzaConfigStorage<K, V> {
+public class AmzaMap<K, V> {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaClientProvider<HttpClient, HttpClientException> clientProvider;
@@ -29,17 +29,17 @@ public class AmzaConfigStorage<K, V> {
     private final PartitionProperties partitionProperties;
     private final int ringSize = 3; //TODO expose to conf?
     private final String partitionName;
-    private final AmzaConfigMarshaller<K> keyMarshaller;
-    private final AmzaConfigMarshaller<V> valueMarshaller;
+    private final AmzaMarshaller<K> keyMarshaller;
+    private final AmzaMarshaller<V> valueMarshaller;
     private final long additionalSolverAfterNMillis = 1_000; //TODO expose to conf?
     private final long abandonLeaderSolutionAfterNMillis = 5_000; //TODO expose to conf?
     private final long abandonSolutionAfterNMillis = 30_000; //TODO expose to conf?
 
-    public AmzaConfigStorage(AmzaClientProvider clientProvider,
+    public AmzaMap(AmzaClientProvider clientProvider,
         String partitionName,
         PartitionProperties partitionProperties,
-        AmzaConfigMarshaller<K> keyMarshaller,
-        AmzaConfigMarshaller<V> valueMarshaller) {
+        AmzaMarshaller<K> keyMarshaller,
+        AmzaMarshaller<V> valueMarshaller) {
 
         this.clientProvider = clientProvider;
         this.partitionProperties = partitionProperties;

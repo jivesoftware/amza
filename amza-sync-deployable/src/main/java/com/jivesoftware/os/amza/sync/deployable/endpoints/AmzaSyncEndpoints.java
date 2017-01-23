@@ -26,7 +26,7 @@ import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncStatus;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncPartitionConfigStorage;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
-import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderConfigStorage;
+import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderMap;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenders;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -54,14 +54,14 @@ public class AmzaSyncEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaSyncSenderConfigStorage configStorage;
+    private final AmzaSyncSenderMap configStorage;
     private final AmzaSyncPartitionConfigStorage partitionConfigStorage;
     private final AmzaSyncSenders syncSenders;
     private final BAInterner interner;
 
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
-    public AmzaSyncEndpoints(@Context AmzaSyncSenderConfigStorage configStorage,
+    public AmzaSyncEndpoints(@Context AmzaSyncSenderMap configStorage,
         @Context AmzaSyncPartitionConfigStorage partitionConfigStorage,
         @Context AmzaSyncSenders syncSenders,
         @Context BAInterner interner) {

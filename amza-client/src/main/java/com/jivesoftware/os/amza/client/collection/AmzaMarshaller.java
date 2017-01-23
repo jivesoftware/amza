@@ -1,9 +1,9 @@
-package com.jivesoftware.os.amza.sync.api;
+package com.jivesoftware.os.amza.client.collection;
 
 /**
  * Created by jonathan.colt on 1/16/17.
  */
-public interface AmzaConfigMarshaller<V> {
+public interface AmzaMarshaller<V> {
 
     V fromBytes(byte[] bytes) throws Exception;
 

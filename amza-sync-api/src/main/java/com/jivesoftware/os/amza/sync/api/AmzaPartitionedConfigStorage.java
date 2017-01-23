@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.client.collection.AmzaMarshaller;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -28,8 +29,8 @@ public class AmzaPartitionedConfigStorage<K, V> {
     private final PartitionProperties partitionProperties;
     private final int ringSize = 3; //TODO expose to conf?
     private final String partitionName;
-    private final AmzaConfigMarshaller<K> keyMarshaller;
-    private final AmzaConfigMarshaller<V> valueMarshaller;
+    private final AmzaMarshaller<K> keyMarshaller;
+    private final AmzaMarshaller<V> valueMarshaller;
 
     private final long additionalSolverAfterNMillis = 1_000; //TODO expose to conf?
     private final long abandonLeaderSolutionAfterNMillis = 5_000; //TODO expose to conf?
@@ -38,8 +39,8 @@ public class AmzaPartitionedConfigStorage<K, V> {
     public AmzaPartitionedConfigStorage(AmzaClientProvider clientProvider,
         String partitionName,
         PartitionProperties partitionProperties,
-        AmzaConfigMarshaller<K> keyMarshaller,
-        AmzaConfigMarshaller<V> valueMarshaller) {
+        AmzaMarshaller<K> keyMarshaller,
+        AmzaMarshaller<V> valueMarshaller) {
 
         this.clientProvider = clientProvider;
         this.partitionProperties = partitionProperties;

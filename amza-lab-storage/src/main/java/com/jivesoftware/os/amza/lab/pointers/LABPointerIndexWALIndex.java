@@ -53,8 +53,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
     private final LABPointerIndexConfig config;
     private final LABEnvironment[] environments;
     private volatile int currentStripe;
-    private ValueIndex primaryDb;
-    private ValueIndex prefixDb;
+    private ValueIndex<byte[]> primaryDb;
+    private ValueIndex<byte[]> prefixDb;
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Semaphore lock = new Semaphore(numPermits, true);

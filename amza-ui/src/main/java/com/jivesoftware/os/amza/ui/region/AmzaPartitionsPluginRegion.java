@@ -310,14 +310,14 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                             row.put("maxLeaps", -1);
                         } else {
                             row.put("durability", partitionProperties.durability);
-                            row.put("tombstoneTimestampAgeInMillis", (int) partitionProperties.tombstoneTimestampAgeInMillis);
-                            row.put("tombstoneTimestampIntervalMillis", (int) partitionProperties.tombstoneTimestampIntervalMillis);
-                            row.put("tombstoneVersionAgeInMillis", (int) partitionProperties.tombstoneVersionAgeInMillis);
-                            row.put("tombstoneVersionIntervalMillis", (int) partitionProperties.tombstoneVersionIntervalMillis);
-                            row.put("ttlTimestampAgeInMillis", (int) partitionProperties.ttlTimestampAgeInMillis);
-                            row.put("ttlTimestampIntervalMillis", (int) partitionProperties.ttlTimestampIntervalMillis);
-                            row.put("ttlVersionAgeInMillis", (int) partitionProperties.ttlVersionAgeInMillis);
-                            row.put("ttlVersionIntervalMillis", (int) partitionProperties.ttlVersionIntervalMillis);
+                            row.put("tombstoneTimestampAgeInMillis", String.valueOf(partitionProperties.tombstoneTimestampAgeInMillis));
+                            row.put("tombstoneTimestampIntervalMillis", String.valueOf(partitionProperties.tombstoneTimestampIntervalMillis));
+                            row.put("tombstoneVersionAgeInMillis", String.valueOf(partitionProperties.tombstoneVersionAgeInMillis));
+                            row.put("tombstoneVersionIntervalMillis", String.valueOf(partitionProperties.tombstoneVersionIntervalMillis));
+                            row.put("ttlTimestampAgeInMillis", String.valueOf(partitionProperties.ttlTimestampAgeInMillis));
+                            row.put("ttlTimestampIntervalMillis", String.valueOf(partitionProperties.ttlTimestampIntervalMillis));
+                            row.put("ttlVersionAgeInMillis", String.valueOf(partitionProperties.ttlVersionAgeInMillis));
+                            row.put("ttlVersionIntervalMillis", String.valueOf(partitionProperties.ttlVersionIntervalMillis));
                             row.put("forceCompactionOnStartup", partitionProperties.forceCompactionOnStartup);
                             row.put("consistency", partitionProperties.consistency);
                             row.put("requireConsistency", partitionProperties.requireConsistency);

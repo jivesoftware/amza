@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amzabot.deployable.ui.health;
 
-import com.google.inject.Singleton;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;

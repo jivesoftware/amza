@@ -125,6 +125,7 @@ public class AmzaMain {
             amzaServiceConfig.ackWatersVerboseLogTimeouts = amzaConfig.getAckWatersVerboseLogTimeouts();
             amzaServiceConfig.takeSlowThresholdInMillis = amzaConfig.getTakeSlowThresholdInMillis();
             amzaServiceConfig.takeReofferMaxElectionsPerHeartbeat = amzaConfig.getTakeReofferMaxElectionsPerHeartbeat();
+            amzaServiceConfig.takeCyaIntervalInMillis = amzaConfig.getTakeCyaIntervalInMillis();
             amzaServiceConfig.maxUpdatesBeforeDeltaStripeCompaction = amzaConfig.getMaxUpdatesBeforeDeltaStripeCompaction();
             amzaServiceConfig.tombstoneCompactionFactor = amzaConfig.getTombstoneCompactionFactor();
             amzaServiceConfig.rebalanceIfImbalanceGreaterThanNBytes = amzaConfig.getRebalanceIfImbalanceGreaterThanNBytes();

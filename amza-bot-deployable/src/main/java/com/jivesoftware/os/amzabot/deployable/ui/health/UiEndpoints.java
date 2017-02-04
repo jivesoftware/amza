@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amzabot.deployable.ui.health;
 
+import com.google.inject.Singleton;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import javax.ws.rs.GET;
@@ -9,6 +10,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+@Singleton
 @Path("/")
 public class UiEndpoints {
 

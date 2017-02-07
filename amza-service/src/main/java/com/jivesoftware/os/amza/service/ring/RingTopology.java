@@ -10,13 +10,15 @@ import java.util.Set;
  */
 public class RingTopology {
 
+    private final boolean system;
     public final long ringCacheId;
     public final long nodeCacheId;
     public final List<RingMemberAndHost> entries;
     public final Set<Member> aquariumMembers;
     public final int rootMemberIndex;
 
-    public RingTopology(long ringCacheId, long nodeCacheId, List<RingMemberAndHost> entries, Set<Member> aquariumMembers, int rootMemberIndex) {
+    public RingTopology(boolean system, long ringCacheId, long nodeCacheId, List<RingMemberAndHost> entries, Set<Member> aquariumMembers, int rootMemberIndex) {
+        this.system = system;
         this.ringCacheId = ringCacheId;
         this.nodeCacheId = nodeCacheId;
         this.entries = entries;
@@ -29,7 +31,19 @@ public class RingTopology {
         //TODO temporary workaround until VersionedRing is pushed down to the partition level.
         /*int ringSize = entries.size();
         return UIO.chunkPower(ringSize < 1 ? 1 : ringSize, 2) - 1;*/
-        return Math.max(entries.size() / 2, 1);
+        if (system) {
+            return chunkPower(entries.size(), 1);
+        } else {
+            return Math.max(entries.size() / 2, 1);
+        }
+    }
+
+    public static int chunkPower(long length, int _minPower) {
+        if (length == 0) {
+            return 0;
+        }
+        int numberOfTrailingZeros = Long.numberOfLeadingZeros(length - 1);
+        return Math.max(_minPower, 64 - numberOfTrailingZeros);
     }
 
     @Override

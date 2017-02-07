@@ -25,6 +25,7 @@ import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,8 +178,8 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                         }
                         return true;
                     });
-
-                ring = new RingTopology(currentRingCacheId, currentNodeCacheId, orderedRing, aquariumMembers, rootMemberIndex[0]);
+                boolean system = Arrays.equals(AmzaRingReader.SYSTEM_RING, ringName);
+                ring = new RingTopology(system, currentRingCacheId, currentNodeCacheId, orderedRing, aquariumMembers, rootMemberIndex[0]);
                 cacheIdRingTopology.entry = ring;
             } catch (Exception e) {
                 throw new RuntimeException(e);

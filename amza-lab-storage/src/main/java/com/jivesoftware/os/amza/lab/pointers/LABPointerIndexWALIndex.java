@@ -95,7 +95,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 NoOpFormatTransformerProvider.NAME,
                 LABRawhide.NAME,
                 MemoryRawEntryFormat.NAME,
-                -1));
+                -1,
+                config.getHashIndexLoadFactor()));
             prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
                 config.getEntriesBetweenLeaps(),
                 config.getMaxHeapPressureInBytes(),
@@ -105,7 +106,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 NoOpFormatTransformerProvider.NAME,
                 LABRawhide.NAME,
                 MemoryRawEntryFormat.NAME,
-                -1));
+                -1,
+                config.getHashIndexLoadFactor()));
         }
     }
 
@@ -612,7 +614,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                     NoOpFormatTransformerProvider.NAME,
                                     LABRawhide.NAME,
                                     MemoryRawEntryFormat.NAME,
-                                    -1));
+                                    -1,
+                                    config.getHashIndexLoadFactor()));
 
                                 prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
                                     config.getEntriesBetweenLeaps(),
@@ -623,7 +626,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                     NoOpFormatTransformerProvider.NAME,
                                     LABRawhide.NAME,
                                     MemoryRawEntryFormat.NAME,
-                                    -1));
+                                    -1,
+                                    config.getHashIndexLoadFactor()));
                             }
 
                             currentStripe = compactionStripe;

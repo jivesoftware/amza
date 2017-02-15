@@ -266,6 +266,38 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/getOffset/{base64PartitionName}/{consistency}/{checkLeader}")
+    public Object getOffset(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        InputStream inputStream) {
+
+        PartitionName partitionName = null;
+        try {
+            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+        } catch (Exception x) {
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
+            return Response.serverError().build();
+        }
+
+        StateMessageCause stateMessageCause = client.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
+        }
+
+        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
+        chunkedOutput.submit(chunkExecutors, partitionName, "getOffset", new FilerInputStream(inputStream), 4096, (partitionName1, in, out) -> {
+            client.getOffset(partitionName1, Consistency.none, in, out);
+        });
+        return chunkedOutput;
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/scan/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
     public Object scan(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,

@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -46,6 +47,15 @@ public interface PartitionClient {
     boolean get(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,
+        KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception;
+
+    boolean getOffset(Consistency consistency,
+        byte[] prefix,
+        OffsetUnprefixedWALKeys keys,
         KeyValueTimestampStream valuesStream,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,

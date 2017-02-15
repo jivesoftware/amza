@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -110,6 +111,16 @@ public class AmzaPartitionClientTest {
             Consistency consistency,
             byte[] prefix,
             UnprefixedWALKeys keys) throws Exception {
+            throw new UnsupportedOperationException("blah");
+        }
+
+        @Override
+        public PartitionResponse<CloseableStreamResponse> getOffset(RingMember leader,
+            RingMember ringMember,
+            TestClient client,
+            Consistency consistency,
+            byte[] prefix,
+            OffsetUnprefixedWALKeys keys) throws Exception {
             throw new UnsupportedOperationException("blah");
         }
 

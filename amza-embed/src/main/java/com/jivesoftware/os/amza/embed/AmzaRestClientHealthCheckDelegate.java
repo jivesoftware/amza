@@ -170,6 +170,33 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
+    public static interface GetOffsetResponseLatency extends TimerHealthCheckConfig {
+
+        @StringDefault("client>getOffset>response>latency")
+        @Override
+        String getName();
+
+        @StringDefault("How long its taking to getOffset.")
+        @Override
+        String getDescription();
+
+        @DoubleDefault(3600000d)
+        @Override
+        Double get95ThPecentileMax();
+    }
+
+    private static final HealthTimer getOffsetResponseLatency = HealthFactory.getHealthTimer(GetOffsetResponseLatency.class, TimerHealthChecker.FACTORY);
+
+    @Override
+    public void getOffset(PartitionName partitionName, Consistency consistency, IReadable in, IWriteable out) throws Exception {
+        try {
+            getOffsetResponseLatency.startTimer();
+            client.getOffset(partitionName, consistency, in, out);
+        } finally {
+            getOffsetResponseLatency.stopTimer("Ensure", "Check cluster health.");
+        }
+    }
+
     public static interface RingRequestLatency extends TimerHealthCheckConfig {
 
         @StringDefault("client>ring>request>latency")

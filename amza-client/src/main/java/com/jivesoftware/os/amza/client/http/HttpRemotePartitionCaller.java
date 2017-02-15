@@ -7,8 +7,8 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
-import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.client.http.exceptions.LeaderElectionInProgressException;
 import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderException;
@@ -102,6 +102,40 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
                     keys.consume((key) -> {
                         UIO.write(fos, new byte[]{0}, "eos");
                         UIO.writeByteArray(fos, key, "key", intLongBuffer);
+                        return true;
+                    });
+                    UIO.write(fos, new byte[]{1}, "eos");
+                } catch (Exception x) {
+                    throw new RuntimeException("Failed while streaming keys.", x);
+                } finally {
+                    out.close();
+                }
+            }, null);
+        CloseableHttpStreamResponse closeableHttpStreamResponse = new CloseableHttpStreamResponse(got);
+        handleLeaderStatusCodes(consistency, got.getStatusCode(), got.getStatusReasonPhrase(), closeableHttpStreamResponse);
+        return new PartitionResponse<>(closeableHttpStreamResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+    }
+
+    @Override
+    public PartitionResponse<CloseableStreamResponse> getOffset(RingMember leader,
+        RingMember ringMember,
+        HttpClient client,
+        Consistency consistency,
+        byte[] prefix,
+        OffsetUnprefixedWALKeys keys) throws HttpClientException {
+
+        byte[] intLongBuffer = new byte[8];
+        HttpStreamResponse got = client.streamingPostStreamableRequest(
+            "/amza/v1/getOffset/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
+            (out) -> {
+                try {
+                    FilerOutputStream fos = new FilerOutputStream(out);
+                    UIO.writeByteArray(fos, prefix, "prefix", intLongBuffer);
+                    keys.consume((key, offset, length) -> {
+                        UIO.write(fos, new byte[]{0}, "eos");
+                        UIO.writeByteArray(fos, key, "key", intLongBuffer);
+                        UIO.writeInt(fos, offset, "offset", intLongBuffer);
+                        UIO.writeInt(fos, length, "length", intLongBuffer);
                         return true;
                     });
                     UIO.write(fos, new byte[]{1}, "eos");

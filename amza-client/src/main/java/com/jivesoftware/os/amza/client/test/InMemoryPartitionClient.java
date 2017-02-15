@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
@@ -92,6 +93,37 @@ public class InMemoryPartitionClient implements PartitionClient {
             WALValue walValue = index.get(WALKey.compose(prefix, key));
             if (walValue != null && walValue.getTimestampId() != -1 && !walValue.getTombstoned()) {
                 return valuesStream.stream(prefix, key, walValue.getValue(), walValue.getTimestampId(), walValue.getVersion());
+            } else {
+                return valuesStream.stream(prefix, key, null, -1, -1);
+            }
+        });
+    }
+
+    @Override
+    public boolean getOffset(Consistency consistency,
+        byte[] prefix,
+        OffsetUnprefixedWALKeys keys,
+        KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+
+        return keys.consume((key, offset, length) -> {
+            WALValue walValue = index.get(WALKey.compose(prefix, key));
+            if (walValue != null && walValue.getTimestampId() != -1 && !walValue.getTombstoned()) {
+                byte[] value = walValue.getValue();
+                if (offset == 0 && length >= value.length) {
+                    // do nothing
+                } else if (offset >= value.length) {
+                    value = null;
+                } else {
+                    int available = Math.min(length, value.length - offset);
+                    byte[] sub = new byte[available];
+                    System.arraycopy(value, offset, sub, 0, available);
+                    value = sub;
+                }
+                return valuesStream.stream(prefix, key, value, walValue.getTimestampId(), walValue.getVersion());
             } else {
                 return valuesStream.stream(prefix, key, null, -1, -1);
             }

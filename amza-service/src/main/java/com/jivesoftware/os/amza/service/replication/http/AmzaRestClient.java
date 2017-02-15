@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
+import com.jivesoftware.os.amza.service.replication.http.endpoints.ChunkedOutputFiler;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import java.io.IOException;
 import java.util.List;
@@ -29,6 +30,8 @@ public interface AmzaRestClient {
     void ensurePartition(PartitionName partitionName, long waitForLeaderElection) throws Exception;
 
     void get(PartitionName partitionName, Consistency consistency, IReadable in, IWriteable out) throws Exception;
+
+    void getOffset(PartitionName partitionName, Consistency consistency, IReadable in, IWriteable out) throws Exception;
 
     RingLeader ring(PartitionName partitionName) throws Exception;
 

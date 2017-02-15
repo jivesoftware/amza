@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
@@ -16,6 +17,8 @@ import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -67,6 +70,47 @@ public class EmbeddedPartitionClient implements PartitionClient {
                 return valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
             }
         });
+    }
+
+    @Override
+    public boolean getOffset(Consistency consistency,
+        byte[] prefix,
+        OffsetUnprefixedWALKeys keys,
+        KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        Deque<int[]> offsetLengths = new ArrayDeque<>();
+        return partition.get(consistency,
+            prefix,
+            true,
+            keyStream -> {
+                return keys.consume((key, offset, length) -> {
+                    offsetLengths.addLast(new int[] { offset, length });
+                    return keyStream.stream(key);
+                });
+            },
+            (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                int[] offsetLength = offsetLengths.removeFirst();
+                int offset = offsetLength[0];
+                int length = offsetLength[1];
+                if (valueTimestamp == -1 || valueTombstoned) {
+                    return valuesStream.stream(prefix1, key, null, -1, -1);
+                } else {
+                    if (value == null || offset == 0 && length >= value.length) {
+                        // do nothing
+                    } else if (offset >= value.length) {
+                        value = null;
+                    } else {
+                        int available = Math.min(length, value.length - offset);
+                        byte[] sub = new byte[available];
+                        System.arraycopy(value, offset, sub, 0, available);
+                        value = sub;
+                    }
+                    return valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
+                }
+            });
     }
 
     @Override

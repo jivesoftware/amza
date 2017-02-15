@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
@@ -132,6 +133,27 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
     }
 
     @Override
+    public boolean getOffset(Consistency consistency,
+        byte[] prefix,
+        OffsetUnprefixedWALKeys keys,
+        KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        return getInternal(consistency,
+            prefix,
+            keys,
+            (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                return valueTombstoned || valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
+            },
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    @Override
     public boolean getRaw(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,
@@ -158,11 +180,46 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        byte[] intLongBuffer = new byte[8];
-        partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "get",
+        return getInternalCall(consistency,
+            stream,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog,
             (leader, ringMember, client) -> {
                 return remotePartitionCaller.get(leader, ringMember, client, consistency, prefix, keys);
-            },
+            });
+    }
+
+    private boolean getInternal(Consistency consistency,
+        byte[] prefix,
+        OffsetUnprefixedWALKeys keys,
+        KeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        return getInternalCall(consistency,
+            stream,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog,
+            (leader, ringMember, client) -> {
+                return remotePartitionCaller.getOffset(leader, ringMember, client, consistency, prefix, keys);
+            });
+    }
+
+    private boolean getInternalCall(Consistency consistency,
+        KeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog,
+        PartitionCall<C, CloseableStreamResponse, E> partitionCall) throws Exception {
+        byte[] intLongBuffer = new byte[8];
+        partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "get",
+            partitionCall,
             (answers) -> {
                 List<FilerInputStream> streams = Lists.newArrayList(
                     Lists.transform(answers, input -> {

@@ -26,7 +26,9 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.List;
 
 /**
@@ -162,6 +164,55 @@ public class AmzaClientService implements AmzaRestClient {
                 UIO.writeByteArray(out, prefix1, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, key, "key", intLongBuffer);
                 UIO.writeByteArray(out, value, "value", intLongBuffer);
+                UIO.writeLong(out, timestamp, "timestamp");
+                UIO.writeByte(out, (byte) (tombstoned ? 1 : 0), "tombstoned");
+                UIO.writeLong(out, version, "version");
+                return true;
+            });
+
+        UIO.writeByte(out, (byte) 1, "eos");
+    }
+
+    @Override
+    public void getOffset(PartitionName partitionName, Consistency consistency, IReadable in, IWriteable out) throws Exception {
+        Partition partition = partitionProvider.getPartition(partitionName);
+        byte[] intLongBuffer = new byte[8];
+        byte[] prefix = UIO.readByteArray(in, "prefix", intLongBuffer);
+
+        Deque<int[]> offsetLengths = new ArrayDeque<>();
+        partition.get(consistency,
+            prefix,
+            true,
+            (keyStream) -> {
+                while (!UIO.readBoolean(in, "eos")) {
+                    byte[] key = UIO.readByteArray(in, "key", intLongBuffer);
+                    int offset = UIO.readInt(in, "offset", intLongBuffer);
+                    int length = UIO.readInt(in, "length", intLongBuffer);
+                    offsetLengths.addLast(new int[] { offset, length });
+                    if (!keyStream.stream(key)) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            (prefix1, key, value, timestamp, tombstoned, version) -> {
+                int[] offsetLength = offsetLengths.removeFirst();
+                int offset = offsetLength[0];
+                int length = offsetLength[1];
+
+                UIO.writeByte(out, (byte) 0, "eos");
+                UIO.writeByteArray(out, prefix1, "prefix", intLongBuffer);
+                UIO.writeByteArray(out, key, "key", intLongBuffer);
+
+                if (value == null || offset == 0 && length >= value.length) {
+                    UIO.writeByteArray(out, value, "value", intLongBuffer);
+                } else if (offset >= value.length) {
+                    UIO.writeByteArray(out, null, "value", intLongBuffer);
+                } else {
+                    int available = Math.min(length, value.length - offset);
+                    UIO.writeByteArray(out, value, offset, available, "value", intLongBuffer);
+                }
+
                 UIO.writeLong(out, timestamp, "timestamp");
                 UIO.writeByte(out, (byte) (tombstoned ? 1 : 0), "tombstoned");
                 UIO.writeLong(out, version, "version");

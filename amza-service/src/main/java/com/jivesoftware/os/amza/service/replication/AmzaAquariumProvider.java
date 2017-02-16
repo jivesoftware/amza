@@ -535,17 +535,18 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     public LivelyEndState awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {
         Aquarium aquarium = getAquarium(versionedPartitionName);
         LivelyEndState livelyEndState = aquarium.livelyEndState();
-        if (!livelyEndState.isOnline()) {
+        if (livelyEndState.isOnline()) {
+            return livelyEndState;
+        } else {
             if (ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName(), 0)) {
                 Waterline leader = livelyEndState.getLeaderWaterline();
                 if (leader == null || !leader.getMember().equals(rootAquariumMember)) {
-
                     aquarium.suggestState(State.follower);
                 }
                 aquarium.tapTheGlass();
             }
+            return aquarium.awaitOnline(timeoutMillis);
         }
-        return aquarium.awaitOnline(timeoutMillis);
     }
 
     @Override

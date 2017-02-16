@@ -33,7 +33,7 @@ public class SystemPartitionCommitChanges implements CommitChanges {
         commitTx.tx(highwaterStorage,
             new VersionedAquarium(versionedPartitionName, null),
             (prefix, commitable) -> systemWALStorage.update(versionedPartitionName, prefix, commitable, walUpdated));
-        highwaterStorage.flush(-1, null);
+        //TODO reevaluate highwaterStorage.flush(-1, null);
     }
 
     @Override

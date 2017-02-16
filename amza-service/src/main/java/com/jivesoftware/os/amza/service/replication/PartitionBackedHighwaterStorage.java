@@ -133,7 +133,9 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         }
 
         bigBird.acquire();
-        updatesSinceLastFlush.addAndGet(updates);
+        if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
+            updatesSinceLastFlush.addAndGet(updates);
+        }
         try {
             Map<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
                 (t) -> Maps.newConcurrentMap());

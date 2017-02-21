@@ -160,7 +160,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             return pointers.consume((txId, prefix, key, value, timestamp, tombstoned, version, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.get(
-                    (stream1) -> stream1.key(0, key, 0, key.length),
+                    (stream1) -> stream1.key(0, pk, 0, pk.length),
                     (index1, key1, timestamp1, tombstoned1, version1, payload) -> {
                         long pointer = (payload == null) ? -1 : payload.getLong(0);
                         if (pointer != -1) {

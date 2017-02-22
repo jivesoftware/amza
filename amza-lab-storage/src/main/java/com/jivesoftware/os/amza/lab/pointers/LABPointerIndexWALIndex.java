@@ -162,8 +162,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return primaryDb.get(
                     (stream1) -> stream1.key(0, pk, 0, pk.length),
                     (index1, key1, timestamp1, tombstoned1, version1, payload) -> {
-                        long pointer = (payload == null) ? -1 : payload.getLong(0);
-                        if (pointer != -1) {
+                        if (payload != null) {
                             int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
                             mode[0] = (c < 0) ? WALMergeKeyPointerStream.clobbered : WALMergeKeyPointerStream.ignored;
                         } else {

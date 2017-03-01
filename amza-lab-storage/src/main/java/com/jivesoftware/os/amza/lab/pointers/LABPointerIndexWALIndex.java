@@ -24,6 +24,7 @@ import com.jivesoftware.os.lab.api.ValueIndex;
 import com.jivesoftware.os.lab.api.ValueIndexConfig;
 import com.jivesoftware.os.lab.api.rawhide.LABRawhide;
 import com.jivesoftware.os.lab.guts.IndexUtil;
+import com.jivesoftware.os.lab.guts.LABHashIndexType;
 import com.jivesoftware.os.lab.io.BolBuffer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -96,6 +97,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 LABRawhide.NAME,
                 MemoryRawEntryFormat.NAME,
                 -1,
+                LABHashIndexType.valueOf(config.getHashIndexType()),
                 config.getHashIndexLoadFactor()));
             prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
                 config.getEntriesBetweenLeaps(),
@@ -107,6 +109,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 LABRawhide.NAME,
                 MemoryRawEntryFormat.NAME,
                 -1,
+                LABHashIndexType.valueOf(config.getHashIndexType()),
                 config.getHashIndexLoadFactor()));
         }
     }
@@ -614,6 +617,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                     LABRawhide.NAME,
                                     MemoryRawEntryFormat.NAME,
                                     -1,
+                                    LABHashIndexType.valueOf(config.getHashIndexType()),
                                     config.getHashIndexLoadFactor()));
 
                                 prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
@@ -626,6 +630,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                     LABRawhide.NAME,
                                     MemoryRawEntryFormat.NAME,
                                     -1,
+                                    LABHashIndexType.valueOf(config.getHashIndexType()),
                                     config.getHashIndexLoadFactor()));
                             }
 

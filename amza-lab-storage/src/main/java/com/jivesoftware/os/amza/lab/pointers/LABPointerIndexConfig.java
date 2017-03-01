@@ -64,4 +64,7 @@ public interface LABPointerIndexConfig extends Config {
     @DoubleDefault(0d)
     double getHashIndexLoadFactor();
 
+    @StringDefault("cuckoo")
+    String getHashIndexType();
+
 }

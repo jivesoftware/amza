@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.lab.pointers;
 
 import org.merlin.config.Config;
+import org.merlin.config.defaults.BooleanDefault;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.IntDefault;
 import org.merlin.config.defaults.LongDefault;
@@ -66,5 +67,8 @@ public interface LABPointerIndexConfig extends Config {
 
     @StringDefault("cuckoo")
     String getHashIndexType();
+
+    @BooleanDefault(true)
+    boolean getHashIndexEnabled();
 
 }

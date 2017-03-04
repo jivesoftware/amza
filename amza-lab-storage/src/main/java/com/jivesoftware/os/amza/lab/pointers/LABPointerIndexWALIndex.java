@@ -98,7 +98,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 MemoryRawEntryFormat.NAME,
                 -1,
                 LABHashIndexType.valueOf(config.getHashIndexType()),
-                config.getHashIndexLoadFactor()));
+                config.getHashIndexLoadFactor(),
+                config.getHashIndexEnabled()));
             prefixDb = environments[currentStripe].open(new ValueIndexConfig(name.getPrefixName(),
                 config.getEntriesBetweenLeaps(),
                 config.getMaxHeapPressureInBytes(),
@@ -110,7 +111,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 MemoryRawEntryFormat.NAME,
                 -1,
                 LABHashIndexType.valueOf(config.getHashIndexType()),
-                config.getHashIndexLoadFactor()));
+                config.getHashIndexLoadFactor(),
+                config.getHashIndexEnabled()));
         }
     }
 
@@ -618,7 +620,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                     MemoryRawEntryFormat.NAME,
                                     -1,
                                     LABHashIndexType.valueOf(config.getHashIndexType()),
-                                    config.getHashIndexLoadFactor()));
+                                    config.getHashIndexLoadFactor(),
+                                    config.getHashIndexEnabled()));
 
                                 prefixDb = environments[compactionStripe].open(new ValueIndexConfig(name.getPrefixName(),
                                     config.getEntriesBetweenLeaps(),
@@ -631,7 +634,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                     MemoryRawEntryFormat.NAME,
                                     -1,
                                     LABHashIndexType.valueOf(config.getHashIndexType()),
-                                    config.getHashIndexLoadFactor()));
+                                    config.getHashIndexLoadFactor(),
+                                    config.getHashIndexEnabled()));
                             }
 
                             currentStripe = compactionStripe;

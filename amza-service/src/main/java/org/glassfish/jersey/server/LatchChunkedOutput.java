@@ -3,12 +3,10 @@ package org.glassfish.jersey.server;
 import com.jivesoftware.os.amza.api.filer.ICloseable;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.ring.RingHost;
-import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.ChunkedOutputFiler;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -19,8 +17,6 @@ import org.glassfish.jersey.internal.util.collection.Value;
 import org.glassfish.jersey.process.internal.RequestScope;
 import org.glassfish.jersey.process.internal.RequestScope.Instance;
 import org.glassfish.jersey.server.internal.process.AsyncContext;
-
-import static com.jivesoftware.os.amza.api.stream.RowType.system;
 
 /**
  *
@@ -83,6 +79,8 @@ public class LatchChunkedOutput extends ChunkedOutput<byte[]> {
                 } else {
                     LOG.error("Timeout submitting chunk output for partition:{} context:{}", partitionName, context);
                 }
+            } catch (EOFException x) {
+                LOG.warn("The other end hung up during submit for partition:{} context:{}", partitionName, context);
             } catch (Exception x) {
                 LOG.error("Failed during submit for partition:{} context:{}", new Object[] { partitionName, context }, x);
             } finally {
@@ -102,6 +100,8 @@ public class LatchChunkedOutput extends ChunkedOutput<byte[]> {
         if (out != null) {
             try {
                 out.close();
+            } catch (IOException x) {
+                LOG.warn("The other end hung up while closing output stream for partition:{} context:{}", partitionName, context);
             } catch (Exception x) {
                 LOG.error("Failed to close output stream for partition:{} context:{}", new Object[] { partitionName, context }, x);
             }

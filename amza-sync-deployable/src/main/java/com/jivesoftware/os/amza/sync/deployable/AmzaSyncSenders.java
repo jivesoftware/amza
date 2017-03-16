@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
@@ -43,6 +44,7 @@ public class AmzaSyncSenders {
     private final AmzaClientAquariumProvider clientAquariumProvider;
     private final BAInterner interner;
     private final ObjectMapper mapper;
+    private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaSyncSenderConfigProvider syncSenderConfigProvider;
     private final AmzaSyncPartitionConfigProvider syncPartitionConfigProvider;
     private final long ensureSendersInterval;
@@ -56,6 +58,7 @@ public class AmzaSyncSenders {
         AmzaClientAquariumProvider clientAquariumProvider,
         BAInterner interner,
         ObjectMapper mapper,
+        TimestampedOrderIdProvider orderIdProvider,
         AmzaSyncSenderConfigProvider syncSenderConfigProvider,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         long ensureSendersInterval) {
@@ -68,6 +71,7 @@ public class AmzaSyncSenders {
         this.clientAquariumProvider = clientAquariumProvider;
         this.interner = interner;
         this.mapper = mapper;
+        this.orderIdProvider = orderIdProvider;
         this.syncSenderConfigProvider = syncSenderConfigProvider;
         this.syncPartitionConfigProvider = syncPartitionConfigProvider;
         this.ensureSendersInterval = ensureSendersInterval;
@@ -107,7 +111,7 @@ public class AmzaSyncSenders {
                                     executorService,
                                     partitionClientProvider,
                                     amzaSyncClient(senderConfig),
-                                    mapper,
+                                    orderIdProvider,
                                     syncPartitionConfigProvider,
                                     interner
                                 );

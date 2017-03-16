@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -27,6 +26,7 @@ import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
@@ -59,7 +59,7 @@ public class AmzaSyncSender {
     private final ScheduledFuture[] syncFutures;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaSyncClient toSyncClient;
-    private final ObjectMapper mapper;
+    private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaSyncPartitionConfigProvider syncPartitionConfigProvider;
     private final BAInterner interner;
 
@@ -77,7 +77,7 @@ public class AmzaSyncSender {
         ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaSyncClient toSyncClient,
-        ObjectMapper mapper,
+        TimestampedOrderIdProvider orderIdProvider,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         BAInterner interner) {
         this.stats = stats;
@@ -89,7 +89,7 @@ public class AmzaSyncSender {
         this.syncFutures = new ScheduledFuture[syncRingStripes];
         this.partitionClientProvider = partitionClientProvider;
         this.toSyncClient = toSyncClient;
-        this.mapper = mapper;
+        this.orderIdProvider = orderIdProvider;
         this.syncPartitionConfigProvider = syncPartitionConfigProvider;
         this.interner = interner;
     }
@@ -232,7 +232,7 @@ public class AmzaSyncSender {
             LOG.warn("Syncing all partitions is not supported yet");
             List<PartitionName> allPartitions = Lists.newArrayList(); //TODO partitionClientProvider.getAllPartitionNames();
             for (PartitionName partitionName : allPartitions) {
-                partitions.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig());
+                partitions.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig(-1, -1)); //TODO maxVersion?
             }
         }
         for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> entry : partitions.entrySet()) {
@@ -297,6 +297,9 @@ public class AmzaSyncSender {
             return 0;
         }
 
+        long minVersion = toPartitionConfig.startTimestampMillis <= 0 ? -1 : orderIdProvider.getApproximateId(toPartitionConfig.startTimestampMillis);
+        long maxVersion = toPartitionConfig.stopTimestampMillis <= 0 ? -1 : orderIdProvider.getApproximateId(toPartitionConfig.stopTimestampMillis);
+
         String readableFromTo = PartitionName.toHumanReadableString(partitionTuple.from) + '/' + PartitionName.toHumanReadableString(partitionTuple.to);
         String statsBytes = "sender/sync/" + readableFromTo + "/bytes";
         String statsCount = "sender/sync/" + readableFromTo + "/count";
@@ -316,7 +319,9 @@ public class AmzaSyncSender {
                     }
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                    rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
+                    if ((minVersion == -1 || valueVersion > minVersion) && (maxVersion == -1 || maxVersion > valueVersion)) {
+                        rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
+                    }
                     bytesCount.add((key == null ? 0 : key.length) + (value == null ? 0 : value.length));
                     return TxResult.MORE;
                 },

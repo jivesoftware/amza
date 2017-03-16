@@ -301,6 +301,7 @@ public class AmzaSyncMain {
                     amzaClientAquariumProvider,
                     interner,
                     mapper,
+                    orderIdProvider,
                     senderConfigStorage,
                     syncPartitionConfigStorage,
                     30_000); // TODO config

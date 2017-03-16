@@ -288,13 +288,14 @@ public class AmzaSyncMain {
 
             AmzaSyncStats stats = new AmzaSyncStats();
 
-            AmzaSyncSenders syncSenders = null;
-            AmzaSyncReceiver syncReceiver = null;
+            AmzaSyncReceiver syncReceiver = new AmzaSyncReceiver(amzaClientProvider, syncConfig.getSyncReceiverUseSolutionLog());
 
+            AmzaSyncSenders syncSenders = null;
             if (syncConfig.getSyncSenderEnabled()) {
                 ScheduledExecutorService executorService = Executors.newScheduledThreadPool(syncConfig.getSyncSendersThreadCount());
                 syncSenders = new AmzaSyncSenders(stats,
                     syncConfig,
+                    syncReceiver,
                     executorService,
                     amzaClientProvider,
                     amzaClientAquariumProvider,
@@ -303,10 +304,6 @@ public class AmzaSyncMain {
                     senderConfigStorage,
                     syncPartitionConfigStorage,
                     30_000); // TODO config
-
-            }
-            if (syncConfig.getSyncReceiverEnabled()) {
-                syncReceiver = new AmzaSyncReceiver(amzaClientProvider, syncConfig.getSyncReceiverUseSolutionLog());
             }
 
             amzaClientAquariumProvider.start();

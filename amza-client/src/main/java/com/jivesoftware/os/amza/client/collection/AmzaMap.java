@@ -106,6 +106,29 @@ public class AmzaMap<K, V> {
 
     }
 
+    public V get(K key) throws Exception {
+        Object[] got = new Object[1];
+        PartitionClient partition = clientProvider.getPartition(partitionName(), ringSize, partitionProperties);
+        partition.get(Consistency.leader_quorum,
+            null,
+            (keyStream) -> keyStream.stream(keyMarshaller.toBytes(key)),
+            (prefix, key1, value, timestamp, version) -> {
+                if (value != null) {
+                    got[0] = valueMarshaller.fromBytes(value);
+                }
+                return true;
+            },
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            Optional.empty()
+        );
+
+        LOG.info("Got {} config.",partitionName);
+
+        return (V) got[0];
+    }
+
     public Map<K, V> multiGet(Collection<K> keys) throws Exception {
         if (keys.isEmpty()) {
             return Collections.emptyMap();

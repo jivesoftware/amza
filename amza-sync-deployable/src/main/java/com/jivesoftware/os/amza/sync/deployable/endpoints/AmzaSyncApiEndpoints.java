@@ -92,7 +92,7 @@ public class AmzaSyncApiEndpoints {
         PartitionProperties properties) throws Exception {
         try {
             PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
-            syncReceiver.ensurePartition(partitionName, ringSize, properties);
+            syncReceiver.ensurePartition(partitionName, properties, ringSize);
             return responseHelper.jsonResponse("ok");
         } catch (Exception x) {
             LOG.error("Failed calling ensurePartition({},{})",

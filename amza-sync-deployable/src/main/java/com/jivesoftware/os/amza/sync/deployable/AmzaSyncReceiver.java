@@ -22,7 +22,7 @@ import java.util.Optional;
 /**
  *
  */
-public class AmzaSyncReceiver {
+public class AmzaSyncReceiver implements AmzaSyncClient {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -39,6 +39,7 @@ public class AmzaSyncReceiver {
         this.useSolutionLog = useSolutionLog;
     }
 
+    @Override
     public void commitRows(PartitionName partitionName, List<Row> rows) throws Exception {
         LOG.info("Received from partition:{} rows:{}", partitionName, rows.size());
         PartitionClient client = partitionClientProvider.getPartition(partitionName);
@@ -90,7 +91,8 @@ public class AmzaSyncReceiver {
         }
     }
 
-    public void ensurePartition(PartitionName partitionName, int ringSize, PartitionProperties partitionProperties) throws Exception {
+    @Override
+    public void ensurePartition(PartitionName partitionName, PartitionProperties partitionProperties, int ringSize) throws Exception {
         partitionClientProvider.getPartition(partitionName, ringSize, partitionProperties);
     }
 }

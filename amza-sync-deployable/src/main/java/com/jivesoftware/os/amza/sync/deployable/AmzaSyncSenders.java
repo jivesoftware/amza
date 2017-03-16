@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.OAuthSigner;
 import java.util.Collection;
@@ -38,6 +37,7 @@ public class AmzaSyncSenders {
 
     private final AmzaSyncStats stats;
     private final AmzaSyncConfig syncConfig;
+    private final AmzaSyncReceiver syncReceiver;
     private final ScheduledExecutorService executorService;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaClientAquariumProvider clientAquariumProvider;
@@ -50,6 +50,7 @@ public class AmzaSyncSenders {
 
     public AmzaSyncSenders(AmzaSyncStats stats,
         AmzaSyncConfig syncConfig,
+        AmzaSyncReceiver syncReceiver,
         ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaClientAquariumProvider clientAquariumProvider,
@@ -60,6 +61,7 @@ public class AmzaSyncSenders {
         long ensureSendersInterval) {
         this.stats = stats;
         this.syncConfig = syncConfig;
+        this.syncReceiver = syncReceiver;
 
         this.executorService = executorService;
         this.partitionClientProvider = partitionClientProvider;
@@ -151,41 +153,44 @@ public class AmzaSyncSenders {
         }
     }
 
-    public AmzaSyncClient amzaSyncClient(AmzaSyncSenderConfig config) throws Exception {
+    private AmzaSyncClient amzaSyncClient(AmzaSyncSenderConfig config) throws Exception {
+        if (config.loopback) {
+            return syncReceiver;
+        } else {
+            String consumerKey = StringUtils.trimToNull(config.oAuthConsumerKey);
+            String consumerSecret = StringUtils.trimToNull(config.oAuthConsumerSecret);
+            String consumerMethod = StringUtils.trimToNull(config.oAuthConsumerMethod);
+            if (consumerKey == null || consumerSecret == null || consumerMethod == null) {
+                throw new IllegalStateException("OAuth consumer has not been configured");
+            }
 
-        String consumerKey = StringUtils.trimToNull(config.oAuthConsumerKey);
-        String consumerSecret = StringUtils.trimToNull(config.oAuthConsumerSecret);
-        String consumerMethod = StringUtils.trimToNull(config.oAuthConsumerMethod);
-        if (consumerKey == null || consumerSecret == null || consumerMethod == null) {
-            throw new IllegalStateException("OAuth consumer has not been configured");
+            consumerMethod = consumerMethod.toLowerCase();
+            if (!consumerMethod.equals("hmac") && !consumerMethod.equals("rsa")) {
+                throw new IllegalStateException("OAuth consumer method must be one of HMAC or RSA");
+            }
+
+            String scheme = config.senderScheme;
+            String host = config.senderHost;
+            int port = config.senderPort;
+
+            boolean sslEnable = scheme.equals("https");
+            OAuthSigner authSigner = (request) -> {
+                CommonsHttpOAuthConsumer oAuthConsumer = new CommonsHttpOAuthConsumer(consumerKey, consumerSecret);
+                oAuthConsumer.setMessageSigner(new HmacSha1MessageSigner());
+                oAuthConsumer.setTokenWithSecret(consumerKey, consumerSecret);
+                return oAuthConsumer.sign(request);
+            };
+            HttpClient httpClient = HttpRequestHelperUtils.buildHttpClient(sslEnable,
+                config.allowSelfSignedCerts,
+                authSigner,
+                host,
+                port,
+                syncConfig.getSyncSenderSocketTimeout());
+
+            return new HttpAmzaSyncClient(httpClient,
+                mapper,
+                "/api/sync/v1/commit/rows",
+                "/api/sync/v1/ensure/partition");
         }
-
-        consumerMethod = consumerMethod.toLowerCase();
-        if (!consumerMethod.equals("hmac") && !consumerMethod.equals("rsa")) {
-            throw new IllegalStateException("OAuth consumer method must be one of HMAC or RSA");
-        }
-
-        String scheme = config.senderScheme;
-        String host = config.senderHost;
-        int port = config.senderPort;
-
-        boolean sslEnable = scheme.equals("https");
-        OAuthSigner authSigner = (request) -> {
-            CommonsHttpOAuthConsumer oAuthConsumer = new CommonsHttpOAuthConsumer(consumerKey, consumerSecret);
-            oAuthConsumer.setMessageSigner(new HmacSha1MessageSigner());
-            oAuthConsumer.setTokenWithSecret(consumerKey, consumerSecret);
-            return oAuthConsumer.sign(request);
-        };
-        HttpClient httpClient = HttpRequestHelperUtils.buildHttpClient(sslEnable,
-            config.allowSelfSignedCerts,
-            authSigner,
-            host,
-            port,
-            syncConfig.getSyncSenderSocketTimeout());
-
-        return new HttpAmzaSyncClient(httpClient,
-            mapper,
-            "/api/sync/v1/commit/rows",
-            "/api/sync/v1/ensure/partition");
     }
 }

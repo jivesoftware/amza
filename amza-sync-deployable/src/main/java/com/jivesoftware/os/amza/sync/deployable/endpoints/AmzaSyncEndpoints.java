@@ -163,6 +163,17 @@ public class AmzaSyncEndpoints {
         try {
             PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
             PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
+
+            AmzaSyncSenderConfig amzaSyncSenderConfig = configStorage.get(syncspaceName);
+            if (amzaSyncSenderConfig == null) {
+                LOG.warn("Rejected add from:{} to:{} for unknown syncspace:{}", from, to, syncspaceName);
+                return Response.status(Status.BAD_REQUEST).entity("Syncspace does not exist: " + syncspaceName).build();
+            }
+            if (from.equals(to) && amzaSyncSenderConfig.loopback) {
+                LOG.warn("Rejected self-referential add for:{} for syncspace:{}", from, syncspaceName);
+                return Response.status(Status.BAD_REQUEST).entity("Loopback syncspace cannot be self-referential").build();
+            }
+
             partitionConfigStorage.multiPut(syncspaceName, ImmutableMap.of(new AmzaSyncPartitionTuple(from, to), new AmzaSyncPartitionConfig()));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {

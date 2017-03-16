@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.sync.deployable.AmzaSyncPartitionConfigStorage;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderMap;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenders;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -159,7 +160,8 @@ public class AmzaSyncEndpoints {
     @Produces(MediaType.APPLICATION_JSON)
     public Response post(@PathParam("syncspaceName") String syncspaceName,
         @PathParam("fromPartitionNameBase64") String fromPartitionNameBase64,
-        @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
+        @PathParam("toPartitionNameBase64") String toPartitionNameBase64,
+        AmzaSyncPartitionConfig config) {
         try {
             PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
             PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
@@ -174,7 +176,7 @@ public class AmzaSyncEndpoints {
                 return Response.status(Status.BAD_REQUEST).entity("Loopback syncspace cannot be self-referential").build();
             }
 
-            partitionConfigStorage.multiPut(syncspaceName, ImmutableMap.of(new AmzaSyncPartitionTuple(from, to), new AmzaSyncPartitionConfig()));
+            partitionConfigStorage.multiPut(syncspaceName, ImmutableMap.of(new AmzaSyncPartitionTuple(from, to), config));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
             LOG.error("Failed to add.", e);

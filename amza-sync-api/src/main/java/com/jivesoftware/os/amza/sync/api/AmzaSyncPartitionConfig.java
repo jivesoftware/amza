@@ -19,4 +19,29 @@ public class AmzaSyncPartitionConfig {
         this.startTimestampMillis = startTimestampMillis;
         this.stopTimestampMillis = stopTimestampMillis;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        AmzaSyncPartitionConfig that = (AmzaSyncPartitionConfig) o;
+
+        if (startTimestampMillis != that.startTimestampMillis) {
+            return false;
+        }
+        return stopTimestampMillis == that.stopTimestampMillis;
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = (int) (startTimestampMillis ^ (startTimestampMillis >>> 32));
+        result = 31 * result + (int) (stopTimestampMillis ^ (stopTimestampMillis >>> 32));
+        return result;
+    }
 }

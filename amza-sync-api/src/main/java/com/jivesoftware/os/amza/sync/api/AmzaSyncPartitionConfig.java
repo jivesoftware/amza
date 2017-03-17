@@ -10,14 +10,23 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AmzaSyncPartitionConfig {
 
-    public final long startTimestampMillis;
-    public final long stopTimestampMillis;
+    public final long startTimestamp;
+    public final long stopTimestamp;
+    public final long startVersion;
+    public final long stopVersion;
+    public final long timeShiftMillis;
 
     @JsonCreator
-    public AmzaSyncPartitionConfig(@JsonProperty("startTimestampMillis") long startTimestampMillis,
-        @JsonProperty("stopTimestampMillis") long stopTimestampMillis) {
-        this.startTimestampMillis = startTimestampMillis;
-        this.stopTimestampMillis = stopTimestampMillis;
+    public AmzaSyncPartitionConfig(@JsonProperty("startTimestamp") long startTimestamp,
+        @JsonProperty("stopTimestamp") long stopTimestamp,
+        @JsonProperty("startVersion") long startVersion,
+        @JsonProperty("stopVersion") long stopVersion,
+        @JsonProperty("timeShiftMillis") long timeShiftMillis) {
+        this.startTimestamp = startTimestamp;
+        this.stopTimestamp = stopTimestamp;
+        this.startVersion = startVersion;
+        this.stopVersion = stopVersion;
+        this.timeShiftMillis = timeShiftMillis;
     }
 
     @Override
@@ -31,17 +40,29 @@ public class AmzaSyncPartitionConfig {
 
         AmzaSyncPartitionConfig that = (AmzaSyncPartitionConfig) o;
 
-        if (startTimestampMillis != that.startTimestampMillis) {
+        if (startTimestamp != that.startTimestamp) {
             return false;
         }
-        return stopTimestampMillis == that.stopTimestampMillis;
+        if (stopTimestamp != that.stopTimestamp) {
+            return false;
+        }
+        if (startVersion != that.startVersion) {
+            return false;
+        }
+        if (stopVersion != that.stopVersion) {
+            return false;
+        }
+        return timeShiftMillis == that.timeShiftMillis;
 
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (startTimestampMillis ^ (startTimestampMillis >>> 32));
-        result = 31 * result + (int) (stopTimestampMillis ^ (stopTimestampMillis >>> 32));
+        int result = (int) (startTimestamp ^ (startTimestamp >>> 32));
+        result = 31 * result + (int) (stopTimestamp ^ (stopTimestamp >>> 32));
+        result = 31 * result + (int) (startVersion ^ (startVersion >>> 32));
+        result = 31 * result + (int) (stopVersion ^ (stopVersion >>> 32));
+        result = 31 * result + (int) (timeShiftMillis ^ (timeShiftMillis >>> 32));
         return result;
     }
 }

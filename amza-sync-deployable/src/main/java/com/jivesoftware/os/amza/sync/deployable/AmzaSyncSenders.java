@@ -111,7 +111,6 @@ public class AmzaSyncSenders {
                                     executorService,
                                     partitionClientProvider,
                                     amzaSyncClient(senderConfig),
-                                    orderIdProvider,
                                     syncPartitionConfigProvider,
                                     interner
                                 );

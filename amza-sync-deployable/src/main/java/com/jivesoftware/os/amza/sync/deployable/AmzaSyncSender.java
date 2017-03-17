@@ -59,7 +59,6 @@ public class AmzaSyncSender {
     private final ScheduledFuture[] syncFutures;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaSyncClient toSyncClient;
-    private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaSyncPartitionConfigProvider syncPartitionConfigProvider;
     private final BAInterner interner;
 
@@ -77,7 +76,6 @@ public class AmzaSyncSender {
         ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaSyncClient toSyncClient,
-        TimestampedOrderIdProvider orderIdProvider,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
         BAInterner interner) {
         this.stats = stats;
@@ -89,7 +87,6 @@ public class AmzaSyncSender {
         this.syncFutures = new ScheduledFuture[syncRingStripes];
         this.partitionClientProvider = partitionClientProvider;
         this.toSyncClient = toSyncClient;
-        this.orderIdProvider = orderIdProvider;
         this.syncPartitionConfigProvider = syncPartitionConfigProvider;
         this.interner = interner;
     }
@@ -232,7 +229,7 @@ public class AmzaSyncSender {
             LOG.warn("Syncing all partitions is not supported yet");
             List<PartitionName> allPartitions = Lists.newArrayList(); //TODO partitionClientProvider.getAllPartitionNames();
             for (PartitionName partitionName : allPartitions) {
-                partitions.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig(-1, -1)); //TODO maxVersion?
+                partitions.put(new AmzaSyncPartitionTuple(partitionName, partitionName), new AmzaSyncPartitionConfig(-1, -1, -1, -1, 0)); //TODO
             }
         }
         for (Entry<AmzaSyncPartitionTuple, AmzaSyncPartitionConfig> entry : partitions.entrySet()) {
@@ -297,8 +294,13 @@ public class AmzaSyncSender {
             return 0;
         }
 
-        long minVersion = toPartitionConfig.startTimestampMillis <= 0 ? -1 : orderIdProvider.getApproximateId(toPartitionConfig.startTimestampMillis);
-        long maxVersion = toPartitionConfig.stopTimestampMillis <= 0 ? -1 : orderIdProvider.getApproximateId(toPartitionConfig.stopTimestampMillis);
+        long minTimestamp = toPartitionConfig.startTimestamp <= 0 ? -1 : toPartitionConfig.startTimestamp;
+        long maxTimestamp = toPartitionConfig.stopTimestamp <= 0 ? -1 : toPartitionConfig.stopTimestamp;
+
+        long minVersion = toPartitionConfig.startVersion <= 0 ? -1 : toPartitionConfig.startVersion;
+        long maxVersion = toPartitionConfig.stopVersion <= 0 ? -1 : toPartitionConfig.stopVersion;
+
+        long timeShiftMillis = toPartitionConfig.timeShiftMillis;
 
         String readableFromTo = PartitionName.toHumanReadableString(partitionTuple.from) + '/' + PartitionName.toHumanReadableString(partitionTuple.to);
         String statsBytes = "sender/sync/" + readableFromTo + "/bytes";
@@ -321,8 +323,11 @@ public class AmzaSyncSender {
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     cursor.maxTimestamp.set(Math.max(cursor.maxTimestamp.get(), valueTimestamp));
                     cursor.maxVersion.set(Math.max(cursor.maxVersion.get(), valueVersion));
-                    if ((minVersion == -1 || valueVersion > minVersion) && (maxVersion == -1 || maxVersion > valueVersion)) {
-                        rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
+                    if ((minTimestamp == -1 || valueTimestamp > minTimestamp)
+                        && (maxTimestamp == -1 || maxTimestamp > valueTimestamp)
+                        && (minVersion == -1 || valueVersion > minVersion)
+                        && (maxVersion == -1 || maxVersion > valueVersion)) {
+                        rows.add(new Row(prefix, key, value, valueTimestamp + timeShiftMillis, valueTombstoned));
                     }
                     bytesCount.add((key == null ? 0 : key.length) + (value == null ? 0 : value.length));
                     return TxResult.MORE;

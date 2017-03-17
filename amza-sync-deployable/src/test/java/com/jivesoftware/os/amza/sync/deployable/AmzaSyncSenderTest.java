@@ -109,9 +109,8 @@ public class AmzaSyncSenderTest {
             Executors.newScheduledThreadPool(1),
             partitionClientProvider,
             syncClient,
-            orderIdProvider,
             (name) -> ImmutableMap.of(new AmzaSyncPartitionTuple(partitionName, partitionName),
-                new AmzaSyncPartitionConfig(-1, -1)),
+                new AmzaSyncPartitionConfig(0, 0, 0, 0, 0)),
             new BAInterner());
 
         amzaClientAquariumProvider.start();

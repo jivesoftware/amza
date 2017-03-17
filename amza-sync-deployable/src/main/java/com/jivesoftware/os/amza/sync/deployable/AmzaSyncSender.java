@@ -319,6 +319,8 @@ public class AmzaSyncSender {
                     }
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    cursor.maxTimestamp.set(Math.max(cursor.maxTimestamp.get(), valueTimestamp));
+                    cursor.maxVersion.set(Math.max(cursor.maxVersion.get(), valueVersion));
                     if ((minVersion == -1 || valueVersion > minVersion) && (maxVersion == -1 || maxVersion > valueVersion)) {
                         rows.add(new Row(prefix, key, value, valueTimestamp, valueTombstoned));
                     }
@@ -385,7 +387,7 @@ public class AmzaSyncSender {
             abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             Optional.empty());
-        return result[0] != null ? result[0] : new Cursor(true, Maps.newHashMap());
+        return result[0] != null ? result[0] : new Cursor(true, -1, -1, Maps.newHashMap());
     }
 
     private void savePartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Cursor cursor) throws Exception {
@@ -404,8 +406,9 @@ public class AmzaSyncSender {
         for (RingMember ringMember : cursor.memberTxIds.keySet()) {
             valueLength += 2 + ringMember.sizeInBytes() + 8;
         }
+        valueLength += 8 + 8;
 
-        byte[] value = new byte[1 + 1 + 2 + valueLength];
+        byte[] value = new byte[valueLength];
         value[0] = 1; // version
         value[1] = (byte) (cursor.taking.get() ? 1 : 0);
         UIO.unsignedShortBytes(cursor.memberTxIds.size(), value, 2);
@@ -419,6 +422,10 @@ public class AmzaSyncSender {
             UIO.longBytes(entry.getValue(), value, o);
             o += 8;
         }
+        UIO.longBytes(cursor.maxTimestamp.get(), value, o);
+        o += 8;
+        UIO.longBytes(cursor.maxVersion.get(), value, o);
+        o += 8;
         return value;
     }
 
@@ -440,7 +447,16 @@ public class AmzaSyncSender {
                 o += 8;
             }
 
-            return new Cursor(taking, memberTxIds);
+            long maxTimestamp = -1;
+            long maxVersion = -1;
+            if (value.length >= (o + 8 + 8)) {
+                maxTimestamp = UIO.bytesLong(value, o);
+                o += 8;
+                maxVersion = UIO.bytesLong(value, o);
+                o += 8;
+            }
+
+            return new Cursor(taking, maxTimestamp, maxVersion, memberTxIds);
         } else {
             LOG.error("Unsupported cursor version {}", value[0]);
             return null;

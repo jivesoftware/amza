@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.sync.deployable;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -121,8 +120,9 @@ public class AmzaSyncSenderTest {
         AtomicInteger keyProvider = new AtomicInteger();
         AtomicLong valueProvider = new AtomicLong();
         AtomicLong largestTxId = new AtomicLong();
+        long initialTimeMillis = System.currentTimeMillis();
 
-        largestTxId.set(advancePartition(partition, 10, keyProvider, valueProvider));
+        largestTxId.set(advancePartition(partition, 10, initialTimeMillis, keyProvider, valueProvider));
         Assert.assertTrue(largestTxId.get() > 0, "Expected positive txId");
 
         long failAfter = System.currentTimeMillis() + 60_000L;
@@ -130,32 +130,40 @@ public class AmzaSyncSenderTest {
 
         Assert.assertNotNull(cursor);
         Assert.assertFalse(cursor.taking.get());
+        Assert.assertEquals(initialTimeMillis, cursor.maxTimestamp.get());
         Assert.assertNotNull(cursor.memberTxIds);
         Assert.assertTrue(cursor.memberTxIds.containsKey(ringMember));
         Assert.assertEquals(cursor.memberTxIds.get(ringMember).longValue(), 10L);
         Assert.assertEquals(rowCount[0], 10);
 
         rowCount[0] = 0;
-        largestTxId.set(advancePartition(partition, 10, keyProvider, valueProvider));
+        long nextTimeMillis = initialTimeMillis + 1;
+        largestTxId.set(advancePartition(partition, 10, nextTimeMillis, keyProvider, valueProvider));
         Assert.assertTrue(largestTxId.get() > 0, "Expected positive txId");
         cursor = awaitCursor(partitionName, syncSender, ringMember, largestTxId.get(), failAfter);
 
         Assert.assertNotNull(cursor);
         Assert.assertFalse(cursor.taking.get());
+        Assert.assertEquals(nextTimeMillis, cursor.maxTimestamp.get());
         Assert.assertNotNull(cursor.memberTxIds);
         Assert.assertTrue(cursor.memberTxIds.containsKey(ringMember));
         Assert.assertEquals(cursor.memberTxIds.get(ringMember).longValue(), 20L);
         Assert.assertEquals(rowCount[0], 10);
     }
 
-    private long advancePartition(PartitionClient partition, int rows, AtomicInteger keyProvider, AtomicLong valueProvider) throws Exception {
+    private long advancePartition(PartitionClient partition,
+        int rows,
+        long currentTimeMillis,
+        AtomicInteger keyProvider,
+        AtomicLong valueProvider) throws Exception {
+
         partition.commit(Consistency.none,
             null,
             commitKeyValueStream -> {
                 for (int i = 0; i < rows; i++) {
                     commitKeyValueStream.commit(UIO.intBytes(keyProvider.incrementAndGet()),
                         UIO.longBytes(valueProvider.incrementAndGet()),
-                        System.currentTimeMillis(),
+                        currentTimeMillis,
                         false);
                 }
                 return true;

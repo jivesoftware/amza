@@ -28,7 +28,6 @@ import com.jivesoftware.os.amza.sync.deployable.AmzaSyncPartitionConfigStorage;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSender;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenderMap;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenders;
-import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -144,7 +143,7 @@ public class AmzaSyncEndpoints {
             if (sender != null) {
                 sender.streamCursors(null, null, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
                     map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
-                        new AmzaSyncStatus(timestamp, cursor.taking.get()));
+                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp.get(), cursor.maxVersion.get(), cursor.taking.get()));
                     return true;
                 });
             }

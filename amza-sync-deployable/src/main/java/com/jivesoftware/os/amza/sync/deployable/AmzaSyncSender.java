@@ -30,6 +30,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -38,6 +39,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -288,47 +290,52 @@ public class AmzaSyncSender {
 
     private int syncPartition(AmzaSyncPartitionTuple partitionTuple, AmzaSyncPartitionConfig toPartitionConfig, int stripe) throws Exception {
         PartitionName toPartitionName = partitionTuple.to;
-        Cursor cursor = getPartitionCursor(partitionTuple.from, toPartitionName);
+        Cursor existingCursor = getPartitionCursor(partitionTuple.from, toPartitionName);
+
         PartitionClient fromClient = partitionClientProvider.getPartition(partitionTuple.from);
         if (!isElected(stripe)) {
             return 0;
         }
 
-        long minTimestamp = toPartitionConfig.startTimestamp <= 0 ? -1 : toPartitionConfig.startTimestamp;
-        long maxTimestamp = toPartitionConfig.stopTimestamp <= 0 ? -1 : toPartitionConfig.stopTimestamp;
+        long takeMinTimestamp = toPartitionConfig.startTimestamp <= 0 ? -1 : toPartitionConfig.startTimestamp;
+        long takeMaxTimestamp = toPartitionConfig.stopTimestamp <= 0 ? -1 : toPartitionConfig.stopTimestamp;
 
-        long minVersion = toPartitionConfig.startVersion <= 0 ? -1 : toPartitionConfig.startVersion;
-        long maxVersion = toPartitionConfig.stopVersion <= 0 ? -1 : toPartitionConfig.stopVersion;
+        long takeMinVersion = toPartitionConfig.startVersion <= 0 ? -1 : toPartitionConfig.startVersion;
+        long takeMaxVersion = toPartitionConfig.stopVersion <= 0 ? -1 : toPartitionConfig.stopVersion;
 
         long timeShiftMillis = toPartitionConfig.timeShiftMillis;
 
         String readableFromTo = PartitionName.toHumanReadableString(partitionTuple.from) + '/' + PartitionName.toHumanReadableString(partitionTuple.to);
         String statsBytes = "sender/sync/" + readableFromTo + "/bytes";
         String statsCount = "sender/sync/" + readableFromTo + "/count";
+
+        Map<RingMember, Long> cursorMemberTxIds = Maps.newHashMap(existingCursor.memberTxIds);
+        AtomicLong cursorMaxTimestamp = new AtomicLong(existingCursor.maxTimestamp);
+        AtomicLong cursorMaxVersion = new AtomicLong(existingCursor.maxVersion);
+
         int synced = 0;
         boolean taking = true;
-        cursor.taking.set(true);
         while (taking) {
             MutableLong bytesCount = new MutableLong();
             List<Row> rows = Lists.newArrayListWithExpectedSize(config.batchSize);
             long start = System.currentTimeMillis();
             TakeResult takeResult = fromClient.takeFromTransactionId(null,
-                cursor.memberTxIds,
+                cursorMemberTxIds,
                 config.batchSize,
                 highwater -> {
                     if (highwater != null) {
                         for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
-                            cursor.memberTxIds.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
+                            cursorMemberTxIds.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
                         }
                     }
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                    cursor.maxTimestamp.set(Math.max(cursor.maxTimestamp.get(), valueTimestamp));
-                    cursor.maxVersion.set(Math.max(cursor.maxVersion.get(), valueVersion));
-                    if ((minTimestamp == -1 || valueTimestamp > minTimestamp)
-                        && (maxTimestamp == -1 || maxTimestamp > valueTimestamp)
-                        && (minVersion == -1 || valueVersion > minVersion)
-                        && (maxVersion == -1 || maxVersion > valueVersion)) {
+                    cursorMaxTimestamp.set(Math.max(cursorMaxTimestamp.get(), valueTimestamp));
+                    cursorMaxVersion.set(Math.max(cursorMaxVersion.get(), valueVersion));
+                    if ((takeMinTimestamp == -1 || valueTimestamp > takeMinTimestamp)
+                        && (takeMaxTimestamp == -1 || takeMaxTimestamp > valueTimestamp)
+                        && (takeMinVersion == -1 || valueVersion > takeMinVersion)
+                        && (takeMaxVersion == -1 || takeMaxVersion > valueVersion)) {
                         rows.add(new Row(prefix, key, value, valueTimestamp + timeShiftMillis, valueTombstoned));
                     }
                     bytesCount.add((key == null ? 0 : key.length) + (value == null ? 0 : value.length));
@@ -344,7 +351,6 @@ public class AmzaSyncSender {
             if (rows.isEmpty()) {
                 //TODO we would prefer to check tookToEnd, but api limitation means an empty partition is indistinguishable from a partial take
                 taking = false;
-                cursor.taking.set(false);
             } else {
                 long ingressLatency = System.currentTimeMillis() - start;
                 stats.ingressed("sender/sync/bytes", bytesCount.longValue(), 0);
@@ -363,16 +369,19 @@ public class AmzaSyncSender {
                 stats.egressed(statsCount, rows.size(), egressLatency);
             }
 
-            cursor.memberTxIds.merge(takeResult.tookFrom, takeResult.lastTxId, Math::max);
+            cursorMemberTxIds.merge(takeResult.tookFrom, takeResult.lastTxId, Math::max);
             if (takeResult.tookToEnd != null) {
                 for (WALHighwater.RingMemberHighwater ringMemberHighwater : takeResult.tookToEnd.ringMemberHighwater) {
-                    cursor.memberTxIds.merge(ringMemberHighwater.ringMember, ringMemberHighwater.transactionId, Math::max);
+                    cursorMemberTxIds.merge(ringMemberHighwater.ringMember, ringMemberHighwater.transactionId, Math::max);
                 }
                 taking = false;
-                cursor.taking.set(false);
             }
 
-            savePartitionCursor(partitionTuple.from, toPartitionName, cursor);
+            Cursor cursor = new Cursor(taking, cursorMaxTimestamp.get(), cursorMaxVersion.get(), cursorMemberTxIds);
+            if (!existingCursor.equals(cursor)) {
+                savePartitionCursor(partitionTuple.from, toPartitionName, cursor);
+                existingCursor = cursor;
+            }
         }
 
         return synced;
@@ -417,7 +426,7 @@ public class AmzaSyncSender {
 
         byte[] value = new byte[valueLength];
         value[0] = 1; // version
-        value[1] = (byte) (cursor.taking.get() ? 1 : 0);
+        value[1] = (byte) (cursor.taking ? 1 : 0);
         UIO.unsignedShortBytes(cursor.memberTxIds.size(), value, 2);
         int o = 4;
         for (Entry<RingMember, Long> entry : cursor.memberTxIds.entrySet()) {
@@ -429,9 +438,9 @@ public class AmzaSyncSender {
             UIO.longBytes(entry.getValue(), value, o);
             o += 8;
         }
-        UIO.longBytes(cursor.maxTimestamp.get(), value, o);
+        UIO.longBytes(cursor.maxTimestamp, value, o);
         o += 8;
-        UIO.longBytes(cursor.maxVersion.get(), value, o);
+        UIO.longBytes(cursor.maxVersion, value, o);
         o += 8;
         return value;
     }

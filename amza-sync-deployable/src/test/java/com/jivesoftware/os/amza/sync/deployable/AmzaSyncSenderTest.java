@@ -128,8 +128,8 @@ public class AmzaSyncSenderTest {
         Cursor cursor = awaitCursor(partitionName, syncSender, ringMember, largestTxId.get(), failAfter);
 
         Assert.assertNotNull(cursor);
-        Assert.assertFalse(cursor.taking.get());
-        Assert.assertEquals(initialTimeMillis, cursor.maxTimestamp.get());
+        Assert.assertFalse(cursor.taking);
+        Assert.assertEquals(initialTimeMillis, cursor.maxTimestamp);
         Assert.assertNotNull(cursor.memberTxIds);
         Assert.assertTrue(cursor.memberTxIds.containsKey(ringMember));
         Assert.assertEquals(cursor.memberTxIds.get(ringMember).longValue(), 10L);
@@ -142,8 +142,8 @@ public class AmzaSyncSenderTest {
         cursor = awaitCursor(partitionName, syncSender, ringMember, largestTxId.get(), failAfter);
 
         Assert.assertNotNull(cursor);
-        Assert.assertFalse(cursor.taking.get());
-        Assert.assertEquals(nextTimeMillis, cursor.maxTimestamp.get());
+        Assert.assertFalse(cursor.taking);
+        Assert.assertEquals(nextTimeMillis, cursor.maxTimestamp);
         Assert.assertNotNull(cursor.memberTxIds);
         Assert.assertTrue(cursor.memberTxIds.containsKey(ringMember));
         Assert.assertEquals(cursor.memberTxIds.get(ringMember).longValue(), 20L);

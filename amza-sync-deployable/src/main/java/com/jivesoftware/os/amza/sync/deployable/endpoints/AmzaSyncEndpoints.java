@@ -143,7 +143,7 @@ public class AmzaSyncEndpoints {
             if (sender != null) {
                 sender.streamCursors(null, null, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
                     map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
-                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp.get(), cursor.maxVersion.get(), cursor.taking.get()));
+                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp, cursor.maxVersion, cursor.taking));
                     return true;
                 });
             }

@@ -316,8 +316,10 @@ public class AmzaSyncSender {
                 cursor.memberTxIds,
                 config.batchSize,
                 highwater -> {
-                    for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
-                        cursor.memberTxIds.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
+                    if (highwater != null) {
+                        for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
+                            cursor.memberTxIds.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
+                        }
                     }
                 },
                 (rowTxId, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {

@@ -23,4 +23,8 @@ public class BAInterner {
         interned.put(copy, copy);
         return copy;
     }
+
+    public int size() {
+        return interned.size();
+    }
 }

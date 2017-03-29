@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.ui;
 import com.google.common.collect.Lists;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -74,6 +75,7 @@ public class AmzaUIInitializer {
         AmzaStats amzaStats,
         TimestampProvider timestampProvider,
         IdPacker idPacker,
+        BAInterner baInterner,
         InjectionCallback injectionCallback) throws Exception {
 
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
@@ -117,7 +119,7 @@ public class AmzaUIInitializer {
             MetricsPluginEndpoints.class,
             new MetricsPluginRegion("soy.page.metricsPluginRegion", "soy.page.partitionMetricsPluginRegion",
                 "soy.page.amzaStats", "soy.page.visualizePartitionPluginRegion", renderer, amzaService.getRingReader(), amzaService, amzaStats,
-                timestampProvider, idPacker));
+                timestampProvider, idPacker, baInterner));
 
         ManagePlugin compactionsPlugin = new ManagePlugin("compressed", "Compactions", "/amza/ui/compactions",
             CompactionsPluginEndpoints.class,

@@ -154,6 +154,32 @@ public class AmzaSyncEndpoints {
         }
     }
 
+    @GET
+    @Path("/partitionCursors/{syncspaceName}/{fromPartitionNameBase64}/{toPartitionNameBase64}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getPartitionCursors(@PathParam("syncspaceName") String syncspaceName,
+        @PathParam("fromPartitionNameBase64") String fromPartitionNameBase64,
+        @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
+        try {
+            PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
+            PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
+
+            AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
+            Map<String, AmzaSyncStatus> map = Maps.newHashMap();
+            if (sender != null) {
+                sender.streamCursors(from, to, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
+                    map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
+                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp, cursor.maxVersion, cursor.taking));
+                    return true;
+                });
+            }
+            return Response.ok(map).build();
+        } catch (Exception e) {
+            LOG.error("Failed to get.", e);
+            return Response.serverError().build();
+        }
+    }
+
     @POST
     @Path("/add/{syncspaceName}/{fromPartitionNameBase64}/{toPartitionNameBase64}")
     @Produces(MediaType.APPLICATION_JSON)

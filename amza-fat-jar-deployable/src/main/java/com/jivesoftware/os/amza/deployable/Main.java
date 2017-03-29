@@ -65,7 +65,6 @@ import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.NoOpHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
@@ -76,6 +75,7 @@ import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptor;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptorsProvider;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptorsResponse;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
+import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.shared.InstanceDescriptor;
 import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescriptorProvider;
 import java.io.IOException;
@@ -300,7 +300,15 @@ public class Main {
             .addInjectable(BAInterner.class, interner)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
-        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
+        new AmzaUIInitializer().initialize(clusterName,
+            ringHost,
+            amzaService,
+            clientProvider,
+            aquariumStats,
+            amzaStats,
+            timestampProvider,
+            idPacker,
+            interner,
             new AmzaUIInitializer.InjectionCallback() {
                 @Override
                 public void addEndpoint(Class clazz) {

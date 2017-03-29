@@ -57,11 +57,11 @@ import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.ClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.OAuthSignerProvider;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
+import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -285,7 +285,15 @@ public class EmbedAmzaServiceInitializer {
             deployable.addNoAuth("/amza/*");
         }
 
-        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, aquariumStats, amzaStats, timestampProvider, idPacker,
+        new AmzaUIInitializer().initialize(clusterName,
+            ringHost,
+            amzaService,
+            clientProvider,
+            aquariumStats,
+            amzaStats,
+            timestampProvider,
+            idPacker,
+            baInterner,
             new AmzaUIInitializer.InjectionCallback() {
 
                 @Override

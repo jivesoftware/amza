@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
@@ -74,11 +75,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     private final AmzaStats amzaStats;
     private final TimestampProvider timestampProvider;
     private final IdPacker idPacker;
+    private final BAInterner baInterner;
 
     private final List<GarbageCollectorMXBean> garbageCollectors;
     private final MemoryMXBean memoryBean;
     private final RuntimeMXBean runtimeBean;
-    private final Map<String, String> progressKeys = Maps.newConcurrentMap();
 
     public MetricsPluginRegion(String template,
         String partitionMetricsTemplate,
@@ -89,7 +90,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         AmzaService amzaService,
         AmzaStats amzaStats,
         TimestampProvider timestampProvider,
-        IdPacker idPacker) {
+        IdPacker idPacker,
+        BAInterner baInterner) {
         this.template = template;
         this.partitionMetricsTemplate = partitionMetricsTemplate;
         this.statsTemplate = statsTemplate;
@@ -100,6 +102,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         this.amzaStats = amzaStats;
         this.timestampProvider = timestampProvider;
         this.idPacker = idPacker;
+        this.baInterner = baInterner;
 
         garbageCollectors = ManagementFactory.getGarbageCollectorMXBeans();
         memoryBean = ManagementFactory.getMemoryMXBean();
@@ -505,6 +508,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             "</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.longValue()).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.longValue()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;baIntern<span class=\"badge\">").append(baInterner.size()).append("</span>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",

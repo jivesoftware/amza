@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
@@ -39,17 +39,17 @@ import org.testng.annotations.Test;
 public class AmzaStateStorageNGTest {
 
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
-    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(new BAInterner());
+    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(new AmzaInterner());
 
     @Test
     public void testUpdate() throws Exception {
-        BAInterner interner = new BAInterner();
+        AmzaInterner amzaInterner = new AmzaInterner();
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         ObjectMapper mapper = new ObjectMapper();
         JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = {partitionTmpDir};
+        File[] workingDirectories = { partitionTmpDir };
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(ioStats,
             1_024,
@@ -95,24 +95,24 @@ public class AmzaStateStorageNGTest {
         RowChanges rowChanges = changes -> {
         };
         PartitionCreator partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage,
-            updated, rowChanges, interner);
+            updated, rowChanges, amzaInterner);
 
         partitionCreator.init((partitionName) -> 0);
 
-        Member root = new Member(new byte[]{1});
-        Member other1 = new Member(new byte[]{2});
-        Member other2 = new Member(new byte[]{3});
+        Member root = new Member(new byte[] { 1 });
+        Member other1 = new Member(new byte[] { 2 });
+        Member other2 = new Member(new byte[] { 3 });
 
-        PartitionName partitionName = new PartitionName(false, new byte[]{20}, new byte[]{30});
+        PartitionName partitionName = new PartitionName(false, new byte[] { 20 }, new byte[] { 30 });
         byte context = 1;
-        AmzaStateStorage stateStorage = new AmzaStateStorage(interner, systemWALStorage, orderIdProvider, updated, partitionName, context);
+        AmzaStateStorage stateStorage = new AmzaStateStorage(amzaInterner, systemWALStorage, orderIdProvider, updated, partitionName, context);
 
         Long lifecycle1 = 1L;
         Long lifecycle2 = 2L;
 
         stateStorage.update((setLiveliness) -> {
 
-            for (Long lifecycle : new Long[]{lifecycle1, lifecycle2}) {
+            for (Long lifecycle : new Long[] { lifecycle1, lifecycle2 }) {
                 setLiveliness.set(root, root, lifecycle, State.leader, 1);
                 setLiveliness.set(root, other1, lifecycle, State.follower, 1);
                 setLiveliness.set(root, other2, lifecycle, State.follower, 1);
@@ -131,8 +131,8 @@ public class AmzaStateStorageNGTest {
         System.out.println("--------------------------");
 
         int[] count = new int[1];
-        for (Long lifecycle : new Long[]{lifecycle1, lifecycle2}) {
-            for (Member m : new Member[]{root, other1, other2}) {
+        for (Long lifecycle : new Long[] { lifecycle1, lifecycle2 }) {
+            for (Member m : new Member[] { root, other1, other2 }) {
                 stateStorage.scan(m, null, lifecycle, (rootMember, isSelf, ackMember, alifecycle, state, timestamp, version) -> {
 
                     Assert.assertEquals(lifecycle, alifecycle);

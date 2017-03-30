@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -46,48 +46,6 @@ public class PartitionName implements Comparable<PartitionName> {
         return 1 + 1 + 4 + ringName.length + 4 + name.length;
     }
 
-    public static PartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) throws InterruptedException {
-        int o = offset;
-        if (bytes[o] == 0) { // version
-            o++;
-            boolean systemPartition = (bytes[o] == 1);
-            o++;
-            int ringNameLength = UIO.bytesInt(bytes, o);
-            o += 4;
-            byte[] ringName = interner.intern(bytes, o, ringNameLength);
-            o += ringNameLength;
-            int nameLength = UIO.bytesInt(bytes, o);
-            o += 4;
-            byte[] name = interner.intern(bytes, o, nameLength);
-            return new PartitionName(systemPartition, ringName, name);
-        }
-        throw new RuntimeException("Invalid version:" + bytes[0]);
-    }
-
-    public static PartitionName fromBytes(byte[] bytes, int offset) throws InterruptedException {
-        int o = offset;
-        if (bytes[o] == 0) { // version
-            o++;
-            boolean systemPartition = (bytes[o] == 1);
-            o++;
-            int ringNameLength = UIO.bytesInt(bytes, o);
-            o += 4;
-            byte[] ringName = copy(bytes, o, ringNameLength);
-            o += ringNameLength;
-            int nameLength = UIO.bytesInt(bytes, o);
-            o += 4;
-            byte[] name = copy(bytes, o, nameLength);
-            return new PartitionName(systemPartition, ringName, name);
-        }
-        throw new RuntimeException("Invalid version:" + bytes[0]);
-    }
-
-    static private byte[] copy(byte[] bytes, int offest, int length) {
-        byte[] copy = new byte[length];
-        System.arraycopy(bytes, offest, copy, 0, length);
-        return copy;
-    }
-
     @JsonCreator
     public PartitionName(@JsonProperty("systemPartition") boolean systemPartition,
         @JsonProperty("ringName") byte[] ringName,
@@ -101,8 +59,8 @@ public class PartitionName implements Comparable<PartitionName> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static PartitionName fromBase64(String base64, BAInterner interner) throws InterruptedException {
-        return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
+    public static PartitionName fromBase64(String base64, AmzaInterner interner) throws InterruptedException {
+        return interner.internPartitionNameBase64(base64);
     }
 
     public static String toHumanReadableString(PartitionName partitionName) {

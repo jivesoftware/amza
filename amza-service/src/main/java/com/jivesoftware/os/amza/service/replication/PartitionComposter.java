@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -46,7 +46,7 @@ public class PartitionComposter implements RowChanges {
     private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
     private final StorageVersionProvider storageVersionProvider;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final StripingLocksProvider<PartitionName> stripingLocksProvider;
     private final ConcurrentBAHash<byte[]> dirtyPartitions;
 
@@ -58,7 +58,7 @@ public class PartitionComposter implements RowChanges {
         AmzaRingStoreReader amzaRingReader,
         PartitionStripeProvider partitionStripeProvider,
         StorageVersionProvider storageVersionProvider,
-        BAInterner interner,
+        AmzaInterner amzaInterner,
         int concurrency) {
 
         this.amzaStats = amzaStats;
@@ -67,7 +67,7 @@ public class PartitionComposter implements RowChanges {
         this.amzaRingReader = amzaRingReader;
         this.partitionStripeProvider = partitionStripeProvider;
         this.storageVersionProvider = storageVersionProvider;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
         this.stripingLocksProvider = new StripingLocksProvider<>(64); //TODO config
         this.dirtyPartitions = new ConcurrentBAHash<>(3, false, concurrency);
     }
@@ -99,12 +99,12 @@ public class PartitionComposter implements RowChanges {
             }
         } else if (partitionName.equals(PARTITION_VERSION_INDEX.getPartitionName())) {
             for (WALKey key : changes.getApply().keySet()) {
-                byte[] dirtyBytes = StorageVersionProvider.fromKey(key.key, interner).toBytes();
+                byte[] dirtyBytes = storageVersionProvider.partitionNameFromKey(key.key).toBytes();
                 dirtyPartitions.put(dirtyBytes, dirtyBytes);
             }
         } else if (partitionName.equals(AQUARIUM_STATE_INDEX.getPartitionName())) {
             for (WALKey key : changes.getApply().keySet()) {
-                AmzaAquariumProvider.streamStateKey(key.key,
+                AmzaAquariumProvider.streamStateKey(key.key, amzaInterner,
                     (dirtyPartitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                         byte[] dirtyBytes = dirtyPartitionName.toBytes();
                         dirtyPartitions.put(dirtyBytes, dirtyBytes);
@@ -128,7 +128,7 @@ public class PartitionComposter implements RowChanges {
                 coldstart = false;
             } else {
                 dirtyPartitions.stream((key, value) -> {
-                    PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
+                    PartitionName partitionName = amzaInterner.internPartitionName(key, 0, key.length);
                     dirtyPartitions.remove(key);
                     try {
                         partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {

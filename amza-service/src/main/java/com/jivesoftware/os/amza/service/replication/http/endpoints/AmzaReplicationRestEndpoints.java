@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -52,14 +52,14 @@ public class AmzaReplicationRestEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaStats amzaStats;
     private final AmzaInstance amzaInstance;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
     public AmzaReplicationRestEndpoints(@Context AmzaStats amzaStats,
         @Context AmzaInstance amzaInstance,
-        @Context BAInterner interner) {
+        @Context AmzaInterner amzaInterner) {
         this.amzaStats = amzaStats;
         this.amzaInstance = amzaInstance;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
     }
 
     @POST
@@ -84,7 +84,7 @@ public class AmzaReplicationRestEndpoints {
                 try {
                     amzaInstance.rowsStream(dos,
                         new RingMember(ringMemberString),
-                        VersionedPartitionName.fromBase64(versionedPartitionName, interner),
+                        VersionedPartitionName.fromBase64(versionedPartitionName, amzaInterner),
                         takeSessionId,
                         takeSharedKey,
                         txId,
@@ -163,7 +163,7 @@ public class AmzaReplicationRestEndpoints {
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
                 takeSessionId,
                 sharedKey,
-                VersionedPartitionName.fromBase64(versionedPartitionName, interner),
+                VersionedPartitionName.fromBase64(versionedPartitionName, amzaInterner),
                 txId,
                 leadershipToken);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
@@ -207,7 +207,7 @@ public class AmzaReplicationRestEndpoints {
             amzaInstance.invalidate(new RingMember(ringMemberName),
                 takeSessionId,
                 sharedKey,
-                VersionedPartitionName.fromBase64(versionedPartitionName, interner));
+                VersionedPartitionName.fromBase64(versionedPartitionName, amzaInterner));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed invalidate for member:{} session:{} partition:{}", new Object[] { ringMemberName, takeSessionId, versionedPartitionName }, x);

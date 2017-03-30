@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.SignedBytes;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.aquarium.Member;
 import java.nio.charset.StandardCharsets;
@@ -44,38 +44,36 @@ public class RingMember implements Comparable<RingMember> {
         return 1 + memberAsBytes.length;
     }
 
-    public static RingMember fromBytes(byte[] bytes, int offset, int length, BAInterner interner) throws InterruptedException {
-        if (bytes != null && bytes[offset] == 0) {
-            byte[] interned = interner.intern(bytes, offset + 1, length - 1);
-            String member = new String(interned, StandardCharsets.UTF_8);
-
-            return new RingMember(member);
-        }
-        return null;
-    }
-
     public String toBase64() {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static RingMember fromBase64(String base64, BAInterner interner) throws InterruptedException {
+    public static RingMember fromBase64(String base64) throws InterruptedException {
         byte[] bytes = BaseEncoding.base64Url().decode(base64);
-        return fromBytes(bytes, 0, bytes.length, interner);
+        return new RingMember(bytes);
     }
 
     private final byte[] memberAsBytes;
-
-    private transient String member;
-    private transient int hash = 0;
+    private final String member;
+    private final int hash;
 
     @JsonCreator
     public RingMember(@JsonProperty("member") String member) {
-        this.member = member;
         this.memberAsBytes = member.getBytes(StandardCharsets.UTF_8);
+        this.member = member;
+
+        int hashCode = 7;
+        hashCode = 73 * hashCode + Arrays.hashCode(this.memberAsBytes);
+        this.hash = hashCode;
     }
 
-    private RingMember(byte[] memberAsBytes) {
+    public RingMember(byte[] memberAsBytes) {
         this.memberAsBytes = memberAsBytes;
+        this.member = new String(memberAsBytes, StandardCharsets.UTF_8);
+
+        int hashCode = 7;
+        hashCode = 73 * hashCode + Arrays.hashCode(this.memberAsBytes);
+        this.hash = hashCode;
     }
 
     public byte[] leakBytes() {
@@ -83,9 +81,6 @@ public class RingMember implements Comparable<RingMember> {
     }
 
     public String getMember() {
-        if (member == null) {
-            member = new String(memberAsBytes, StandardCharsets.UTF_8);
-        }
         return member;
     }
 
@@ -99,11 +94,6 @@ public class RingMember implements Comparable<RingMember> {
 
     @Override
     public int hashCode() {
-        if (hash == 0) {
-            int hashCode = 7;
-            hashCode = 73 * hashCode + Arrays.hashCode(this.memberAsBytes);
-            hash = hashCode;
-        }
         return hash;
     }
 

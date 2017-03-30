@@ -19,7 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -81,7 +81,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
     private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
     private final RowChanges rowChanges;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
     private final ConcurrentMap<PartitionName, PartitionProperties> partitionProperties = Maps.newConcurrentMap();
     private final AtomicLong partitionPropertiesVersion = new AtomicLong();
@@ -146,7 +146,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
         RowChanges rowChanges,
-        BAInterner interner) {
+        AmzaInterner amzaInterner) {
 
         this.orderIdProvider = orderIdProvider;
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
@@ -154,7 +154,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         this.walUpdated = walUpdated;
         this.systemWALStorage = systemWALStorage;
         this.rowChanges = rowChanges;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
     }
 
     public void init(SystemStriper systemStriper) throws Exception {
@@ -310,7 +310,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         List<PartitionName> partitionNames = Lists.newArrayList();
         systemWALStorage.rowScan(REGION_INDEX, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned && valueTimestamp != -1 && value != null) {
-                PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
+                PartitionName partitionName = amzaInterner.internPartitionName(key, 0, key.length);
                 if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName(), 0)) {
                     partitionNames.add(partitionName);
                 }
@@ -323,7 +323,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
     public void streamAllParitions(PartitionPropertiesStream partitionStream) throws Exception {
         systemWALStorage.rowScan(REGION_PROPERTIES, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned) {
-                PartitionName partitionName = PartitionName.fromBytes(key, 0, interner);
+                PartitionName partitionName = amzaInterner.internPartitionName(key, 0, key.length);
                 PartitionProperties properties = partitionPropertyMarshaller.fromBytes(value);
                 if (!partitionStream.stream(partitionName, properties)) {
                     return false;
@@ -390,7 +390,8 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         if (changes.getVersionedPartitionName().getPartitionName().equals(REGION_PROPERTIES.getPartitionName())) {
             try {
                 for (Map.Entry<WALKey, WALValue> entry : changes.getApply().entrySet()) {
-                    PartitionName partitionName = PartitionName.fromBytes(entry.getKey().key, 0, interner);
+                    byte[] key = entry.getKey().key;
+                    PartitionName partitionName = amzaInterner.internPartitionName(key, 0, key.length);
                     removeProperties(partitionName);
 
                     PartitionProperties properties = getProperties(partitionName);

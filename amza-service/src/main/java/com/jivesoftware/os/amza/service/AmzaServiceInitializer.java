@@ -20,7 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -160,7 +160,7 @@ public class AmzaServiceInitializer {
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
-        BAInterner interner,
+        AmzaInterner amzaInterner,
         AquariumStats aquariumStats,
         AmzaStats amzaStats,
         HealthTimer quorumLatency,
@@ -284,12 +284,13 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             walUpdated,
             allRowChanges,
-            interner);
+            amzaInterner);
 
         TakeFullySystemReady systemReady = new TakeFullySystemReady(systemRingSizeProvider, partitionCreator, sickPartitions, sickThreads);
 
         AtomicLong nodeCacheId = new AtomicLong(0);
-        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(systemReady, interner,
+        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(systemReady,
+            amzaInterner,
             ringMember,
             ringsCache,
             ringMemberRingNamesCache,
@@ -319,7 +320,7 @@ public class AmzaServiceInitializer {
                 highwaterRowMarshaller, config.corruptionParanoiaFactor);
 
             deltaStripeWALStorages[i] = new DeltaStripeWALStorage(
-                interner,
+                amzaInterner,
                 i,
                 amzaStats,
                 ackWaters,
@@ -333,7 +334,7 @@ public class AmzaServiceInitializer {
         }
 
         long stripeMaxFreeWithinNBytes = config.rebalanceIfImbalanceGreaterThanNBytes / 2; //TODO config separately
-        StorageVersionProvider storageVersionProvider = new StorageVersionProvider(interner,
+        StorageVersionProvider storageVersionProvider = new StorageVersionProvider(amzaInterner,
             orderIdProvider,
             ringMember,
             systemWALStorage,
@@ -382,7 +383,7 @@ public class AmzaServiceInitializer {
             new AtomicLong(-1));
 
         AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(aquariumStats,
-            interner,
+            amzaInterner,
             ringMember,
             orderIdProvider,
             ringStoreReader,
@@ -399,7 +400,7 @@ public class AmzaServiceInitializer {
 
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
 
-        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(interner,
+        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(amzaInterner,
             orderIdProvider,
             ringMember,
             partitionCreator,
@@ -426,7 +427,7 @@ public class AmzaServiceInitializer {
             config.deltaStripeCompactionIntervalInMillis);
 
         PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader,
-            partitionStripeProvider, storageVersionProvider, interner, numProc);
+            partitionStripeProvider, storageVersionProvider, amzaInterner, numProc);
         amzaSystemPartitionWatcher.watch(PartitionCreator.REGION_INDEX.getPartitionName(), partitionComposter);
         amzaSystemPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), partitionComposter);
         amzaSystemPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), partitionComposter);

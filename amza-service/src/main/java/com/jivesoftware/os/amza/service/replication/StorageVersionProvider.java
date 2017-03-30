@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -46,9 +46,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class StorageVersionProvider implements CurrentVersionProvider, RowChanges, SystemStriper {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private static final Random rand = new Random();
 
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
@@ -65,7 +64,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
     private final Map<PartitionName, StickyStorage> partitionStorage = Maps.newConcurrentMap();
     private final Map<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = Maps.newConcurrentMap();
 
-    public StorageVersionProvider(BAInterner interner,
+    public StorageVersionProvider(AmzaInterner amzaInterner,
         OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
@@ -78,7 +77,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         DeltaStripeWALStorage[] deltaStripeWALStorages,
         WALUpdated walUpdated,
         AwaitNotify<PartitionName> awaitNotify) {
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemWALStorage = systemWALStorage;
@@ -104,7 +103,7 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             try {
                 stripeLocks[i].release();
             } catch (IOException x) {
-                LOG.error("Failed to release stripe lock {} for {}", new Object[]{i, workingIndexDirectories[i]}, x);
+                LOG.error("Failed to release stripe lock {} for {}", new Object[] { i, workingIndexDirectories[i] }, x);
             }
         }
     }
@@ -315,9 +314,9 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         } else {
             throw new IllegalStateException(
                 "Failed to transition to versionedPartitionName:" + versionedPartitionName
-                + " stripe:" + rebalanceToStripe
-                + " from " + currentStorageVersion
-                + " to " + requireStorageVersion);
+                    + " stripe:" + rebalanceToStripe
+                    + " from " + currentStorageVersion
+                    + " to " + requireStorageVersion);
         }
     }
 
@@ -354,10 +353,11 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
                     o++; //serializationVersion
                     int ringMemberLength = UIO.bytesInt(key, o);
                     o += 4;
-                    RingMember ringMember = RingMember.fromBytes(key, o, ringMemberLength, interner);
+                    RingMember ringMember = amzaInterner.internRingMember(key, o, ringMemberLength);
                     o += ringMemberLength;
+                    int partitionNameBytesLength = UIO.bytesInt(key, o);
                     o += 4; // partitionNameLength
-                    PartitionName partitionName = PartitionName.fromBytes(key, o, interner);
+                    PartitionName partitionName = amzaInterner.internPartitionName(key, o, partitionNameBytesLength);
                     StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
                     int stripe = getStripeIndex(storageVersion.stripeVersion);
@@ -378,14 +378,15 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         return -1;
     }
 
-    public static PartitionName fromKey(byte[] key, BAInterner interner) throws Exception {
+    public PartitionName partitionNameFromKey(byte[] key) throws Exception {
         int o = 0;
         o++; //serializationVersion
         int ringMemberLength = UIO.bytesInt(key, o);
         o += 4;
         o += ringMemberLength;
+        int partitionNameBytesLength = UIO.bytesInt(key, o);
         o += 4; // partitionNameLength
-        return PartitionName.fromBytes(key, o, interner);
+        return amzaInterner.internPartitionName(key, o, partitionNameBytesLength);
     }
 
     public StorageVersion getRemote(RingMember ringMember, PartitionName partitionName) throws Exception {
@@ -471,11 +472,12 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
         o++; // serializationVersion
         int ringMemberLength = UIO.bytesInt(walKey, o);
         o += 4;
-        RingMember ringMember = RingMember.fromBytes(walKey, o, ringMemberLength, interner);
+        RingMember ringMember = amzaInterner.internRingMember(walKey, o, ringMemberLength);
         o += ringMemberLength;
         if (ringMember != null) {
+            int partitionNameBytesLength = UIO.bytesInt(walKey, o);
             o += 4; // partitionNameLength
-            PartitionName partitionName = PartitionName.fromBytes(walKey, o, interner);
+            PartitionName partitionName = amzaInterner.internPartitionName(walKey, o, partitionNameBytesLength);
             if (ringMember.equals(rootRingMember)) {
                 if (walValue != null) {
                     StorageVersion storageVersion = StorageVersion.fromBytes(walValue);

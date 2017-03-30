@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.api.partition;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.IOException;
 import java.util.Objects;
@@ -35,20 +35,6 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         return 1 + 4 + partitionName.sizeInBytes() + 8;
     }
 
-    public static VersionedPartitionName fromBytes(byte[] bytes, int offset, BAInterner interner) throws Exception {
-        int o = offset;
-        if (bytes[o] == 0) { // version
-            o++;
-            int partitionNameBytesLength = UIO.bytesInt(bytes, o);
-            o += 4;
-            PartitionName partitionName = PartitionName.fromBytes(bytes, o, interner);
-            o += partitionNameBytesLength;
-            long version = UIO.bytesLong(bytes, o);
-            return new VersionedPartitionName(partitionName, version);
-        }
-        throw new IOException("Invalid version:" + bytes[0]);
-    }
-
     @JsonCreator
     public VersionedPartitionName(@JsonProperty("partitionName") PartitionName partitionName,
         @JsonProperty("partitionVersion") long partitionVersion) {
@@ -60,8 +46,8 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static VersionedPartitionName fromBase64(String base64, BAInterner interner) throws Exception {
-        return fromBytes(BaseEncoding.base64Url().decode(base64), 0, interner);
+    public static VersionedPartitionName fromBase64(String base64, AmzaInterner interner) throws Exception {
+        return interner.internVersionedPartitionNameBase64(base64);
     }
 
     public PartitionName getPartitionName() {

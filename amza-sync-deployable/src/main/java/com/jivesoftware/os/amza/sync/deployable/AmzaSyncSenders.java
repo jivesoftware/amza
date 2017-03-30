@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.sync.deployable;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
@@ -42,7 +42,7 @@ public class AmzaSyncSenders {
     private final ScheduledExecutorService executorService;
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaClientAquariumProvider clientAquariumProvider;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final ObjectMapper mapper;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaSyncSenderConfigProvider syncSenderConfigProvider;
@@ -56,7 +56,7 @@ public class AmzaSyncSenders {
         ScheduledExecutorService executorService,
         PartitionClientProvider partitionClientProvider,
         AmzaClientAquariumProvider clientAquariumProvider,
-        BAInterner interner,
+        AmzaInterner amzaInterner,
         ObjectMapper mapper,
         TimestampedOrderIdProvider orderIdProvider,
         AmzaSyncSenderConfigProvider syncSenderConfigProvider,
@@ -69,7 +69,7 @@ public class AmzaSyncSenders {
         this.executorService = executorService;
         this.partitionClientProvider = partitionClientProvider;
         this.clientAquariumProvider = clientAquariumProvider;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
         this.mapper = mapper;
         this.orderIdProvider = orderIdProvider;
         this.syncSenderConfigProvider = syncSenderConfigProvider;
@@ -112,7 +112,7 @@ public class AmzaSyncSenders {
                                     partitionClientProvider,
                                     amzaSyncClient(senderConfig),
                                     syncPartitionConfigProvider,
-                                    interner
+                                    amzaInterner
                                 );
 
                                 senders.put(entry.getKey(), amzaSyncSender);

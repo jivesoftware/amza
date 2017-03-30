@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALKey;
@@ -19,20 +19,20 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
  */
 class AmzaStateStorage implements StateStorage<Long> {
 
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final SystemWALStorage systemWALStorage;
     private final OrderIdProvider orderIdProvider;
     private final WALUpdated walUpdated;
     private final PartitionName partitionName;
     private final byte context;
 
-    public AmzaStateStorage(BAInterner interner,
+    public AmzaStateStorage(AmzaInterner amzaInterner,
         SystemWALStorage systemWALStorage,
         OrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
         PartitionName partitionName,
         byte context) {
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
         this.systemWALStorage = systemWALStorage;
         this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
@@ -46,7 +46,7 @@ class AmzaStateStorage implements StateStorage<Long> {
         return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_STATE_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
             (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
-                    return AmzaAquariumProvider.streamStateKey(key,
+                    return AmzaAquariumProvider.streamStateKey(key, amzaInterner,
                         (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                             State state = State.fromSerializedForm(value[0]);
                             return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, valueTimestamp, valueVersion);

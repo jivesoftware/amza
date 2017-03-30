@@ -2,7 +2,6 @@ package com.jivesoftware.os.amzabot.deployable;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
@@ -44,11 +43,11 @@ import com.jivesoftware.os.routing.bird.health.checkers.LoadAverageHealthChecker
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
+import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.File;
 import java.util.Arrays;
 import java.util.UUID;
@@ -87,7 +86,7 @@ public class AmzaBotMain {
                 serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
 
-            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion)() -> {
+            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion) () -> {
                 if (serviceStartupHealthCheck.startupHasSucceeded()) {
                     return instanceConfig.getVersion();
                 } else {
@@ -116,10 +115,9 @@ public class AmzaBotMain {
             AmzaBotCoalmineConfig amzaBotCoalmineConfig = configBinder.bind(AmzaBotCoalmineConfig.class);
             AmzaBotRandomOpConfig amzaBotRandomOpConfig = configBinder.bind(AmzaBotRandomOpConfig.class);
 
-            BAInterner interner = new BAInterner();
             AmzaClientProvider<HttpClient, HttpClientException> amzaClientProvider = new AmzaClientProvider<>(
-                new HttpPartitionClientFactory(interner),
-                new HttpPartitionHostsProvider(interner, amzaClient, objectMapper),
+                new HttpPartitionClientFactory(),
+                new HttpPartitionHostsProvider(amzaClient, objectMapper),
                 new RingHostHttpClientProvider(amzaClient),
                 Executors.newFixedThreadPool(amzaBotConfig.getAmzaCallerThreadPoolSize()),
                 amzaBotConfig.getAmzaAwaitLeaderElectionForNMillis(),

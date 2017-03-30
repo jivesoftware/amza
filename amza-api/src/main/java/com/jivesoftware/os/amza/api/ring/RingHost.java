@@ -142,32 +142,38 @@ public class RingHost {
     }
 
     @Override
-    public int hashCode() {
-        int hash = 3;
-        hash = 17 * hash + Objects.hashCode(this.host);
-        hash = 17 * hash + this.port;
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
+    public boolean equals(Object o) {
+        if (this == o) {
             return true;
         }
-        if (obj == null) {
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+
+        RingHost ringHost = (RingHost) o;
+
+        if (port != ringHost.port) {
             return false;
         }
-        final RingHost other = (RingHost) obj;
-        if (this.port != other.port) {
+        if (datacenter != null ? !datacenter.equals(ringHost.datacenter) : ringHost.datacenter != null) {
             return false;
         }
-        if (!Objects.equals(this.host, other.host)) {
+        if (rack != null ? !rack.equals(ringHost.rack) : ringHost.rack != null) {
             return false;
         }
+        if (host != null ? !host.equals(ringHost.host) : ringHost.host != null) {
+            return false;
+        }
+
         return true;
     }
 
+    @Override
+    public int hashCode() {
+        int result = datacenter != null ? datacenter.hashCode() : 0;
+        result = 31 * result + (rack != null ? rack.hashCode() : 0);
+        result = 31 * result + (host != null ? host.hashCode() : 0);
+        result = 31 * result + port;
+        return result;
+    }
 }

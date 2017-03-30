@@ -1,8 +1,10 @@
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Interner;
+import com.google.common.collect.Interners;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.RingMembership;
@@ -37,7 +39,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaSystemReady systemReady;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final RingMember rootRingMember;
     private PartitionStore ringIndex;
     private PartitionStore nodeIndex;
@@ -47,14 +49,14 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     private final Set<RingMember> blacklistRingMembers;
 
     public AmzaRingStoreReader(AmzaSystemReady systemReady,
-        BAInterner interner,
+        AmzaInterner amzaInterner,
         RingMember rootRingMember,
         ConcurrentBAHash<CacheId<RingTopology>> ringsCache,
         ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache,
         AtomicLong nodeCacheId,
         Set<RingMember> blacklistRingMembers) {
         this.systemReady = systemReady;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
         this.rootRingMember = rootRingMember;
         this.ringsCache = ringsCache;
         this.ringMemberRingNamesCache = ringMemberRingNamesCache;
@@ -101,7 +103,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         o++; // separator
         int ringMemberLength = UIO.bytesInt(key, o);
         o += 4;
-        return RingMember.fromBytes(key, o, ringMemberLength, interner);
+        return amzaInterner.internRingMember(key, o, ringMemberLength);
     }
 
     @Override
@@ -124,8 +126,11 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public boolean isMemberOfRing(byte[] ringName, long timeoutInMillis) throws Exception {
-        return getRing(ringName, timeoutInMillis).rootMemberIndex >= 0;
+        RingTopology ring = getRing(ringName, timeoutInMillis);
+        return ring.rootMemberIndex >= 0;
     }
+
+    private final Interner<RingMemberAndHost> ringMemberAndHostInterner = Interners.newStrongInterner();
 
     @Override
     public RingTopology getRing(byte[] ringName, long timeoutInMillis) throws Exception {
@@ -164,15 +169,15 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             }
                         }, true),
                     (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                        RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
+                        RingMember ringMember = amzaInterner.internRingMember(key, 0, key.length);
                         if (!blacklistRingMembers.contains(ringMember)) {
                             if (ringMember.equals(rootRingMember)) {
                                 rootMemberIndex[0] = orderedRing.size();
                             }
                             if (value != null && !valueTombstone) {
-                                orderedRing.add(new RingMemberAndHost(ringMember, RingHost.fromBytes(value)));
+                                orderedRing.add(internMemberAndHost(ringMember, RingHost.fromBytes(value)));
                             } else {
-                                orderedRing.add(new RingMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
+                                orderedRing.add(internMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
                             }
                             aquariumMembers.add(ringMember.asAquariumMember());
                         }
@@ -194,16 +199,20 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         }
 
         nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-            RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
+            RingMember ringMember = amzaInterner.internRingMember(key, 0, key.length);
             if (valueTombstoned || blacklistRingMembers.contains(ringMember)) {
                 return true;
             } else if (value != null) {
-                return stream.stream(new RingMemberAndHost(ringMember, RingHost.fromBytes(value)));
+                return stream.stream(internMemberAndHost(ringMember, RingHost.fromBytes(value)));
             } else {
-                return stream.stream(new RingMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
+                return stream.stream(internMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
             }
         }, true);
 
+    }
+
+    private RingMemberAndHost internMemberAndHost(RingMember ringMember, RingHost ringHost) {
+        return ringMemberAndHostInterner.intern(new RingMemberAndHost(ringMember, ringHost));
     }
 
     public interface RingMemberAndHostStream {
@@ -276,12 +285,12 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             int o = 0;
                             int ringNameLength = UIO.bytesInt(key, o);
                             o += 4;
-                            byte[] ringName = interner.intern(key, o, ringNameLength);
+                            byte[] ringName = amzaInterner.internRingName(key, o, ringNameLength);
                             o += ringNameLength;
                             o++; // separator
                             int ringMemberLength = UIO.bytesInt(key, o);
                             o += 4;
-                            RingMember ringMember = RingMember.fromBytes(key, o, ringMemberLength, interner);
+                            RingMember ringMember = amzaInterner.internRingMember(key, o, ringMemberLength);
                             if (ringMember != null && ringMember.equals(desiredRingMember)) {
                                 ringNames.put(ringName, BAHasher.SINGLETON.hashCode(ringName, 0, ringName.length));
                             }
@@ -319,7 +328,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
         nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
-                RingMember ringMember = RingMember.fromBytes(key, 0, key.length, interner);
+                RingMember ringMember = new RingMember(key);
                 if (!blacklistRingMembers.contains(ringMember)) {
                     RingHost ringHost = RingHost.fromBytes(value);
                     ringMemberToRingHost.put(ringMember, ringHost);
@@ -333,12 +342,12 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                 int o = 0;
                 int ringNameLength = UIO.bytesInt(key, o);
                 o += 4;
-                byte[] ringName = interner.intern(key, o, ringNameLength);
+                byte[] ringName = amzaInterner.internRingName(key, o, ringNameLength);
                 o += ringNameLength;
                 o++; // separator
                 int ringMemberLength = UIO.bytesInt(key, o);
                 o += 4;
-                RingMember ringMember = RingMember.fromBytes(key, o, ringMemberLength, interner);
+                RingMember ringMember = amzaInterner.internRingMember(key, o, ringMemberLength);
                 if (blacklistRingMembers.contains(ringMember)) {
                     return true;
                 } else {

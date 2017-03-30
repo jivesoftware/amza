@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -28,13 +28,13 @@ import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer.StreamingTak
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiveStrategy;
-import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import com.jivesoftware.os.routing.bird.http.client.NonSuccessStatusCodeException;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.shared.ClientCall.ClientResponse;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
+import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -53,11 +53,11 @@ public class HttpRowsTaker implements RowsTaker {
     public HttpRowsTaker(AmzaStats amzaStats,
         TenantAwareHttpClient<String> ringClient,
         ObjectMapper mapper,
-        BAInterner interner) {
+        AmzaInterner amzaInterner) {
         this.amzaStats = amzaStats;
         this.ringClient = ringClient;
         this.mapper = mapper;
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.streamingTakesConsumer = new StreamingTakesConsumer(amzaInterner);
     }
 
     /**

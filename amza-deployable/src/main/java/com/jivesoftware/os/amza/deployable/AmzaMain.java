@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.embed.AmzaConfig;
@@ -93,8 +93,8 @@ public class AmzaMain {
 
 
             InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
-            AtomicReference<Callable<Boolean>> isAmzaReady = new AtomicReference<>(()-> false);
-            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion)() -> {
+            AtomicReference<Callable<Boolean>> isAmzaReady = new AtomicReference<>(() -> false);
+            deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion) () -> {
                 if (serviceStartupHealthCheck.startupHasSucceeded() && isAmzaReady.get().call()) {
                     return instanceConfig.getVersion();
                 } else {
@@ -137,7 +137,7 @@ public class AmzaMain {
             amzaServiceConfig.rowsTakerLimit = amzaConfig.getRowsTakerLimit();
 
             AmzaStats amzaStats = new AmzaStats();
-            BAInterner interner = new BAInterner();
+            AmzaInterner amzaInterner = new AmzaInterner();
             SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
             JiveEpochTimestampProvider timestampProvider = new JiveEpochTimestampProvider();
 
@@ -172,7 +172,7 @@ public class AmzaMain {
                 amzaServiceConfig,
                 labConfig,
                 amzaStats,
-                interner,
+                amzaInterner,
                 idPacker,
                 timestampProvider,
                 blacklistRingMembers,

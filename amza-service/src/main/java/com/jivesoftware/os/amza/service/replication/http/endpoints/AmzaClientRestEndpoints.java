@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
@@ -30,6 +29,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.wal.KeyUtil;
 import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
@@ -67,13 +67,13 @@ public class AmzaClientRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRestClient client;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("stream-chunks-%d").build());
 
     public AmzaClientRestEndpoints(@Context AmzaRestClient client,
-        @Context BAInterner interner) {
+        @Context AmzaInterner amzaInterner) {
         this.client = client;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
     }
 
     @GET
@@ -82,7 +82,7 @@ public class AmzaClientRestEndpoints {
     public Response getProperties(@PathParam("base64PartitionName") String base64PartitionName) {
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             RingPartitionProperties properties = client.getProperties(partitionName);
             return Response.ok(properties).build();
         } catch (Exception e) {
@@ -100,7 +100,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             RingTopology ringTopology = client.configPartition(partitionName, partitionProperties, ringSize);
             LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
             chunkedOutput.submit(chunkExecutors, partitionName, "configPartition", null, 4096, (partitionName1, in, out) -> {
@@ -121,7 +121,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             client.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
@@ -143,7 +143,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             RingLeader ringLeader = client.ring(partitionName);
             StreamingOutput stream = os -> {
                 os.flush();
@@ -171,7 +171,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
             StreamingOutput stream = os -> {
                 os.flush();
@@ -206,7 +206,7 @@ public class AmzaClientRestEndpoints {
         FilerInputStream in = null;
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             in = new FilerInputStream(inputStream);
             StateMessageCause stateMessageCause = client.commit(partitionName,
                 Consistency.valueOf(consistencyName),
@@ -242,7 +242,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
@@ -274,7 +274,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
@@ -307,7 +307,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
@@ -365,7 +365,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
@@ -434,7 +434,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
@@ -457,7 +457,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
@@ -521,7 +521,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = null;
         try {
-            partitionName = PartitionName.fromBase64(base64PartitionName, interner);
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
         } catch (Exception x) {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();

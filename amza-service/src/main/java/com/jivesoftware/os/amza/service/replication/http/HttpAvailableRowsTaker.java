@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
@@ -43,10 +43,10 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
     private final ObjectMapper mapper;
 
     public HttpAvailableRowsTaker(TenantAwareHttpClient<String> ringClient,
-        BAInterner interner,
+        AmzaInterner amzaInterner,
         ObjectMapper mapper) {
         this.ringClient = ringClient;
-        this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
+        this.streamingTakesConsumer = new StreamingTakesConsumer(amzaInterner);
         this.mapper = mapper;
     }
 

@@ -5,7 +5,7 @@ import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
@@ -75,7 +75,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     private final AmzaStats amzaStats;
     private final TimestampProvider timestampProvider;
     private final IdPacker idPacker;
-    private final BAInterner baInterner;
+    private final AmzaInterner amzaInterner;
 
     private final List<GarbageCollectorMXBean> garbageCollectors;
     private final MemoryMXBean memoryBean;
@@ -91,7 +91,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         AmzaStats amzaStats,
         TimestampProvider timestampProvider,
         IdPacker idPacker,
-        BAInterner baInterner) {
+        AmzaInterner amzaInterner) {
         this.template = template;
         this.partitionMetricsTemplate = partitionMetricsTemplate;
         this.statsTemplate = statsTemplate;
@@ -102,7 +102,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         this.amzaStats = amzaStats;
         this.timestampProvider = timestampProvider;
         this.idPacker = idPacker;
-        this.baInterner = baInterner;
+        this.amzaInterner = amzaInterner;
 
         garbageCollectors = ManagementFactory.getGarbageCollectorMXBeans();
         memoryBean = ManagementFactory.getMemoryMXBean();
@@ -508,7 +508,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             "</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.longValue()).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.longValue()).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;baIntern<span class=\"badge\">").append(baInterner.size()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;baIntern<span class=\"badge\">").append(amzaInterner.size()).append("</span>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
@@ -520,7 +520,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false),
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false),
             null, null));
 
         long s = 0;
@@ -586,7 +586,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             null, null));
 
         sb.append(progress("Took Average Rows (" + numberFormat.format(amzaStats.takes.longValue()) + ")",
-            (int) (((double) amzaStats.takeExcessRows.longValue()/ amzaStats.takes.longValue()) / 4096 * 100),
+            (int) (((double) amzaStats.takeExcessRows.longValue() / amzaStats.takes.longValue()) / 4096 * 100),
             numberFormat.format(amzaStats.takeExcessRows.longValue()),
             null, null));
 
@@ -615,7 +615,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
         }
 
-        sb.append(progress("Quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
+        sb.append(progress(
+            "Quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
             (int) ((grandTotal.quorumsLatency / 10000d) * 100),
             getDurationBreakdown(grandTotal.quorumsLatency) + " lag",
             "quorums", subQuorumsLatency));
@@ -695,7 +696,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

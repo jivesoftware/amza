@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -27,10 +27,10 @@ import java.util.List;
 
 public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte[]> {
 
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
-    public BinaryHighwaterRowMarshaller(BAInterner interner) {
-        this.interner = interner;
+    public BinaryHighwaterRowMarshaller(AmzaInterner amzaInterner) {
+        this.amzaInterner = amzaInterner;
     }
 
     @Override
@@ -68,7 +68,7 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
             o++;
             int ringMemberLength = UIO.bytesInt(row, o);
             o += 4;
-            RingMember ringMember = RingMember.fromBytes(row, o, ringMemberLength, interner);
+            RingMember ringMember = amzaInterner.internRingMember(row, o, ringMemberLength);
             o += ringMemberLength;
             long transactionId = UIO.bytesLong(row, o);
             o += 8;

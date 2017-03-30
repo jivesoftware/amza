@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.service.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
+import com.google.common.collect.Interner;
+import com.google.common.collect.Interners;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -32,6 +34,7 @@ public class AmzaStats {
     private final Map<CompactionFamily, Map<String, CompactionStats>> ongoingCompaction = Maps.newConcurrentMap();
     private final Map<CompactionFamily, LongAdder> totalCompactions = Maps.newConcurrentMap();
     private final List<Entry<String, CompactionStats>> recentCompaction = new ArrayList<>();
+    private final Interner<String> compactionNameInterner = Interners.newStrongInterner();
 
     public final Map<RingMember, LongAdder> longPolled = new ConcurrentSkipListMap<>();
     public final Map<RingMember, LongAdder> longPollAvailables = new ConcurrentSkipListMap<>();
@@ -229,21 +232,21 @@ public class AmzaStats {
 
         @Override
         public void add(String name, long count) {
-            counters.compute(name, (k, v) -> {
+            counters.compute(compactionNameInterner.intern(name), (k, v) -> {
                 return v == null ? count : v + count;
             });
         }
 
         @Override
         public void start(String name) {
-            timers.compute(name, (k, v) -> {
+            timers.compute(compactionNameInterner.intern(name), (k, v) -> {
                 return v == null ? System.currentTimeMillis() : v;
             });
         }
 
         @Override
         public void stop(String name) {
-            timers.compute(name, (k, v) -> {
+            timers.compute(compactionNameInterner.intern(name), (k, v) -> {
                 return v == null ? null : System.currentTimeMillis() - v;
             });
         }
@@ -258,7 +261,7 @@ public class AmzaStats {
         if (compactionStats != null) {
             compactionStats.finished();
             recentCompaction.add(new AbstractMap.SimpleEntry<>(family + " " + name, compactionStats));
-            while (recentCompaction.size() > 10_000) {
+            while (recentCompaction.size() > 1_000) {
                 recentCompaction.remove(0);
             }
         }

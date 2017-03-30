@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.sync.deployable.endpoints;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
@@ -57,19 +57,19 @@ public class AmzaSyncEndpoints {
     private final AmzaSyncSenderMap configStorage;
     private final AmzaSyncPartitionConfigStorage partitionConfigStorage;
     private final AmzaSyncSenders syncSenders;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
     public AmzaSyncEndpoints(@Context AmzaSyncSenderMap configStorage,
         @Context AmzaSyncPartitionConfigStorage partitionConfigStorage,
         @Context AmzaSyncSenders syncSenders,
-        @Context BAInterner interner) {
+        @Context AmzaInterner amzaInterner) {
 
         this.configStorage = configStorage;
         this.partitionConfigStorage = partitionConfigStorage;
         this.syncSenders = syncSenders;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
     }
 
     @GET
@@ -161,8 +161,8 @@ public class AmzaSyncEndpoints {
         @PathParam("fromPartitionNameBase64") String fromPartitionNameBase64,
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
         try {
-            PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
+            PartitionName from = amzaInterner.internPartitionNameBase64(fromPartitionNameBase64);
+            PartitionName to = amzaInterner.internPartitionNameBase64(toPartitionNameBase64);
 
             AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
             Map<String, AmzaSyncStatus> map = Maps.newHashMap();
@@ -188,8 +188,8 @@ public class AmzaSyncEndpoints {
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64,
         AmzaSyncPartitionConfig config) {
         try {
-            PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
+            PartitionName from = amzaInterner.internPartitionNameBase64(fromPartitionNameBase64);
+            PartitionName to = amzaInterner.internPartitionNameBase64(toPartitionNameBase64);
 
             AmzaSyncSenderConfig amzaSyncSenderConfig = configStorage.get(syncspaceName);
             if (amzaSyncSenderConfig == null) {
@@ -216,8 +216,8 @@ public class AmzaSyncEndpoints {
         @PathParam("fromPartitionNameBase64") String fromPartitionNameBase64,
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
         try {
-            PartitionName from = PartitionName.fromBase64(fromPartitionNameBase64, interner);
-            PartitionName to = PartitionName.fromBase64(toPartitionNameBase64, interner);
+            PartitionName from = amzaInterner.internPartitionNameBase64(fromPartitionNameBase64);
+            PartitionName to = amzaInterner.internPartitionNameBase64(toPartitionNameBase64);
             partitionConfigStorage.multiRemove(syncspaceName, ImmutableList.of(new AmzaSyncPartitionTuple(from, to)));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
@@ -233,7 +233,7 @@ public class AmzaSyncEndpoints {
         @PathParam("partitionNameBase64") String partitionNameBase64) {
         try {
             if (syncSenders != null) {
-                PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
+                PartitionName partitionName = amzaInterner.internPartitionNameBase64(partitionNameBase64);
                 AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
                 boolean result = sender != null && sender.resetCursors(partitionName);
                 return Response.ok(result).build();

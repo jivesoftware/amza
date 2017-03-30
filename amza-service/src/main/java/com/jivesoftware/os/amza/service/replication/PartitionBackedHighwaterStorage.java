@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -12,6 +11,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
@@ -31,7 +31,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final BAInterner interner;
+    private final AmzaInterner memberInterner;
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final PartitionCreator partitionCreator;
@@ -44,7 +44,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     private final Map<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> hostToPartitionToHighwaterUpdates = Maps.newConcurrentMap();
     private final AtomicLong updatesSinceLastFlush = new AtomicLong();
 
-    public PartitionBackedHighwaterStorage(BAInterner interner,
+    public PartitionBackedHighwaterStorage(AmzaInterner memberInterner,
         OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         PartitionCreator partitionCreator,
@@ -52,7 +52,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         WALUpdated walUpdated,
         long flushHighwatersAfterNUpdates) {
 
-        this.interner = interner;
+        this.memberInterner = memberInterner;
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.partitionCreator = partitionCreator;
@@ -118,7 +118,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         o += 4;
         int ringMemberLength = UIO.bytesInt(rawMember, o);
         o += 4;
-        return RingMember.fromBytes(rawMember, o, ringMemberLength, interner);
+        return memberInterner.internRingMember(rawMember, o, ringMemberLength);
     }
 
     @Override

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
@@ -60,15 +60,15 @@ public class AmzaSyncPartitionTuple {
         return tuple.from.toBase64() + " " + tuple.to.toBase64();
     }
 
-    public static AmzaSyncPartitionTuple fromBytes(byte[] bytes, int offset, BAInterner interner) throws InterruptedException {
-        return fromKeyString(new String(bytes,offset, bytes.length-offset, StandardCharsets.UTF_8), interner);
+    public static AmzaSyncPartitionTuple fromBytes(byte[] bytes, int offset, AmzaInterner interner) throws InterruptedException {
+        return fromKeyString(new String(bytes, offset, bytes.length - offset, StandardCharsets.UTF_8), interner);
     }
 
-    public static AmzaSyncPartitionTuple fromKeyString(String key, BAInterner interner) throws InterruptedException {
+    public static AmzaSyncPartitionTuple fromKeyString(String key, AmzaInterner interner) throws InterruptedException {
         Iterable<String> fromTo = Splitter.on(' ').split(key);
         Iterator<String> iterator = fromTo.iterator();
-        PartitionName from = iterator.hasNext() ? PartitionName.fromBase64(iterator.next(), interner) : null;
-        PartitionName to = iterator.hasNext() ? PartitionName.fromBase64(iterator.next(), interner) : null;
+        PartitionName from = iterator.hasNext() ? interner.internPartitionNameBase64(iterator.next()) : null;
+        PartitionName to = iterator.hasNext() ? interner.internPartitionNameBase64(iterator.next()) : null;
         return new AmzaSyncPartitionTuple(from, to);
     }
 }

@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -53,8 +53,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.CountersAndTimers;
-import com.jivesoftware.os.mlogger.core.Timer;
-import com.jivesoftware.os.routing.bird.health.HealthCheckResponse;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.NoOpHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
@@ -84,9 +82,9 @@ public class DeltaStripeWALStorageNGTest {
         new PartitionName(false, "ring2".getBytes(), "partitionName2".getBytes()),
         VersionedPartitionName.STATIC_VERSION);
 
-    private final BAInterner interner = new BAInterner();
+    private final AmzaInterner amzaInterner = new AmzaInterner();
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
-    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(amzaInterner);
 
     private JacksonPartitionPropertyMarshaller partitionPropertyMarshaller;
     private IndexedWALStorageProvider indexedWALStorageProvider;
@@ -114,7 +112,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        File[] workingDirectories = {partitionTmpDir};
+        File[] workingDirectories = { partitionTmpDir };
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
@@ -183,7 +181,7 @@ public class DeltaStripeWALStorageNGTest {
             systemWALStorage,
             updated,
             rowChanges,
-            interner);
+            amzaInterner);
 
         partitionCreator.init((partitionName) -> 0);
 
@@ -222,16 +220,18 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNotNull(partitionStore1);
         Assert.assertNotNull(partitionStore2);
 
-        highwaterStorage = new PartitionBackedHighwaterStorage(interner, ids, member, partitionCreator, systemWALStorage, updated, 100);
+        highwaterStorage = new PartitionBackedHighwaterStorage(amzaInterner, ids, member, partitionCreator, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        workingDirectories = new File[]{tmp};
+        workingDirectories = new File[] { tmp };
         RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
 
-        ringStoreReader = new AmzaRingStoreReader(timeoutInMillis -> {},
-            interner,
+        ringStoreReader = new AmzaRingStoreReader(
+            timeoutInMillis -> {
+            },
+            amzaInterner,
             member,
             new ConcurrentBAHash<>(13, true, 4),
             new ConcurrentBAHash<>(13, true, 4),
@@ -242,7 +242,7 @@ public class DeltaStripeWALStorageNGTest {
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
         HealthTimer quorumLatency = new HealthTimer(CountersAndTimers.getOrCreate("test"), "test", new NoOpHealthChecker<>("test"));
-        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(interner,
+        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(amzaInterner,
             1,
             new AmzaStats(),
             new AckWaters(amzaStats, quorumLatency, 2, false),
@@ -358,7 +358,8 @@ public class DeltaStripeWALStorageNGTest {
         deltaStripeWALStorage.hackTruncation(4);
 
         partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, 4, Executors.newCachedThreadPool());
-        partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, rowChanges, interner);
+        partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, rowChanges,
+            amzaInterner);
         partitionCreator.init((partitionName) -> 0);
         deltaStripeWALStorage = loadDeltaStripe();
 
@@ -548,7 +549,8 @@ public class DeltaStripeWALStorageNGTest {
         deltaStripeWALStorage.merge(partitionIndex, partitionCreator, currentVersionProvider, true);
 
         partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, 4, Executors.newCachedThreadPool());
-        partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, rowChanges, interner);
+        partitionCreator = new PartitionCreator(orderIdProvider, partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, rowChanges,
+            amzaInterner);
         partitionCreator.init((partitionName) -> 0);
         deltaStripeWALStorage = loadDeltaStripe();
 

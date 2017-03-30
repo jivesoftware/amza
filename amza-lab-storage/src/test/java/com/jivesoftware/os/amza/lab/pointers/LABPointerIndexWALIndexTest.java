@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.lab.pointers;
 
 import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -388,8 +389,8 @@ public class LABPointerIndexWALIndexTest {
 
     private LABPointerIndexWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
         LABPointerIndexConfig config = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
-
-        return new LABPointerIndexWALIndexProvider(config, "lab", 1, new File[] { dir }).createIndex(partitionName, -1, 0);
+        AmzaInterner amzaInterner = new AmzaInterner();
+        return new LABPointerIndexWALIndexProvider(amzaInterner, config, "lab", 1, new File[] { dir }).createIndex(partitionName, -1, 0);
     }
 
 }

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -131,7 +131,7 @@ public class EmbedAmzaServiceInitializer {
         AmzaServiceConfig amzaServiceConfig,
         LABPointerIndexConfig indexConfig,
         AmzaStats amzaStats,
-        BAInterner baInterner,
+        AmzaInterner amzaInterner,
         SnowflakeIdPacker idPacker,
         JiveEpochTimestampProvider timestampProvider,
         Set<RingMember> blacklistRingMembers,
@@ -176,7 +176,7 @@ public class EmbedAmzaServiceInitializer {
         };
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
-        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(baInterner);
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(amzaInterner);
 
         TenantRoutingHttpClientInitializer<String> nonSigningClientInitializer = new TenantRoutingHttpClientInitializer<>(new OAuthSignerProvider(() -> null));
         TenantAwareHttpClient<String> systemTakeClient = nonSigningClientInitializer.builder(
@@ -196,8 +196,8 @@ public class EmbedAmzaServiceInitializer {
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
 
-        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemTakeClient, mapper, baInterner);
-        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, baInterner);
+        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemTakeClient, mapper, amzaInterner);
+        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, amzaInterner);
 
         TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
         TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
@@ -209,7 +209,7 @@ public class EmbedAmzaServiceInitializer {
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
 
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, baInterner, mapper);
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, amzaInterner, mapper);
         AquariumStats aquariumStats = new AquariumStats();
 
         TriggerTimeoutHealthCheck quorumTimeoutHealthCheck = new TriggerTimeoutHealthCheck(() -> amzaStats.getGrandTotal().quorumTimeouts.longValue(),
@@ -218,7 +218,7 @@ public class EmbedAmzaServiceInitializer {
 
         AtomicInteger systemRingSize = new AtomicInteger(0);
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
-            baInterner,
+            amzaInterner,
             aquariumStats,
             amzaStats,
             quorumLatency,
@@ -245,7 +245,8 @@ public class EmbedAmzaServiceInitializer {
                         workingIndexDirectories),
                     persistentRowIOProvider);
 
-                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(indexConfig,
+                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(amzaInterner,
+                        indexConfig,
                         LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
                         workingIndexDirectories),
@@ -270,8 +271,8 @@ public class EmbedAmzaServiceInitializer {
         }
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
-            new HttpPartitionClientFactory(baInterner),
-            new HttpPartitionHostsProvider(baInterner, ringClient, mapper),
+            new HttpPartitionClientFactory(),
+            new HttpPartitionHostsProvider(ringClient, mapper),
             new RingHostHttpClientProvider(ringClient),
             Executors.newCachedThreadPool(),
             10_000, //TODO expose to conf
@@ -293,7 +294,7 @@ public class EmbedAmzaServiceInitializer {
             amzaStats,
             timestampProvider,
             idPacker,
-            baInterner,
+            amzaInterner,
             new AmzaUIInitializer.InjectionCallback() {
 
                 @Override
@@ -317,7 +318,7 @@ public class EmbedAmzaServiceInitializer {
         deployable.addInjectables(AmzaRingWriter.class, amzaService.getRingWriter());
         deployable.addInjectables(AmzaRingReader.class, amzaService.getRingReader());
         deployable.addInjectables(AmzaInstance.class, amzaService);
-        deployable.addInjectables(BAInterner.class, baInterner);
+        deployable.addInjectables(AmzaInterner.class, amzaInterner);
 
         if (bindClientEndpoints) {
             deployable.addEndpoints(AmzaClientRestEndpoints.class);

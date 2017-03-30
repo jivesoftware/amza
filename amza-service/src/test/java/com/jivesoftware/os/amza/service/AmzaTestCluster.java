@@ -22,7 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -289,18 +289,18 @@ public class AmzaTestCluster {
             }
         };
 
-        BAInterner interner = new BAInterner();
+        AmzaInterner amzaInterner = new AmzaInterner();
         AmzaStats amzaStats = new AmzaStats();
         SickThreads sickThreads = new SickThreads();
         SickPartitions sickPartitions = new SickPartitions();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
-        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(amzaInterner);
         AquariumStats aquariumStats = new AquariumStats();
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
-            interner,
+            amzaInterner,
             aquariumStats,
             amzaStats,
             new HealthTimer(CountersAndTimers.getOrCreate("test"), "test", new NoOpHealthChecker<>("test")),
@@ -323,7 +323,8 @@ public class AmzaTestCluster {
 
                 LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
 
-                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
+                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(amzaInterner,
+                        labConfig,
                         LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
                         workingIndexDirectories),
@@ -361,7 +362,7 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(interner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
+        service = new AmzaNode(amzaInterner, localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
 
         cluster.put(localRingMember, service);
 
@@ -372,6 +373,7 @@ public class AmzaTestCluster {
     public class AmzaNode {
 
         private final Random random = new Random();
+        private final AmzaInterner amzaInterner;
         final RingMember ringMember;
         final RingHost ringHost;
         private final AmzaService amzaService;
@@ -382,9 +384,8 @@ public class AmzaTestCluster {
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
         private final EmbeddedClientProvider clientProvider;
-        private final BAInterner interner;
 
-        public AmzaNode(BAInterner interner,
+        public AmzaNode(AmzaInterner amzaInterner,
             RingMember ringMember,
             RingHost ringHost,
             AmzaService amzaService,
@@ -392,7 +393,7 @@ public class AmzaTestCluster {
             SickThreads sickThreads,
             SickPartitions sickPartitions) {
 
-            this.interner = interner;
+            this.amzaInterner = amzaInterner;
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
@@ -538,7 +539,7 @@ public class AmzaTestCluster {
                 });
                 submit.get();
 
-                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(interner);
+                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer(amzaInterner);
                 // this is some sick joke
                 DataInputStream in = new DataInputStream(
                     new SnappyInputStream(new BufferedInputStream(new ByteArrayInputStream(bytesOut.toByteArray()), 8192)));

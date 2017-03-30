@@ -7,7 +7,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -67,7 +67,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -85,7 +84,7 @@ public class DeltaStripeWALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
     private final int index;
     private final AmzaStats amzaStats;
     private final AckWaters ackWaters;
@@ -119,7 +118,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public DeltaStripeWALStorage(BAInterner interner,
+    public DeltaStripeWALStorage(AmzaInterner amzaInterner,
         int index,
         AmzaStats amzaStats,
         AckWaters ackWaters,
@@ -131,7 +130,7 @@ public class DeltaStripeWALStorage {
         long mergeAfterNUpdates,
         int mergeDeltaThreads) {
 
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
         this.index = index;
         this.amzaStats = amzaStats;
         this.ackWaters = ackWaters;
@@ -235,7 +234,7 @@ public class DeltaStripeWALStorage {
                                     return true;
                                 },
                                 (rowTxId, rowFP, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                                    VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix, 0, interner);
+                                    VersionedPartitionName versionedPartitionName = amzaInterner.internVersionedPartitionName(prefix, 0, prefix.length);
                                     try {
                                         boolean acceptable;
                                         if (accepted.contains(versionedPartitionName)) {

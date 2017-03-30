@@ -19,18 +19,18 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.client.aquarium.AmzaClientAquariumProvider;
+import com.jivesoftware.os.amza.client.collection.AmzaMarshaller;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
-import com.jivesoftware.os.amza.client.collection.AmzaMarshaller;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionConfig;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
@@ -64,7 +64,6 @@ import com.jivesoftware.os.routing.bird.health.checkers.LoadAverageHealthChecker
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
 import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
@@ -73,6 +72,7 @@ import com.jivesoftware.os.routing.bird.server.oauth.validator.AuthValidator;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptor;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptors;
+import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.shared.TenantRoutingProvider;
 import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescriptorProvider;
 import java.io.File;
@@ -139,10 +139,10 @@ public class AmzaSyncMain {
 
             AmzaSyncConfig syncConfig = deployable.config(AmzaSyncConfig.class);
 
-            BAInterner interner = new BAInterner();
+            AmzaInterner amzaInterner = new AmzaInterner();
             AmzaClientProvider<HttpClient, HttpClientException> amzaClientProvider = new AmzaClientProvider<>(
-                new HttpPartitionClientFactory(interner),
-                new HttpPartitionHostsProvider(interner, amzaClient, mapper),
+                new HttpPartitionClientFactory(),
+                new HttpPartitionHostsProvider(amzaClient, mapper),
                 new RingHostHttpClientProvider(amzaClient),
                 Executors.newFixedThreadPool(syncConfig.getAmzaCallerThreadPoolSize()),
                 syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
@@ -202,7 +202,7 @@ public class AmzaSyncMain {
             AmzaMarshaller<AmzaSyncSenderConfig> amzaSyncSenderConfigMarshaller = new AmzaMarshaller<AmzaSyncSenderConfig>() {
                 @Override
                 public AmzaSyncSenderConfig fromBytes(byte[] bytes) throws Exception {
-                    return mapper.readValue(bytes,AmzaSyncSenderConfig.class);
+                    return mapper.readValue(bytes, AmzaSyncSenderConfig.class);
                 }
 
                 @Override
@@ -212,8 +212,8 @@ public class AmzaSyncMain {
             };
 
             AmzaClientProvider clientProvider = new AmzaClientProvider<>(
-                new HttpPartitionClientFactory(interner),
-                new HttpPartitionHostsProvider(interner, amzaClient, mapper),
+                new HttpPartitionClientFactory(),
+                new HttpPartitionHostsProvider(amzaClient, mapper),
                 new RingHostHttpClientProvider(amzaClient),
                 Executors.newCachedThreadPool(), //TODO expose to conf?
                 30_000L, // TODO config
@@ -244,7 +244,7 @@ public class AmzaSyncMain {
             AmzaMarshaller<AmzaSyncPartitionTuple> tupleMarshaller = new AmzaMarshaller<AmzaSyncPartitionTuple>() {
                 @Override
                 public AmzaSyncPartitionTuple fromBytes(byte[] bytes) throws Exception {
-                    return AmzaSyncPartitionTuple.fromBytes(bytes, 0, interner);
+                    return AmzaSyncPartitionTuple.fromBytes(bytes, 0, amzaInterner);
                 }
 
                 @Override
@@ -256,7 +256,7 @@ public class AmzaSyncMain {
             AmzaMarshaller<AmzaSyncPartitionConfig> partitionConfigMarshaller = new AmzaMarshaller<AmzaSyncPartitionConfig>() {
                 @Override
                 public AmzaSyncPartitionConfig fromBytes(byte[] bytes) throws Exception {
-                    return mapper.readValue(bytes,AmzaSyncPartitionConfig.class);
+                    return mapper.readValue(bytes, AmzaSyncPartitionConfig.class);
                 }
 
                 @Override
@@ -299,7 +299,7 @@ public class AmzaSyncMain {
                     executorService,
                     amzaClientProvider,
                     amzaClientAquariumProvider,
-                    interner,
+                    amzaInterner,
                     mapper,
                     orderIdProvider,
                     senderConfigStorage,
@@ -348,7 +348,7 @@ public class AmzaSyncMain {
             }
 
             deployable.addEndpoints(AmzaSyncEndpoints.class);
-            deployable.addInjectables(BAInterner.class, interner);
+            deployable.addInjectables(AmzaInterner.class, amzaInterner);
             if (syncSenders != null) {
                 deployable.addInjectables(AmzaSyncSenders.class, syncSenders);
             }

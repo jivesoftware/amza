@@ -5,7 +5,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
@@ -26,11 +26,9 @@ import com.jivesoftware.os.amza.sync.api.AmzaSyncPartitionTuple;
 import com.jivesoftware.os.amza.sync.api.AmzaSyncSenderConfig;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
-import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -62,7 +60,7 @@ public class AmzaSyncSender {
     private final PartitionClientProvider partitionClientProvider;
     private final AmzaSyncClient toSyncClient;
     private final AmzaSyncPartitionConfigProvider syncPartitionConfigProvider;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final SetMultimap<PartitionName, PartitionName> ensuredPartitions = Multimaps.synchronizedSetMultimap(HashMultimap.create());
@@ -79,7 +77,7 @@ public class AmzaSyncSender {
         PartitionClientProvider partitionClientProvider,
         AmzaSyncClient toSyncClient,
         AmzaSyncPartitionConfigProvider syncPartitionConfigProvider,
-        BAInterner interner) {
+        AmzaInterner amzaInterner) {
         this.stats = stats;
 
         this.config = config;
@@ -90,7 +88,7 @@ public class AmzaSyncSender {
         this.partitionClientProvider = partitionClientProvider;
         this.toSyncClient = toSyncClient;
         this.syncPartitionConfigProvider = syncPartitionConfigProvider;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
     }
 
     public AmzaSyncSenderConfig getConfig() {
@@ -150,7 +148,7 @@ public class AmzaSyncSender {
                 if (value != null) {
                     PartitionName from = cursorKeyFromPartitionName(key);
                     PartitionName to = cursorKeyToPartitionName(key);
-                    Cursor cursor = cursorFromValue(value, interner);
+                    Cursor cursor = cursorFromValue(value);
                     return stream.stream(from, to, timestamp, cursor);
                 }
                 return true;
@@ -395,7 +393,7 @@ public class AmzaSyncSender {
             unprefixedWALKeyStream -> unprefixedWALKeyStream.stream(cursorKey),
             (prefix, key, value, timestamp, version) -> {
                 if (value != null) {
-                    result[0] = cursorFromValue(value, interner);
+                    result[0] = cursorFromValue(value);
                 }
                 return true;
             },
@@ -445,7 +443,7 @@ public class AmzaSyncSender {
         return value;
     }
 
-    private static Cursor cursorFromValue(byte[] value, BAInterner interner) throws InterruptedException {
+    private Cursor cursorFromValue(byte[] value) throws InterruptedException {
         if (value[0] == 1) {
             boolean taking = value[1] == 1;
 
@@ -456,7 +454,7 @@ public class AmzaSyncSender {
             for (int i = 0; i < memberTxIdsLength; i++) {
                 int memberLength = UIO.bytesUnsignedShort(value, o);
                 o += 2;
-                RingMember member = RingMember.fromBytes(value, o, memberLength, interner);
+                RingMember member = amzaInterner.internRingMember(value, o, memberLength);
                 o += memberLength;
                 long txId = UIO.bytesLong(value, o);
                 memberTxIds.put(member, txId);
@@ -502,7 +500,7 @@ public class AmzaSyncSender {
         int fromPartitionLength = UIO.bytesUnsignedShort(key, 0);
         byte[] fromPartitionBytes = new byte[fromPartitionLength];
         UIO.readBytes(key, 2, fromPartitionBytes);
-        return PartitionName.fromBytes(fromPartitionBytes, 0, interner);
+        return amzaInterner.internPartitionName(fromPartitionBytes, 0, fromPartitionBytes.length);
     }
 
     private PartitionName cursorKeyToPartitionName(byte[] key) throws InterruptedException {
@@ -510,6 +508,6 @@ public class AmzaSyncSender {
         int toPartitionLength = UIO.bytesUnsignedShort(key, 2 + fromPartitionLength);
         byte[] toPartitionBytes = new byte[toPartitionLength];
         UIO.readBytes(key, 2 + fromPartitionLength + 2, toPartitionBytes);
-        return PartitionName.fromBytes(toPartitionBytes, 0, interner);
+        return amzaInterner.internPartitionName(toPartitionBytes, 0, toPartitionBytes.length);
     }
 }

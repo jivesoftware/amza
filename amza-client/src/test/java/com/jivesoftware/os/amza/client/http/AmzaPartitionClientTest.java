@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.util.concurrent.MoreExecutors;
-import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -12,7 +11,6 @@ import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
-import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -36,7 +34,7 @@ public class AmzaPartitionClientTest {
         PartitionName partitionName = new PartitionName(false, partitionNameBytes, partitionNameBytes);
         AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(3),
             new TestRingHostClientProvider());
-        AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(new BAInterner(), partitionName, router, new TestRemotePartitionCaller(),
+        AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(partitionName, router, new TestRemotePartitionCaller(),
             10_000L, -1, -1);
 
         client.scan(Consistency.quorum,
@@ -58,7 +56,7 @@ public class AmzaPartitionClientTest {
         PartitionName partitionName = new PartitionName(false, partitionNameBytes, partitionNameBytes);
         AmzaClientCallRouter<TestClient, Exception> router = new AmzaClientCallRouter<>(MoreExecutors.sameThreadExecutor(), new TestPartitionHostsProvider(3),
             new TestRingHostClientProvider());
-        AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(new BAInterner(), partitionName, router, new TestRemotePartitionCaller(),
+        AmzaPartitionClient<TestClient, Exception> client = new AmzaPartitionClient<>(partitionName, router, new TestRemotePartitionCaller(),
             10_000L, -1, -1);
 
         client.scanKeys(Consistency.quorum,

@@ -1,8 +1,7 @@
 package com.jivesoftware.os.amza.lab.pointers;
 
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
-import com.jivesoftware.os.amza.api.BAInterner;
-import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
@@ -27,15 +26,18 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     public static final String INDEX_CLASS_NAME = "lab";
 
+    private final AmzaInterner amzaInterner;
     private final String name;
     private final LABEnvironment[] environments;
     private final LABPointerIndexConfig config;
     private final LRUConcurrentBAHLinkedHash<Leaps> leapCache;
 
-    public LABPointerIndexWALIndexProvider(LABPointerIndexConfig config,
+    public LABPointerIndexWALIndexProvider(AmzaInterner amzaInterner,
+        LABPointerIndexConfig config,
         String name,
         int numberOfStripes,
         File[] baseDirs) throws Exception {
+        this.amzaInterner = amzaInterner;
 
         this.config = config;
         this.name = name;
@@ -80,10 +82,9 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
             File[] files = active.listFiles();
             if (files != null) {
-                BAInterner interner = new BAInterner();
                 for (File file : files) {
                     if (file.isDirectory()) {
-                        File dest = convertBase64toPartitionVersion(file, interner);
+                        File dest = convertBase64toPartitionVersion(file);
                         if (dest != null && !file.renameTo(dest)) {
                             throw new IOException("Failed rename of " + file + " to " + dest);
                         }
@@ -192,7 +193,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         }
     }
 
-    private static File convertBase64toPartitionVersion(File file, BAInterner interner) throws Exception {
+    private File convertBase64toPartitionVersion(File file) throws Exception {
 
         String filename = file.getName();
         int firstHyphen = filename.indexOf('-');
@@ -204,7 +205,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
                 long partitionVersion = Long.parseLong(partition);
                 LOG.info("Did not repair partition version {}", partitionVersion);
             } catch (NumberFormatException e) {
-                VersionedPartitionName vpn = VersionedPartitionName.fromBase64(partition, interner);
+                VersionedPartitionName vpn = amzaInterner.internVersionedPartitionNameBase64(partition);
                 LOG.info("We will repair partition {}", vpn);
                 return new File(file.getParent(), base + "-" + String.valueOf(vpn.getPartitionVersion()));
             }
@@ -212,12 +213,4 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         return null;
     }
 
-    public static void main(String[] args) throws Exception {
-        System.out.println(convertBase64toPartitionVersion(
-            new File("/example/prefix-active-" + new VersionedPartitionName(new PartitionName(false, "abc".getBytes(), "def".getBytes()), 123L).toBase64()),
-            new BAInterner()));
-        System.out.println(convertBase64toPartitionVersion(
-            new File("/example/prefix-active-123"),
-            new BAInterner()));
-    }
 }

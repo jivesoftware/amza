@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.sync.deployable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
@@ -111,7 +111,7 @@ public class AmzaSyncSenderTest {
             syncClient,
             (name) -> ImmutableMap.of(new AmzaSyncPartitionTuple(partitionName, partitionName),
                 new AmzaSyncPartitionConfig(0, 0, 0, 0, 0)),
-            new BAInterner());
+            new AmzaInterner());
 
         amzaClientAquariumProvider.start();
         syncSender.start();

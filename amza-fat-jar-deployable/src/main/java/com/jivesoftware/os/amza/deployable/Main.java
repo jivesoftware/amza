@@ -23,7 +23,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -177,7 +177,7 @@ public class Main {
             systemRingSize.set(amzaServiceConfig.systemRingSize);
         }
 
-        BAInterner interner = new BAInterner();
+        AmzaInterner amzaInterner = new AmzaInterner();
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
             @Override
@@ -204,7 +204,7 @@ public class Main {
         labConfig.setLeapCacheMaxCapacity(Integer.parseInt(System.getProperty("amza.leap.cache.max.capacity", "1000000")));
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
-        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(interner);
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(amzaInterner);
 
         AtomicReference<Callable<RingTopology>> topologyProvider = new AtomicReference<>(); // bit of a hack
 
@@ -242,11 +242,11 @@ public class Main {
             .socketTimeoutInMillis(60_000)
             .build(); //TODO expose to conf
 
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(httpClient, interner, mapper); // TODO config
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(httpClient, amzaInterner, mapper); // TODO config
         AquariumStats aquariumStats = new AquariumStats();
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
-            interner,
+            amzaInterner,
             aquariumStats,
             amzaStats,
             new HealthTimer(CountersAndTimers.getOrCreate("quorumLatency"), "quorumLatency", new NoOpHealthChecker<>("quorumLatency")),
@@ -267,15 +267,16 @@ public class Main {
                     persistentRowIOProvider);
 
                 indexProviderRegistry.register(
-                    new LABPointerIndexWALIndexProvider(labConfig,
+                    new LABPointerIndexWALIndexProvider(amzaInterner,
+                        labConfig,
                         LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
                         workingIndexDirectories),
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, interner),
-            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, interner),
+            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner),
+            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner),
             Optional.absent(),
             (RowsChanged changes) -> {
             });
@@ -283,8 +284,8 @@ public class Main {
         topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
-            new HttpPartitionClientFactory(interner),
-            new HttpPartitionHostsProvider(interner, httpClient, mapper),
+            new HttpPartitionClientFactory(),
+            new HttpPartitionHostsProvider(httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
             Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
             10_000, //TODO expose to conf
@@ -297,7 +298,7 @@ public class Main {
             .addEndpoint(AmzaReplicationRestEndpoints.class)
             .addInjectable(AmzaInstance.class, amzaService)
             .addEndpoint(AmzaClientRestEndpoints.class)
-            .addInjectable(BAInterner.class, interner)
+            .addInjectable(AmzaInterner.class, amzaInterner)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
         new AmzaUIInitializer().initialize(clusterName,
@@ -308,7 +309,7 @@ public class Main {
             amzaStats,
             timestampProvider,
             idPacker,
-            interner,
+            amzaInterner,
             new AmzaUIInitializer.InjectionCallback() {
                 @Override
                 public void addEndpoint(Class clazz) {

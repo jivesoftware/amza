@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.take;
 
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -20,10 +20,10 @@ import java.util.Map;
 public class StreamingTakesConsumer {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
-    public StreamingTakesConsumer(BAInterner interner) {
-        this.interner = interner;
+    public StreamingTakesConsumer(AmzaInterner amzaInterner) {
+        this.amzaInterner = amzaInterner;
     }
 
     public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream, PingStream pingStream) throws Exception {
@@ -37,7 +37,9 @@ public class StreamingTakesConsumer {
             dis.readFully(versionedPartitionNameBytes);
             long txId = dis.readLong();
             try {
-                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes, 0, interner), txId);
+                VersionedPartitionName versionedPartitionName = amzaInterner.internVersionedPartitionName(versionedPartitionNameBytes, 0,
+                    versionedPartitionNameBytes.length);
+                updatedPartitionsStream.available(versionedPartitionName, txId);
             } catch (PropertiesNotPresentException e) {
                 LOG.warn(e.getMessage());
             } catch (Throwable t) {
@@ -61,7 +63,7 @@ public class StreamingTakesConsumer {
                 byte[] ringMemberBytes = new byte[dis.readInt()];
                 dis.readFully(ringMemberBytes);
                 long highwaterMark = dis.readLong();
-                neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes, 0, ringMemberBytes.length, interner), highwaterMark);
+                neighborsHighwaterMarks.put(amzaInterner.internRingMember(ringMemberBytes, 0, ringMemberBytes.length), highwaterMark);
                 bytes += 1 + 4 + ringMemberBytes.length + 8;
             }
             while (dis.readByte() == 1) {

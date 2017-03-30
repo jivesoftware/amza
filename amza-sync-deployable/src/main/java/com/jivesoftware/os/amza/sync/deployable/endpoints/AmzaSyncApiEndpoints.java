@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.sync.deployable.endpoints;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.api.BAInterner;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.sync.deployable.AmzaSyncReceiver;
@@ -48,14 +48,14 @@ public class AmzaSyncApiEndpoints {
 
     private final AmzaSyncReceiver syncReceiver;
     private final ObjectMapper mapper;
-    private final BAInterner interner;
+    private final AmzaInterner amzaInterner;
 
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
-    public AmzaSyncApiEndpoints(@Context AmzaSyncReceiver syncReceiver, @Context ObjectMapper mapper, @Context BAInterner interner) {
+    public AmzaSyncApiEndpoints(@Context AmzaSyncReceiver syncReceiver, @Context ObjectMapper mapper, @Context AmzaInterner amzaInterner) {
         this.syncReceiver = syncReceiver;
         this.mapper = mapper;
-        this.interner = interner;
+        this.amzaInterner = amzaInterner;
     }
 
     @POST
@@ -73,7 +73,7 @@ public class AmzaSyncApiEndpoints {
             return responseHelper.errorResponse("Server error", x);
         }
         try {
-            PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(partitionNameBase64);
             syncReceiver.commitRows(partitionName, rows);
             return responseHelper.jsonResponse("ok");
         } catch (Exception x) {
@@ -91,7 +91,7 @@ public class AmzaSyncApiEndpoints {
         @PathParam("ringSize") int ringSize,
         PartitionProperties properties) throws Exception {
         try {
-            PartitionName partitionName = PartitionName.fromBase64(partitionNameBase64, interner);
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(partitionNameBase64);
             syncReceiver.ensurePartition(partitionName, properties, ringSize);
             return responseHelper.jsonResponse("ok");
         } catch (Exception x) {

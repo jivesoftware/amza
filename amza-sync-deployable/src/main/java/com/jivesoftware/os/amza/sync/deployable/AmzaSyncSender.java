@@ -51,6 +51,8 @@ public class AmzaSyncSender {
         0, 0, 0, 0, 0, 0, 0, 0,
         false, Consistency.leader_quorum, true, true, false, RowType.primary, "lab", 8, null, -1, -1);
 
+    private static final Cursor DEFAULT_CURSOR = new Cursor(true, true, -1, -1, Maps.newHashMap());
+
     private final AmzaSyncStats stats;
     private final AmzaSyncSenderConfig config;
     private final AmzaClientAquariumProvider amzaClientAquariumProvider;
@@ -268,9 +270,9 @@ public class AmzaSyncSender {
 
             if (properties.partitionProperties == null) {
                 LOG.warn("Missing partition properties fromPartitionName:{}", fromPartitionName);
-                Cursor existing = getPartitionCursor(fromPartitionName, toPartitionName);
+                Cursor existing = getPartitionCursor(fromPartitionName, toPartitionName, null);
                 Cursor update = (existing != null)
-                    ? new Cursor(false, existing.taking, existing.maxTimestamp, existing.maxVersion, existing.memberTxIds)
+                    ? new Cursor(false, false, existing.maxTimestamp, existing.maxVersion, existing.memberTxIds)
                     : new Cursor(false, false, -1, -1, Maps.newHashMap());
                 savePartitionCursor(fromPartitionName, toPartitionName, update);
                 return false;
@@ -291,7 +293,7 @@ public class AmzaSyncSender {
 
     private int syncPartition(AmzaSyncPartitionTuple partitionTuple, AmzaSyncPartitionConfig toPartitionConfig, int stripe) throws Exception {
         PartitionName toPartitionName = partitionTuple.to;
-        Cursor existingCursor = getPartitionCursor(partitionTuple.from, toPartitionName);
+        Cursor existingCursor = getPartitionCursor(partitionTuple.from, toPartitionName, DEFAULT_CURSOR);
 
         PartitionClient fromClient = partitionClientProvider.getPartition(partitionTuple.from);
         if (!isElected(stripe)) {
@@ -388,7 +390,7 @@ public class AmzaSyncSender {
         return synced;
     }
 
-    private Cursor getPartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName) throws Exception {
+    private Cursor getPartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Cursor defaultCursor) throws Exception {
         PartitionClient cursorClient = cursorClient();
         byte[] cursorKey = cursorKey(fromPartitionName, toPartitionName);
         Cursor[] result = new Cursor[1];
@@ -404,7 +406,7 @@ public class AmzaSyncSender {
             abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             Optional.empty());
-        return result[0] != null ? result[0] : new Cursor(true, true, -1, -1, Maps.newHashMap());
+        return result[0] != null ? result[0] : defaultCursor;
     }
 
     private void savePartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Cursor cursor) throws Exception {

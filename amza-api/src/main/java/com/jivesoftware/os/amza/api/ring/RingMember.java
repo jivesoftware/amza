@@ -48,9 +48,8 @@ public class RingMember implements Comparable<RingMember> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static RingMember fromBase64(String base64) throws InterruptedException {
-        byte[] bytes = BaseEncoding.base64Url().decode(base64);
-        return new RingMember(bytes);
+    public static RingMember fromBase64(String base64, AmzaInterner amzaInterner) throws InterruptedException {
+        return amzaInterner.internRingMemberBase64(base64);
     }
 
     private final byte[] memberAsBytes;

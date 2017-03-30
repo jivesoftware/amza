@@ -39,6 +39,11 @@ public class AmzaInterner {
         return null;
     }
 
+    public RingMember internRingMemberBase64(String base64) throws InterruptedException {
+        byte[] bytes = BaseEncoding.base64Url().decode(base64);
+        return internRingMember(bytes, 0, bytes.length);
+    }
+
     public PartitionName internPartitionName(byte[] bytes, int offset, int length) throws InterruptedException {
         if (bytes == null || length == -1) {
             return null;

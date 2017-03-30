@@ -143,7 +143,7 @@ public class AmzaSyncEndpoints {
             if (sender != null) {
                 sender.streamCursors(null, null, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
                     map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
-                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp, cursor.maxVersion, cursor.taking));
+                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp, cursor.maxVersion, cursor.exists, cursor.taking));
                     return true;
                 });
             }
@@ -169,7 +169,7 @@ public class AmzaSyncEndpoints {
             if (sender != null) {
                 sender.streamCursors(from, to, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
                     map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
-                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp, cursor.maxVersion, cursor.taking));
+                        new AmzaSyncStatus(timestamp, cursor.maxTimestamp, cursor.maxVersion, cursor.exists, cursor.taking));
                     return true;
                 });
             }

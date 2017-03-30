@@ -258,18 +258,21 @@ public class AmzaSyncSender {
         LOG.info("Synced stripe:{} partitions:{} rows:{}", stripe, partitionCount, rowCount);
     }
 
-    public static void main(String[] args) {
-        byte[] bytes = "follow-fc9be4a1-92da-4976-9ef8-dc9b41a13267".getBytes(StandardCharsets.UTF_8);
-        System.out.println(new PartitionName(false, bytes, bytes));
-        System.out.println(new PartitionName(false, bytes, bytes).hashCode());
-        System.out.println(new PartitionName(false, bytes, bytes).hashCode() % 128);
-    }
-
     private boolean ensurePartition(PartitionName fromPartitionName, PartitionName toPartitionName) throws Exception {
         if (!ensuredPartitions.containsEntry(fromPartitionName, toPartitionName)) {
             RingPartitionProperties properties = partitionClientProvider.getProperties(fromPartitionName);
             if (properties == null) {
-                LOG.warn("Missing properties fromPartitionName:{}", fromPartitionName);
+                LOG.warn("Failed to get ring partition properties fromPartitionName:{}", fromPartitionName);
+                return false;
+            }
+
+            if (properties.partitionProperties == null) {
+                LOG.warn("Missing partition properties fromPartitionName:{}", fromPartitionName);
+                Cursor existing = getPartitionCursor(fromPartitionName, toPartitionName);
+                Cursor update = (existing != null)
+                    ? new Cursor(false, existing.taking, existing.maxTimestamp, existing.maxVersion, existing.memberTxIds)
+                    : new Cursor(false, false, -1, -1, Maps.newHashMap());
+                savePartitionCursor(fromPartitionName, toPartitionName, update);
                 return false;
             }
 
@@ -375,7 +378,7 @@ public class AmzaSyncSender {
                 taking = false;
             }
 
-            Cursor cursor = new Cursor(taking, cursorMaxTimestamp.get(), cursorMaxVersion.get(), cursorMemberTxIds);
+            Cursor cursor = new Cursor(true, taking, cursorMaxTimestamp.get(), cursorMaxVersion.get(), cursorMemberTxIds);
             if (!existingCursor.equals(cursor)) {
                 savePartitionCursor(partitionTuple.from, toPartitionName, cursor);
                 existingCursor = cursor;
@@ -401,7 +404,7 @@ public class AmzaSyncSender {
             abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             Optional.empty());
-        return result[0] != null ? result[0] : new Cursor(true, -1, -1, Maps.newHashMap());
+        return result[0] != null ? result[0] : new Cursor(true, true, -1, -1, Maps.newHashMap());
     }
 
     private void savePartitionCursor(PartitionName fromPartitionName, PartitionName toPartitionName, Cursor cursor) throws Exception {
@@ -416,17 +419,18 @@ public class AmzaSyncSender {
     }
 
     private static byte[] valueFromCursor(Cursor cursor) {
-        int valueLength = 1 + 1 + 2;
+        int valueLength = 1 + 1 + 1 + 2;
         for (RingMember ringMember : cursor.memberTxIds.keySet()) {
             valueLength += 2 + ringMember.sizeInBytes() + 8;
         }
         valueLength += 8 + 8;
 
         byte[] value = new byte[valueLength];
-        value[0] = 1; // version
-        value[1] = (byte) (cursor.taking ? 1 : 0);
-        UIO.unsignedShortBytes(cursor.memberTxIds.size(), value, 2);
-        int o = 4;
+        value[0] = 2; // version
+        value[1] = (byte) (cursor.exists ? 1 : 0);
+        value[2] = (byte) (cursor.taking ? 1 : 0);
+        UIO.unsignedShortBytes(cursor.memberTxIds.size(), value, 3);
+        int o = 5;
         for (Entry<RingMember, Long> entry : cursor.memberTxIds.entrySet()) {
             int memberLength = entry.getKey().sizeInBytes();
             UIO.unsignedShortBytes(memberLength, value, o);
@@ -444,7 +448,35 @@ public class AmzaSyncSender {
     }
 
     private Cursor cursorFromValue(byte[] value) throws InterruptedException {
-        if (value[0] == 1) {
+        if (value[0] == 2) {
+            boolean exists = value[1] == 1;
+            boolean taking = value[2] == 1;
+
+            int memberTxIdsLength = UIO.bytesUnsignedShort(value, 3);
+            int o = 5;
+
+            Map<RingMember, Long> memberTxIds = Maps.newHashMap();
+            for (int i = 0; i < memberTxIdsLength; i++) {
+                int memberLength = UIO.bytesUnsignedShort(value, o);
+                o += 2;
+                RingMember member = amzaInterner.internRingMember(value, o, memberLength);
+                o += memberLength;
+                long txId = UIO.bytesLong(value, o);
+                memberTxIds.put(member, txId);
+                o += 8;
+            }
+
+            long maxTimestamp = -1;
+            long maxVersion = -1;
+            if (value.length >= (o + 8 + 8)) {
+                maxTimestamp = UIO.bytesLong(value, o);
+                o += 8;
+                maxVersion = UIO.bytesLong(value, o);
+                o += 8;
+            }
+
+            return new Cursor(exists, taking, maxTimestamp, maxVersion, memberTxIds);
+        } else if (value[0] == 1) {
             boolean taking = value[1] == 1;
 
             int memberTxIdsLength = UIO.bytesUnsignedShort(value, 2);
@@ -470,7 +502,7 @@ public class AmzaSyncSender {
                 o += 8;
             }
 
-            return new Cursor(taking, maxTimestamp, maxVersion, memberTxIds);
+            return new Cursor(true, taking, maxTimestamp, maxVersion, memberTxIds);
         } else {
             LOG.error("Unsupported cursor version {}", value[0]);
             return null;

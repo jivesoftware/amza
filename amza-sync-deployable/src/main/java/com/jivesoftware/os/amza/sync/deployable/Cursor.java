@@ -2,20 +2,20 @@ package com.jivesoftware.os.amza.sync.deployable;
 
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
  */
 public class Cursor {
 
+    public final boolean exists;
     public final boolean taking;
     public final long maxTimestamp;
     public final long maxVersion;
     public final Map<RingMember, Long> memberTxIds;
 
-    public Cursor(boolean taking, long maxTimestamp, long maxVersion, Map<RingMember, Long> memberTxIds) {
+    public Cursor(boolean exists, boolean taking, long maxTimestamp, long maxVersion, Map<RingMember, Long> memberTxIds) {
+        this.exists = exists;
         this.taking = taking;
         this.maxTimestamp = maxTimestamp;
         this.maxVersion = maxVersion;

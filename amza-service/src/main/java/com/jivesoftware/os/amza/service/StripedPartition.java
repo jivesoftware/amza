@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -112,56 +113,67 @@ public class StripedPartition implements Partition {
             throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
         }
 
-        long currentTime = System.currentTimeMillis();
-        long version = orderIdProvider.nextId();
-        partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-            long leadershipToken = -1;
-            if (takeQuorum > 0) {
-                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-                if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
-                    throw new FailedToAchieveQuorumException("Leader has changed.");
+        while (true) {
+            try {
+                long currentTime = System.currentTimeMillis();
+                long version = orderIdProvider.nextId();
+                partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
+                    long leadershipToken = -1;
+                    if (takeQuorum > 0) {
+                        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                        if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
+                            throw new FailedToAchieveQuorumException("Leader has changed.");
+                        }
+                        leadershipToken = livelyEndState.getLeaderWaterline().getTimestamp();
+                    }
+
+                    RowsChanged commit = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
+                        return partitionStripe.commit(highwaterStorage,
+                            versionedAquarium,
+                            true,
+                            Optional.absent(),
+                            true,
+                            prefix,
+                            (highwaters, stream) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
+                                long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                                return stream.row(-1L, key, value, timestamp, valueTombstone, version);
+                            }),
+                            walUpdated);
+                    });
+
+                    if (takeQuorum > 0) {
+                        long timeToWait = Math.max(0, end - System.currentTimeMillis());
+                        LOG.debug("Awaiting quorum for {} ms", timeToWait);
+                        int takenBy = 0;
+                        if (timeToWait > 0) {
+                            takenBy = ackWaters.await(versionedAquarium.getVersionedPartitionName(),
+                                commit.getLargestCommittedTxId(),
+                                neighbors,
+                                takeQuorum,
+                                timeToWait,
+                                leadershipToken,
+                                takeCoordinator);
+                        }
+                        if (takenBy < takeQuorum) {
+                            throw new FailedToAchieveQuorumException(
+                                "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
+                        }
+                    }
+                    //TODO necessary? aquarium.tapTheGlass();
+
+                    amzaStats.direct(partitionName, commit.getApply().size(), commit.getSmallestCommittedTxId());
+
+                    return null;
+                });
+                break;
+            } catch (DeltaOverCapacityException e) {
+                long timeRemaining = end - System.currentTimeMillis();
+                if (timeRemaining <= 0) {
+                    throw e;
                 }
-                leadershipToken = livelyEndState.getLeaderWaterline().getTimestamp();
+                Thread.sleep(Math.min(timeRemaining, 1000L)); //TODO magic number
             }
-
-            RowsChanged commit = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                return partitionStripe.commit(highwaterStorage,
-                    versionedAquarium,
-                    true,
-                    Optional.absent(),
-                    true,
-                    prefix,
-                    (highwaters, stream) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
-                        long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
-                        return stream.row(-1L, key, value, timestamp, valueTombstone, version);
-                    }),
-                    walUpdated);
-            });
-
-            if (takeQuorum > 0) {
-                long timeToWait = Math.max(0, end - System.currentTimeMillis());
-                LOG.debug("Awaiting quorum for {} ms", timeToWait);
-                int takenBy = 0;
-                if (timeToWait > 0) {
-                    takenBy = ackWaters.await(versionedAquarium.getVersionedPartitionName(),
-                        commit.getLargestCommittedTxId(),
-                        neighbors,
-                        takeQuorum,
-                        timeToWait,
-                        leadershipToken,
-                        takeCoordinator);
-                }
-                if (takenBy < takeQuorum) {
-                    throw new FailedToAchieveQuorumException(
-                        "Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
-                }
-            }
-            //TODO necessary? aquarium.tapTheGlass();
-
-            amzaStats.direct(partitionName, commit.getApply().size(), commit.getSmallestCommittedTxId());
-
-            return null;
-        });
+        }
 
         long fsyncWaitInMillis = Math.max(end - System.currentTimeMillis(), 0);
         if (fsyncWaitInMillis > 0) {

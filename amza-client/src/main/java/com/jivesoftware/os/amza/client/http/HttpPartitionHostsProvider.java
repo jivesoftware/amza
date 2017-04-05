@@ -15,6 +15,7 @@ import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiv
 import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import com.jivesoftware.os.routing.bird.http.client.RoundRobinStrategy;
+import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.shared.ClientCall;
 import com.jivesoftware.os.routing.bird.shared.ClientCall.ClientResponse;
@@ -37,9 +38,11 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
     private final ObjectMapper mapper;
 
     private final RoundRobinStrategy roundRobinStrategy = new RoundRobinStrategy();
+    private final TailAtScaleStrategy tailAtScaleStrategy;
 
-    public HttpPartitionHostsProvider(TenantAwareHttpClient<String> tenantAwareHttpClient, ObjectMapper mapper) {
+    public HttpPartitionHostsProvider(TenantAwareHttpClient<String> tenantAwareHttpClient, TailAtScaleStrategy tailAtScaleStrategy, ObjectMapper mapper) {
         this.tenantAwareHttpClient = tenantAwareHttpClient;
+        this.tailAtScaleStrategy  = tailAtScaleStrategy;
         this.mapper = mapper;
     }
 
@@ -53,7 +56,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
     @Override
     public RingPartitionProperties getRingPartitionProperties(PartitionName partitionName) throws Exception {
         String base64PartitionName = partitionName.toBase64();
-        return tenantAwareHttpClient.call("", roundRobinStrategy, "configPartition", (client) -> {
+        return tenantAwareHttpClient.call("", tailAtScaleStrategy, "configPartition", (client) -> {
             HttpResponse got = client.get("/amza/v1/properties/" + base64PartitionName, null);
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
                 try {
@@ -85,7 +88,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
         String base64PartitionName = partitionName.toBase64();
         String partitionPropertiesString = mapper.writeValueAsString(partitionProperties);
         byte[] intBuffer = new byte[4];
-        Ring partitionsRing = tenantAwareHttpClient.call("", roundRobinStrategy, "configPartition", (client) -> {
+        Ring partitionsRing = tenantAwareHttpClient.call("", roundRobinStrategy, "configPartition", (client) -> { // maybe switch to tailAtScale
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/configPartition/" + base64PartitionName + "/" + desiredRingSize,
                 partitionPropertiesString, null);
@@ -147,7 +150,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
         NextClientStrategy strategy = useHost.map((ringMemberAndHost) -> {
             HostPort[] hostPorts = { new HostPort(ringMemberAndHost.ringHost.getHost(), ringMemberAndHost.ringHost.getPort()) };
             return (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(hostPorts);
-        }).orElse(roundRobinStrategy);
+        }).orElse(tailAtScaleStrategy);
         byte[] intBuffer = new byte[4];
         Ring leaderlessRing = tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 

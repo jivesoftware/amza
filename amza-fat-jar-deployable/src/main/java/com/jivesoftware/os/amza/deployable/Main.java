@@ -66,6 +66,7 @@ import com.jivesoftware.os.routing.bird.health.api.NoOpHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
+import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.InitializeRestfulServer;
@@ -283,9 +284,15 @@ public class Main {
 
         topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));
 
+        TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
+            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+            100,
+            95
+        );
+
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
             new HttpPartitionClientFactory(),
-            new HttpPartitionHostsProvider(httpClient, mapper),
+            new HttpPartitionHostsProvider(httpClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(httpClient),
             Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
             10_000, //TODO expose to conf

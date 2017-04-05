@@ -2,6 +2,7 @@ package com.jivesoftware.os.amzabot.deployable;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
@@ -45,6 +46,7 @@ import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
+import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import com.jivesoftware.os.routing.bird.shared.HttpClientException;
@@ -115,9 +117,15 @@ public class AmzaBotMain {
             AmzaBotCoalmineConfig amzaBotCoalmineConfig = configBinder.bind(AmzaBotCoalmineConfig.class);
             AmzaBotRandomOpConfig amzaBotRandomOpConfig = configBinder.bind(AmzaBotRandomOpConfig.class);
 
+            TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
+                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+                100, // TODO config
+                95 // TODO config
+            );
+
             AmzaClientProvider<HttpClient, HttpClientException> amzaClientProvider = new AmzaClientProvider<>(
                 new HttpPartitionClientFactory(),
-                new HttpPartitionHostsProvider(amzaClient, objectMapper),
+                new HttpPartitionHostsProvider(amzaClient, tailAtScaleStrategy, objectMapper),
                 new RingHostHttpClientProvider(amzaClient),
                 Executors.newFixedThreadPool(amzaBotConfig.getAmzaCallerThreadPoolSize()),
                 amzaBotConfig.getAmzaAwaitLeaderElectionForNMillis(),

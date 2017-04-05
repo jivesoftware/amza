@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -58,6 +59,7 @@ import com.jivesoftware.os.routing.bird.health.checkers.TimerHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.ClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.OAuthSignerProvider;
+import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
@@ -270,9 +272,15 @@ public class EmbedAmzaServiceInitializer {
             systemRingSize.set(amzaServiceConfig.systemRingSize);
         }
 
+        TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
+            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+            100, // TODO config
+            95 // TODO config
+        );
+
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
             new HttpPartitionClientFactory(),
-            new HttpPartitionHostsProvider(ringClient, mapper),
+            new HttpPartitionHostsProvider(ringClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(ringClient),
             Executors.newCachedThreadPool(),
             10_000, //TODO expose to conf

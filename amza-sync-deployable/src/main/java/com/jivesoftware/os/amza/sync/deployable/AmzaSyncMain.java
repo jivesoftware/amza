@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -66,6 +67,7 @@ import com.jivesoftware.os.routing.bird.health.checkers.SystemCpuHealthChecker;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
+import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.oauth.validator.AuthValidator;
@@ -139,10 +141,16 @@ public class AmzaSyncMain {
 
             AmzaSyncConfig syncConfig = deployable.config(AmzaSyncConfig.class);
 
+            TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
+                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+                100, // TODO config
+                95 // TODO config
+            );
+
             AmzaInterner amzaInterner = new AmzaInterner();
             AmzaClientProvider<HttpClient, HttpClientException> amzaClientProvider = new AmzaClientProvider<>(
                 new HttpPartitionClientFactory(),
-                new HttpPartitionHostsProvider(amzaClient, mapper),
+                new HttpPartitionHostsProvider(amzaClient, tailAtScaleStrategy, mapper),
                 new RingHostHttpClientProvider(amzaClient),
                 Executors.newFixedThreadPool(syncConfig.getAmzaCallerThreadPoolSize()),
                 syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
@@ -211,18 +219,9 @@ public class AmzaSyncMain {
                 }
             };
 
-            AmzaClientProvider clientProvider = new AmzaClientProvider<>(
-                new HttpPartitionClientFactory(),
-                new HttpPartitionHostsProvider(amzaClient, mapper),
-                new RingHostHttpClientProvider(amzaClient),
-                Executors.newCachedThreadPool(), //TODO expose to conf?
-                30_000L, // TODO config
-                -1,
-                -1);
-
 
             AmzaSyncSenderMap senderConfigStorage = new AmzaSyncSenderMap(
-                clientProvider,
+                amzaClientProvider,
                 "amza-sync-sender-config",
                 new PartitionProperties(Durability.fsync_async,
                     0, 0, 0, 0, 0, 0, 0, 0,
@@ -267,7 +266,7 @@ public class AmzaSyncMain {
 
 
             AmzaSyncPartitionConfigStorage syncPartitionConfigStorage = new AmzaSyncPartitionConfigStorage(
-                clientProvider,
+                amzaClientProvider,
                 "amza-sync-partitions-config-",
                 new PartitionProperties(Durability.fsync_async,
                     0, 0, 0, 0, 0, 0, 0, 0,

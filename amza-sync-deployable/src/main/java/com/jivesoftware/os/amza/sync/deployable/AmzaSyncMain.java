@@ -142,9 +142,10 @@ public class AmzaSyncMain {
             AmzaSyncConfig syncConfig = deployable.config(AmzaSyncConfig.class);
 
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+                Executors.newFixedThreadPool(1024, new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
                 100, // TODO config
-                95 // TODO config
+                95, // TODO config
+                1000 // TODO config
             );
 
             AmzaInterner amzaInterner = new AmzaInterner();

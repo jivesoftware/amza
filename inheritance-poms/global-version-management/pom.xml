@@ -15,7 +15,7 @@
         <jive.utils.version>0.110</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.23</mlogger.version>
-        <routing.bird.version>0.184</routing.bird.version>
+        <routing.bird.version>0.186</routing.bird.version>
         <aquarium.version>0.31</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>

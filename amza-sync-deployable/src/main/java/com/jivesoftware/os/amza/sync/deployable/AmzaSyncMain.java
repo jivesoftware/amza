@@ -83,6 +83,9 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.glassfish.jersey.oauth1.signature.OAuth1Request;
 import org.glassfish.jersey.oauth1.signature.OAuth1Signature;
 
@@ -142,7 +145,10 @@ public class AmzaSyncMain {
             AmzaSyncConfig syncConfig = deployable.config(AmzaSyncConfig.class);
 
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-                Executors.newFixedThreadPool(1024, new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+                new ThreadPoolExecutor(0, 1024,
+                    60L, TimeUnit.SECONDS,
+                    new SynchronousQueue<>(),
+                    new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
                 100, // TODO config
                 95, // TODO config
                 1000 // TODO config

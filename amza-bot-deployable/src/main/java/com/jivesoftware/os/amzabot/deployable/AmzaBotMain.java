@@ -54,6 +54,9 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public class AmzaBotMain {
 
@@ -118,7 +121,10 @@ public class AmzaBotMain {
             AmzaBotRandomOpConfig amzaBotRandomOpConfig = configBinder.bind(AmzaBotRandomOpConfig.class);
 
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-                Executors.newFixedThreadPool(1024, new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+                new ThreadPoolExecutor(0, 1024,
+                    60L, TimeUnit.SECONDS,
+                    new SynchronousQueue<>(),
+                    new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
                 100, // TODO config
                 95, // TODO config
                 1000 // TODO config

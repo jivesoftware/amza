@@ -67,6 +67,9 @@ import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.StringDefault;
@@ -273,7 +276,10 @@ public class EmbedAmzaServiceInitializer {
         }
 
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-            Executors.newFixedThreadPool(1024, new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+            new ThreadPoolExecutor(0, 1024,
+                60L, TimeUnit.SECONDS,
+                new SynchronousQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
             100, // TODO config
             95, // TODO config
             1000 // TODO config

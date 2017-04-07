@@ -285,9 +285,10 @@ public class Main {
         topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));
 
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
-            100,
-            95
+            Executors.newFixedThreadPool(1024, new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+            100, // TODO config
+            95, // TODO config
+            1000 // TODO config
         );
 
         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(

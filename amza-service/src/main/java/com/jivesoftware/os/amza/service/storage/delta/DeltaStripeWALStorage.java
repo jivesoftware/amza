@@ -71,6 +71,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -140,7 +143,9 @@ public class DeltaStripeWALStorage {
         this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
-        this.mergeDeltaThreads = Executors.newFixedThreadPool(mergeDeltaThreads,
+        this.mergeDeltaThreads = new ThreadPoolExecutor(0, mergeDeltaThreads,
+            60L, TimeUnit.SECONDS,
+            new SynchronousQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("merge-deltas-" + index + "-%d").build());
     }
 

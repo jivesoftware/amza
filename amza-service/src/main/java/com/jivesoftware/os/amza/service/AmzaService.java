@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -59,8 +60,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.commons.lang.mutable.MutableLong;
 import org.xerial.snappy.SnappyOutputStream;
@@ -780,7 +783,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public void compactAllTombstones() throws Exception {
         LOG.info("Manual compact all tombstones requests.");
 
-        ExecutorService compactorPool = Executors.newFixedThreadPool(numberOfStripes);
+        ExecutorService compactorPool = new ThreadPoolExecutor(0, numberOfStripes,
+            60L, TimeUnit.SECONDS,
+            new SynchronousQueue<>(),
+            new ThreadFactoryBuilder().setNameFormat("compactor-%d").build());
+
         try {
             List<Future<?>> runnables = Lists.newArrayList();
             for (int i = 0; i < numberOfStripes; i++) {

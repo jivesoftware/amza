@@ -142,7 +142,7 @@ public class DeltaStripeWALStorage {
         this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
-        this.mergeDeltaThreads = new ThreadPoolExecutor(0, mergeDeltaThreads,
+        this.mergeDeltaThreads = new ThreadPoolExecutor(mergeDeltaThreads, mergeDeltaThreads,
             60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("merge-deltas-" + index + "-%d").build());

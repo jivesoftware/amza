@@ -783,7 +783,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public void compactAllTombstones() throws Exception {
         LOG.info("Manual compact all tombstones requests.");
 
-        ExecutorService compactorPool = new ThreadPoolExecutor(0, numberOfStripes,
+        ExecutorService compactorPool = new ThreadPoolExecutor(numberOfStripes, numberOfStripes,
             60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("compactor-%d").build());

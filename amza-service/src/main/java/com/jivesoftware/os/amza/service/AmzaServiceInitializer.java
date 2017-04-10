@@ -229,7 +229,7 @@ public class AmzaServiceInitializer {
             orderIdProvider,
             walStorageProvider,
             numProc,
-            new ThreadPoolExecutor(0, 1024,
+            new ThreadPoolExecutor(1024, 1024,
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("partition-loader-%d").build()));
@@ -494,7 +494,7 @@ public class AmzaServiceInitializer {
             rowsTakerFactory.create(),
             partitionStripeProvider,
             availableRowsTaker,
-            new ThreadPoolExecutor(0, config.numberOfTakerThreads,
+            new ThreadPoolExecutor(config.numberOfTakerThreads, config.numberOfTakerThreads,
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),

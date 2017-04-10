@@ -128,7 +128,7 @@ public class TakeFullySystemReady implements AmzaSystemReady {
                 }
                 systemTookFully.clear();
 
-                ExecutorService onReadyExecutor = new ThreadPoolExecutor(0, 1024,
+                ExecutorService onReadyExecutor = new ThreadPoolExecutor(1024, 1024,
                     60L, TimeUnit.SECONDS,
                     new LinkedBlockingQueue<>(),
                     new ThreadFactoryBuilder().setNameFormat("on-ready-callback-%d").build());

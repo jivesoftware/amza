@@ -275,7 +275,7 @@ public class EmbedAmzaServiceInitializer {
         }
 
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-            new ThreadPoolExecutor(0, 1024,
+            new ThreadPoolExecutor(1024, 1024,
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
@@ -288,7 +288,7 @@ public class EmbedAmzaServiceInitializer {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(ringClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(ringClient),
-            new ThreadPoolExecutor(0, 1024,
+            new ThreadPoolExecutor(1024, 1024,
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("amza-client-%d").build()),

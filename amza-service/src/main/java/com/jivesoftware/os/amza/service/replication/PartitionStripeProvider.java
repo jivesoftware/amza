@@ -112,13 +112,13 @@ public class PartitionStripeProvider {
             }
         }
 
-        this.compactDeltasThreadPool = new ThreadPoolExecutor(0, numberOfStripes,
+        this.compactDeltasThreadPool = new ThreadPoolExecutor(numberOfStripes, numberOfStripes,
             60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
 
 
-        this.flusherExecutor = new ThreadPoolExecutor(0, numberOfStripes,
+        this.flusherExecutor = new ThreadPoolExecutor(numberOfStripes, numberOfStripes,
             60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("stripe-flusher-%d").build());
@@ -130,7 +130,7 @@ public class PartitionStripeProvider {
     }
 
     public void load() throws Exception {
-        ExecutorService stripeLoaderThreadPool = new ThreadPoolExecutor(0, partitionStripes.length,
+        ExecutorService stripeLoaderThreadPool = new ThreadPoolExecutor(partitionStripes.length, partitionStripes.length,
             60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());

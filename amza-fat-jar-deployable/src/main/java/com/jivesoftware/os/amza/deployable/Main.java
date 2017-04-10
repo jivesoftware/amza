@@ -288,7 +288,7 @@ public class Main {
         topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));
 
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-            new ThreadPoolExecutor(0, 1024,
+            new ThreadPoolExecutor(1024, 1024,
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
@@ -301,7 +301,7 @@ public class Main {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(httpClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(httpClient),
-            new ThreadPoolExecutor(0, 1024,
+            new ThreadPoolExecutor(1024, 1024,
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("amza-client-%d").build()),

@@ -87,6 +87,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -301,7 +302,10 @@ public class Main {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(httpClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(httpClient),
-            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
+            new ThreadPoolExecutor(0, 1024,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("amza-client-%d").build()),
             10_000, //TODO expose to conf
             -1,
             -1);

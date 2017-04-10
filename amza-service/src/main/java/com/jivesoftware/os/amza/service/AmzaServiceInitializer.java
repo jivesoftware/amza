@@ -85,7 +85,7 @@ import java.nio.channels.FileLock;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -230,7 +230,10 @@ public class AmzaServiceInitializer {
             orderIdProvider,
             walStorageProvider,
             numProc,
-            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("partitionLoader-%d").build()));
+            new ThreadPoolExecutor(0, 1024,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("partition-loader-%d").build()));
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,

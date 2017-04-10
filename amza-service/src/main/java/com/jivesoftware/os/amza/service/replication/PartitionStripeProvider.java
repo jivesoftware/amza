@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -131,8 +131,11 @@ public class PartitionStripeProvider {
     }
 
     public void load() throws Exception {
-        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
+        ExecutorService stripeLoaderThreadPool = new ThreadPoolExecutor(0, partitionStripes.length,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
+
         List<Future> futures = new ArrayList<>();
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             futures.add(stripeLoaderThreadPool.submit(() -> {

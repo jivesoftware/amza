@@ -20,6 +20,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -125,7 +128,11 @@ public class TakeFullySystemReady implements AmzaSystemReady {
                 }
                 systemTookFully.clear();
 
-                ExecutorService onReadyExecutor = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("onReadyCallback-%d").build());
+                ExecutorService onReadyExecutor = new ThreadPoolExecutor(0, 1024,
+                    60L, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>(),
+                    new ThreadFactoryBuilder().setNameFormat("on-ready-callback-%d").build());
+
                 try {
                     List<Future<?>> futures = Lists.newArrayList();
                     for (Callable<Void> callback : onReadyCallbacks) {

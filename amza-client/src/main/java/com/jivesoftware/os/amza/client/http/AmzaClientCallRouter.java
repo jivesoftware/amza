@@ -5,7 +5,6 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -27,7 +26,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -45,9 +43,6 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
     private final PartitionHostsProvider partitionHostsProvider;
     private final RingHostClientProvider<C, E> clientProvider;
     private final Cache<PartitionName, Ring> partitionRoutingCache;
-
-    private final ExecutorService cleanupExecutor = Executors.newSingleThreadExecutor(
-        new ThreadFactoryBuilder().setNameFormat("amza-client-cleanup-%d").build());
 
     public AmzaClientCallRouter(ExecutorService callerThreads,
         PartitionHostsProvider partitionHostsProvider,

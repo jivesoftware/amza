@@ -85,7 +85,9 @@ import java.nio.channels.FileLock;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -228,7 +230,10 @@ public class AmzaServiceInitializer {
             orderIdProvider,
             walStorageProvider,
             numProc,
-            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("partitionLoader-%d").build()));
+            new ThreadPoolExecutor(0, 1024,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("partition-loader-%d").build()));
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -490,7 +495,10 @@ public class AmzaServiceInitializer {
             rowsTakerFactory.create(),
             partitionStripeProvider,
             availableRowsTaker,
-            Executors.newFixedThreadPool(config.numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),
+            new ThreadPoolExecutor(0, config.numberOfTakerThreads,
+                60L, TimeUnit.SECONDS,
+                new SynchronousQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),
             new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, highwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),

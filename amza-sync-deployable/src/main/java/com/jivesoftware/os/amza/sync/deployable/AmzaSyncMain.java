@@ -159,7 +159,10 @@ public class AmzaSyncMain {
                 new HttpPartitionClientFactory(),
                 new HttpPartitionHostsProvider(amzaClient, tailAtScaleStrategy, mapper),
                 new RingHostHttpClientProvider(amzaClient),
-                Executors.newFixedThreadPool(syncConfig.getAmzaCallerThreadPoolSize()),
+                new ThreadPoolExecutor(0, syncConfig.getAmzaCallerThreadPoolSize(),
+                    60L, TimeUnit.SECONDS,
+                    new SynchronousQueue<>(),
+                    new ThreadFactoryBuilder().setNameFormat("amza-caller-%d").build()),
                 syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
                 -1,
                 -1);

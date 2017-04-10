@@ -66,8 +66,7 @@ import com.jivesoftware.os.routing.bird.server.util.Resource;
 import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.IOException;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -278,7 +277,7 @@ public class EmbedAmzaServiceInitializer {
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
             new ThreadPoolExecutor(0, 1024,
                 60L, TimeUnit.SECONDS,
-                new SynchronousQueue<>(),
+                new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
             100, // TODO config
             95, // TODO config
@@ -289,7 +288,10 @@ public class EmbedAmzaServiceInitializer {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(ringClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(ringClient),
-            Executors.newCachedThreadPool(),
+            new ThreadPoolExecutor(0, 1024,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                new ThreadFactoryBuilder().setNameFormat("amza-client-%d").build()),
             10_000, //TODO expose to conf
             -1,
             -1);

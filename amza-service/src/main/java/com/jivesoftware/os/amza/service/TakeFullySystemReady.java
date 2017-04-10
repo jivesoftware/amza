@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -20,9 +21,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -128,10 +126,7 @@ public class TakeFullySystemReady implements AmzaSystemReady {
                 }
                 systemTookFully.clear();
 
-                ExecutorService onReadyExecutor = new ThreadPoolExecutor(1024, 1024,
-                    60L, TimeUnit.SECONDS,
-                    new LinkedBlockingQueue<>(),
-                    new ThreadFactoryBuilder().setNameFormat("on-ready-callback-%d").build());
+                ExecutorService onReadyExecutor =  BoundedExecutor.newBoundedExecutor(1024, "on-ready-callback");
 
                 try {
                     List<Future<?>> futures = Lists.newArrayList();

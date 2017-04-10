@@ -56,6 +56,7 @@ import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -142,10 +143,7 @@ public class DeltaStripeWALStorage {
         this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
-        this.mergeDeltaThreads = new ThreadPoolExecutor(mergeDeltaThreads, mergeDeltaThreads,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("merge-deltas-" + index + "-%d").build());
+        this.mergeDeltaThreads =  BoundedExecutor.newBoundedExecutor(mergeDeltaThreads, "merge-deltas-" + index);
     }
 
     public int getId() {

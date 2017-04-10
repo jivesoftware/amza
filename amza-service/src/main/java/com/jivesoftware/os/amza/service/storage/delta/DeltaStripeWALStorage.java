@@ -68,10 +68,9 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -145,7 +144,7 @@ public class DeltaStripeWALStorage {
         this.mergeAfterNUpdates = mergeAfterNUpdates;
         this.mergeDeltaThreads = new ThreadPoolExecutor(0, mergeDeltaThreads,
             60L, TimeUnit.SECONDS,
-            new SynchronousQueue<>(),
+            new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("merge-deltas-" + index + "-%d").build());
     }
 

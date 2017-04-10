@@ -32,7 +32,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -115,13 +114,13 @@ public class PartitionStripeProvider {
 
         this.compactDeltasThreadPool = new ThreadPoolExecutor(0, numberOfStripes,
             60L, TimeUnit.SECONDS,
-            new SynchronousQueue<>(),
+            new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
 
 
         this.flusherExecutor = new ThreadPoolExecutor(0, numberOfStripes,
             60L, TimeUnit.SECONDS,
-            new SynchronousQueue<>(),
+            new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setNameFormat("stripe-flusher-%d").build());
 
         this.flushers = new AsyncStripeFlusher[numberOfStripes];

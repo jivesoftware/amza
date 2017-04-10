@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -53,6 +52,7 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -61,9 +61,6 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.commons.lang.mutable.MutableLong;
 import org.xerial.snappy.SnappyOutputStream;
@@ -783,10 +780,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public void compactAllTombstones() throws Exception {
         LOG.info("Manual compact all tombstones requests.");
 
-        ExecutorService compactorPool = new ThreadPoolExecutor(numberOfStripes, numberOfStripes,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("compactor-%d").build());
+        ExecutorService compactorPool = BoundedExecutor.newBoundedExecutor(numberOfStripes, "compactor");
 
         try {
             List<Future<?>> runnables = Lists.newArrayList();

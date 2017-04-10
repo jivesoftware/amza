@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -72,6 +71,7 @@ import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientIniti
 import com.jivesoftware.os.routing.bird.server.InitializeRestfulServer;
 import com.jivesoftware.os.routing.bird.server.JerseyEndpoints;
 import com.jivesoftware.os.routing.bird.server.RestfulServer;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptor;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptorsProvider;
 import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptorsResponse;
@@ -87,9 +87,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.merlin.config.BindInterfaceToConfiguration;
@@ -288,10 +285,7 @@ public class Main {
         topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));
 
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-            new ThreadPoolExecutor(1024, 1024,
-                60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+            BoundedExecutor.newBoundedExecutor(1024, "tas"),
             100, // TODO config
             95, // TODO config
             1000 // TODO config
@@ -301,10 +295,7 @@ public class Main {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(httpClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(httpClient),
-            new ThreadPoolExecutor(1024, 1024,
-                60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("amza-client-%d").build()),
+            BoundedExecutor.newBoundedExecutor(1024, "amza-client"),
             10_000, //TODO expose to conf
             -1,
             -1);

@@ -2,7 +2,6 @@ package com.jivesoftware.os.amzabot.deployable;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
@@ -49,14 +48,12 @@ import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.File;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 public class AmzaBotMain {
 
@@ -121,10 +118,7 @@ public class AmzaBotMain {
             AmzaBotRandomOpConfig amzaBotRandomOpConfig = configBinder.bind(AmzaBotRandomOpConfig.class);
 
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-                new ThreadPoolExecutor(1024, 1024,
-                    60L, TimeUnit.SECONDS,
-                    new LinkedBlockingQueue<>(),
-                    new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
+                BoundedExecutor.newBoundedExecutor(1024, "tas"),
                 100, // TODO config
                 95, // TODO config
                 1000 // TODO config

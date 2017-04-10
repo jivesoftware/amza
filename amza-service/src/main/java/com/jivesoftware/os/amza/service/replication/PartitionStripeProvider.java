@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -25,15 +24,13 @@ import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -112,16 +109,9 @@ public class PartitionStripeProvider {
             }
         }
 
-        this.compactDeltasThreadPool = new ThreadPoolExecutor(numberOfStripes, numberOfStripes,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
+        this.compactDeltasThreadPool = BoundedExecutor.newBoundedExecutor(numberOfStripes, "compact-deltas");
 
-
-        this.flusherExecutor = new ThreadPoolExecutor(numberOfStripes, numberOfStripes,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("stripe-flusher-%d").build());
+        this.flusherExecutor = BoundedExecutor.newBoundedExecutor(numberOfStripes, "stripe-flusher");
 
         this.flushers = new AsyncStripeFlusher[numberOfStripes];
         for (int i = 0; i < numberOfStripes; i++) {
@@ -130,10 +120,7 @@ public class PartitionStripeProvider {
     }
 
     public void load() throws Exception {
-        ExecutorService stripeLoaderThreadPool = new ThreadPoolExecutor(partitionStripes.length, partitionStripes.length,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
+        ExecutorService stripeLoaderThreadPool = BoundedExecutor.newBoundedExecutor(partitionStripes.length, "load-stripes");
 
         List<Future> futures = new ArrayList<>();
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
@@ -143,7 +130,7 @@ public class PartitionStripeProvider {
                 try {
                     deltaStripeWALStorage.load(partitionIndex, partitionCreator, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
-                    LOG.error("Failed while loading {} ", new Object[]{deltaStripeWALStorage}, x);
+                    LOG.error("Failed while loading {} ", new Object[] { deltaStripeWALStorage }, x);
                     throw new RuntimeException(x);
                 } finally {
                     compactionStats.finished();

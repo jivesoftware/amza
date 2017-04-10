@@ -11,11 +11,11 @@
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
-        <leaps-n-bounds.version>0.215</leaps-n-bounds.version>
+        <leaps-n-bounds.version>0.216</leaps-n-bounds.version>
         <jive.utils.version>0.110</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.23</mlogger.version>
-        <routing.bird.version>0.186</routing.bird.version>
+        <routing.bird.version>0.187</routing.bird.version>
         <aquarium.version>0.31</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>

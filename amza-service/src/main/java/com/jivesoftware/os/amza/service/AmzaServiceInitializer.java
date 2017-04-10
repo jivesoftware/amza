@@ -19,7 +19,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -73,6 +72,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -85,8 +85,6 @@ import java.nio.channels.FileLock;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -229,10 +227,7 @@ public class AmzaServiceInitializer {
             orderIdProvider,
             walStorageProvider,
             numProc,
-            new ThreadPoolExecutor(1024, 1024,
-                60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("partition-loader-%d").build()));
+            BoundedExecutor.newBoundedExecutor(numProc, "partition-loader"));
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -494,10 +489,7 @@ public class AmzaServiceInitializer {
             rowsTakerFactory.create(),
             partitionStripeProvider,
             availableRowsTaker,
-            new ThreadPoolExecutor(config.numberOfTakerThreads, config.numberOfTakerThreads,
-                60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(),
-                new ThreadFactoryBuilder().setNameFormat("rowTakerThreadPool-%d").build()),
+            BoundedExecutor.newBoundedExecutor(config.numberOfTakerThreads, "row-taker"),
             new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, highwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),

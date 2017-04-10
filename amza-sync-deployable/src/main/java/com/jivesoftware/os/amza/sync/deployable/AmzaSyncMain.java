@@ -82,8 +82,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.glassfish.jersey.oauth1.signature.OAuth1Request;
@@ -147,7 +147,7 @@ public class AmzaSyncMain {
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
                 new ThreadPoolExecutor(0, 1024,
                     60L, TimeUnit.SECONDS,
-                    new SynchronousQueue<>(),
+                    new LinkedBlockingQueue<>(),
                     new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
                 100, // TODO config
                 95, // TODO config
@@ -161,7 +161,7 @@ public class AmzaSyncMain {
                 new RingHostHttpClientProvider(amzaClient),
                 new ThreadPoolExecutor(0, syncConfig.getAmzaCallerThreadPoolSize(),
                     60L, TimeUnit.SECONDS,
-                    new SynchronousQueue<>(),
+                    new LinkedBlockingQueue<>(),
                     new ThreadFactoryBuilder().setNameFormat("amza-caller-%d").build()),
                 syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
                 -1,

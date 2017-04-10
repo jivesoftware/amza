@@ -88,7 +88,6 @@ import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -291,7 +290,7 @@ public class Main {
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
             new ThreadPoolExecutor(0, 1024,
                 60L, TimeUnit.SECONDS,
-                new SynchronousQueue<>(),
+                new LinkedBlockingQueue<>(),
                 new ThreadFactoryBuilder().setNameFormat("tas-%d").build()),
             100, // TODO config
             95, // TODO config

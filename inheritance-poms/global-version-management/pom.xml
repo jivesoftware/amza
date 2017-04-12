@@ -11,11 +11,11 @@
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
-        <leaps-n-bounds.version>0.216</leaps-n-bounds.version>
+        <leaps-n-bounds.version>0.217</leaps-n-bounds.version>
         <jive.utils.version>0.110</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
-        <mlogger.version>0.23</mlogger.version>
-        <routing.bird.version>0.187</routing.bird.version>
+        <mlogger.version>0.26</mlogger.version>
+        <routing.bird.version>0.188</routing.bird.version>
         <aquarium.version>0.31</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
@@ -613,53 +613,6 @@
                             </execution>
                         </executions>
                     </plugin>
-                    <!--                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-deploy-plugin</artifactId>
-                        <version>2.8.2</version>
-                        <executions>
-                            <execution>
-                                <id>executable pom git</id>
-                                <phase>deploy</phase>
-                                <goals>
-                                    <goal>deploy-file</goal>
-                                </goals>
-                                <configuration>
-                                    <artifactId>${project.artifactId}</artifactId>
-                                    <version>${project.version}</version>
-                                    <groupId>${project.groupId}</groupId>
-                                    <classifier>git</classifier>
-                                    <repositoryId>${project.distributionManagement.repository.id}</repositoryId>
-                                    <url>${project.distributionManagement.repository.url}</url>
-                                    <file>target/build.properties</file>
-                                    <generatePom>false</generatePom>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <id>executable pom changelog</id>
-                                <phase>deploy</phase>
-                                <goals>
-                                    <goal>deploy-file</goal>
-                                </goals>
-                                <configuration>
-                                    <artifactId>${project.artifactId}</artifactId>
-                                    <version>${project.version}</version>
-                                    <groupId>${project.groupId}</groupId>
-                                    <classifier>changelog</classifier>
-                                    <repositoryId>${project.distributionManagement.repository.id}</repositoryId>
-                                    <url>${project.distributionManagement.repository.url}</url>
-                                    <file>target/changelog.table.html</file>
-                                    <generatePom>false</generatePom>
-                                </configuration>
-                            </execution>
-                            <execution>
-                                <phase>deploy</phase>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <file>${project.build.directory}/${project.name}-${project.version}.tar.gz</file>
-                        </configuration>
-                    </plugin>-->
                     <plugin>
                         <groupId>pl.project13.maven</groupId>
                         <artifactId>git-commit-id-plugin</artifactId>

@@ -52,6 +52,7 @@ import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
+import com.jivesoftware.os.routing.bird.deployable.TenantAwareHttpClientHealthCheck;
 import com.jivesoftware.os.routing.bird.endpoints.base.FullyOnlineVersion;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
@@ -135,6 +136,8 @@ public class AmzaSyncMain {
                 .checkDeadEveryNMillis(10_000)
                 .socketTimeoutInMillis(60_000)
                 .build(); // TODO expose to conf
+
+            deployable.addHealthCheck(new TenantAwareHttpClientHealthCheck("amzaClient", amzaClient));
 
             ObjectMapper mapper = new ObjectMapper();
             mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);

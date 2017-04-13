@@ -46,6 +46,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
+import com.jivesoftware.os.routing.bird.deployable.TenantAwareHttpClientHealthCheck;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
@@ -188,6 +189,9 @@ public class EmbedAmzaServiceInitializer {
             .maxConnections(1_000)
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
+
+        deployable.addHealthCheck(new TenantAwareHttpClientHealthCheck("systemTakes", systemTakeClient));
+
         TenantAwareHttpClient<String> stripedTakeClient = nonSigningClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
             clientHealthProvider)
@@ -196,6 +200,8 @@ public class EmbedAmzaServiceInitializer {
             .maxConnections(1_000)
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
+
+        deployable.addHealthCheck(new TenantAwareHttpClientHealthCheck("stripeTakes", stripedTakeClient));
 
         RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemTakeClient, mapper, amzaInterner);
         RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, amzaInterner);
@@ -209,6 +215,8 @@ public class EmbedAmzaServiceInitializer {
             .maxConnections(1_000)
             .socketTimeoutInMillis(60_000)
             .build(); // TODO expose to conf
+
+        deployable.addHealthCheck(new TenantAwareHttpClientHealthCheck("ringClient", ringClient));
 
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(ringClient, amzaInterner, mapper);
         AquariumStats aquariumStats = new AquariumStats();

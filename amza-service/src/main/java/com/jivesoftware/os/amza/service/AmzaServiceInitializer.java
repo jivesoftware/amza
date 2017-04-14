@@ -72,7 +72,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
-import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -85,6 +84,7 @@ import java.nio.channels.FileLock;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -158,6 +158,10 @@ public class AmzaServiceInitializer {
             int numberOfStripes) throws Exception;
     }
 
+    public interface AmzaThreadPoolProvider {
+        ExecutorService allocateThreadPool(int threadCount, String name);
+    }
+
     public AmzaService initialize(AmzaServiceConfig config,
         AmzaInterner amzaInterner,
         AquariumStats aquariumStats,
@@ -179,7 +183,8 @@ public class AmzaServiceInitializer {
         RowsTakerFactory systemRowsTakerFactory,
         RowsTakerFactory rowsTakerFactory,
         Optional<TakeFailureListener> takeFailureListener,
-        RowChanges allRowChanges) throws Exception {
+        RowChanges allRowChanges,
+        AmzaThreadPoolProvider amzaThreadPoolProvider) throws Exception {
 
         AmzaPartitionWatcher amzaSystemPartitionWatcher = new AmzaPartitionWatcher(true, allRowChanges);
 
@@ -227,7 +232,7 @@ public class AmzaServiceInitializer {
             orderIdProvider,
             walStorageProvider,
             numProc,
-            BoundedExecutor.newBoundedExecutor(numProc, "partition-loader"));
+            amzaThreadPoolProvider.allocateThreadPool(numProc, "partition-loader"));
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -329,7 +334,8 @@ public class AmzaServiceInitializer {
                 config.deltaMaxValueSizeInIndex,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction,
-                deltaMergeThreads);
+                amzaThreadPoolProvider.allocateThreadPool(deltaMergeThreads, "merge-deltas-" + i)
+            );
         }
 
         long stripeMaxFreeWithinNBytes = config.rebalanceIfImbalanceGreaterThanNBytes / 2; //TODO config separately
@@ -423,7 +429,10 @@ public class AmzaServiceInitializer {
             awaitOnline,
             amzaStripedPartitionWatcher,
             config.asyncFsyncIntervalMillis,
-            config.deltaStripeCompactionIntervalInMillis);
+            config.deltaStripeCompactionIntervalInMillis,
+            amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length, "compact-deltas"),
+            amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length, "stripe-flusher")
+        );
 
         PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader,
             partitionStripeProvider, storageVersionProvider, amzaInterner, numProc);
@@ -489,7 +498,7 @@ public class AmzaServiceInitializer {
             rowsTakerFactory.create(),
             partitionStripeProvider,
             availableRowsTaker,
-            BoundedExecutor.newBoundedExecutor(config.numberOfTakerThreads, "row-taker"),
+            amzaThreadPoolProvider.allocateThreadPool(config.numberOfTakerThreads, "row-taker"),
             new SystemPartitionCommitChanges(storageVersionProvider, systemWALStorage, highwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),

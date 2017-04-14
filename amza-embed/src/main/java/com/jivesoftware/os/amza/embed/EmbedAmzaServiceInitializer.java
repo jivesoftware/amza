@@ -63,7 +63,6 @@ import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
-import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.IOException;
 import java.util.Set;
@@ -256,6 +255,10 @@ public class EmbedAmzaServiceInitializer {
 
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(amzaInterner,
                         indexConfig,
+                        deployable.newBoundedExecutor(partitionStripeFunction, "lab-heap"),
+                        deployable.newBoundedExecutor(indexConfig.getConcurrency(), "lab-scheduler"),
+                        deployable.newBoundedExecutor(indexConfig.getConcurrency(), "lab-compactor"),
+                        deployable.newBoundedExecutor(partitionStripeFunction, "lab-destroy"),
                         LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
                         workingIndexDirectories),

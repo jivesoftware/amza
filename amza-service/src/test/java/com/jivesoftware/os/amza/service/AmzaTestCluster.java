@@ -325,6 +325,10 @@ public class AmzaTestCluster {
 
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(amzaInterner,
                         labConfig,
+                        Executors.newCachedThreadPool(),
+                        Executors.newCachedThreadPool(),
+                        Executors.newCachedThreadPool(),
+                        Executors.newCachedThreadPool(),
                         LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
                         workingIndexDirectories),

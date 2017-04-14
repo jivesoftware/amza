@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeyStream;
 import java.io.File;
 import java.util.Arrays;
+import java.util.concurrent.Executors;
 import org.merlin.config.BindInterfaceToConfiguration;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -390,7 +391,11 @@ public class LABPointerIndexWALIndexTest {
     private LABPointerIndexWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
         LABPointerIndexConfig config = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
         AmzaInterner amzaInterner = new AmzaInterner();
-        return new LABPointerIndexWALIndexProvider(amzaInterner, config, "lab", 1, new File[] { dir }).createIndex(partitionName, -1, 0);
+        return new LABPointerIndexWALIndexProvider(amzaInterner, config, Executors.newCachedThreadPool(),
+            Executors.newCachedThreadPool(),
+            Executors.newCachedThreadPool(),
+            Executors.newCachedThreadPool(),
+            "lab", 1, new File[] { dir }).createIndex(partitionName, -1, 0);
     }
 
 }

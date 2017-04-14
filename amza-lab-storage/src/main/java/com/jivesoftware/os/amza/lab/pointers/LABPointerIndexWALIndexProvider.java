@@ -34,6 +34,10 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
     public LABPointerIndexWALIndexProvider(AmzaInterner amzaInterner,
         LABPointerIndexConfig config,
+        ExecutorService heapThreadPool,
+        ExecutorService schedulerThreadPool,
+        ExecutorService compactorThreadPool,
+        ExecutorService destroyThreadPool,
         String name,
         int numberOfStripes,
         File[] baseDirs) throws Exception {
@@ -43,10 +47,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
         this.name = name;
         this.environments = new LABEnvironment[numberOfStripes];
 
-        ExecutorService heapThreadPool = LABEnvironment.buildLABHeapSchedulerThreadPool(environments.length);
-        ExecutorService schedulerThreadPool = LABEnvironment.buildLABSchedulerThreadPool(config.getConcurrency());
-        ExecutorService compactorThreadPool = LABEnvironment.buildLABCompactorThreadPool(config.getConcurrency());
-        ExecutorService destroyThreadPool = LABEnvironment.buildLABDestroyThreadPool(environments.length);
+
         LABStats labStats = new LABStats(); // grr
 
         LabHeapPressure labHeapPressure = new LabHeapPressure(labStats, heapThreadPool,

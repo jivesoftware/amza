@@ -127,7 +127,6 @@ public class TakeFullySystemReady implements AmzaSystemReady {
                 systemTookFully.clear();
 
                 ExecutorService onReadyExecutor =  BoundedExecutor.newBoundedExecutor(1024, "on-ready-callback");
-
                 try {
                     List<Future<?>> futures = Lists.newArrayList();
                     for (Callable<Void> callback : onReadyCallbacks) {

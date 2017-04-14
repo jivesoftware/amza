@@ -251,7 +251,8 @@ public class DeltaStripeWALStorageNGTest {
             deltaWALFactory,
             8,
             walIndexProviderRegistry,
-            20_000, 8);
+            20_000,
+            Executors.newCachedThreadPool());
         delta.load(partitionIndex, partitionCreator, currentVersionProvider, primaryRowMarshaller);
         return delta;
     }

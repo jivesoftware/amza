@@ -339,7 +339,10 @@ public class AmzaTestCluster {
             () -> updateTaker,
             () -> updateTaker,
             absent,
-            (RowsChanged changes) -> {
+            (changes) -> {
+            },
+            (threadCount, name) -> {
+                return Executors.newCachedThreadPool();
             });
 
         amzaService.start(localRingMember, localRingHost);

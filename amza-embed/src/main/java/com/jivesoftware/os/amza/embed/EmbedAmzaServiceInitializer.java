@@ -268,7 +268,10 @@ public class EmbedAmzaServiceInitializer {
             systemRowsTakerFactory,
             rowsTakerFactory,
             Optional.<TakeFailureListener>absent(),
-            allRowChanges);
+            allRowChanges,
+            (threadCount, name) -> {
+                return deployable.newBoundedExecutor(threadCount, name);
+            });
 
         RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = null;
         if (useAmzaDiscovery) {

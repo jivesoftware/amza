@@ -6,7 +6,6 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
@@ -56,7 +55,6 @@ import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
-import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -70,10 +68,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -131,7 +126,7 @@ public class DeltaStripeWALStorage {
         int maxValueSizeInIndex,
         WALIndexProviderRegistry walIndexProviderRegistry,
         long mergeAfterNUpdates,
-        int mergeDeltaThreads) {
+        ExecutorService mergeDeltaThreads) {
 
         this.amzaInterner = amzaInterner;
         this.index = index;
@@ -143,7 +138,7 @@ public class DeltaStripeWALStorage {
         this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
-        this.mergeDeltaThreads =  BoundedExecutor.newBoundedExecutor(mergeDeltaThreads, "merge-deltas-" + index);
+        this.mergeDeltaThreads = mergeDeltaThreads;
     }
 
     public int getId() {

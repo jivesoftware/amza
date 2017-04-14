@@ -76,7 +76,9 @@ public class PartitionStripeProvider {
         AwaitNotify<PartitionName> awaitNotify,
         AmzaPartitionWatcher amzaStripedPartitionWatcher,
         long asyncFlushIntervalMillis,
-        long deltaStripeCompactionIntervalInMillis) {
+        long deltaStripeCompactionIntervalInMillis,
+        ExecutorService compactDeltasThreadPool,
+        ExecutorService flusherExecutor) {
 
         this.stats = stats;
         this.partitionCreator = partitionCreator;
@@ -109,9 +111,8 @@ public class PartitionStripeProvider {
             }
         }
 
-        this.compactDeltasThreadPool = BoundedExecutor.newBoundedExecutor(numberOfStripes, "compact-deltas");
-
-        this.flusherExecutor = BoundedExecutor.newBoundedExecutor(numberOfStripes, "stripe-flusher");
+        this.compactDeltasThreadPool = compactDeltasThreadPool;
+        this.flusherExecutor = flusherExecutor;
 
         this.flushers = new AsyncStripeFlusher[numberOfStripes];
         for (int i = 0; i < numberOfStripes; i++) {

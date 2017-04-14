@@ -26,7 +26,6 @@ import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
@@ -283,7 +282,10 @@ public class Main {
             () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner),
             () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner),
             Optional.absent(),
-            (RowsChanged changes) -> {
+            (changes) -> {
+            },
+            (threadCount, name) -> {
+                return Executors.newCachedThreadPool();
             });
 
         topologyProvider.set(() -> amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING, -1));

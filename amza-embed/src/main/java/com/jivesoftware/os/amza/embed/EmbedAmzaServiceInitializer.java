@@ -280,7 +280,7 @@ public class EmbedAmzaServiceInitializer {
         }
 
         TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-            BoundedExecutor.newBoundedExecutor(1024, "tas"),
+            deployable.newBoundedExecutor(1024, "tas"),
             100, // TODO config
             95, // TODO config
             1000 // TODO config
@@ -290,7 +290,7 @@ public class EmbedAmzaServiceInitializer {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(ringClient, tailAtScaleStrategy, mapper),
             new RingHostHttpClientProvider(ringClient),
-            BoundedExecutor.newBoundedExecutor(1024, "tas"),
+            deployable.newBoundedExecutor(1024, "amza-client"),
             10_000, //TODO expose to conf
             -1,
             -1);

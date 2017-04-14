@@ -145,7 +145,7 @@ public class AmzaSyncMain {
             AmzaSyncConfig syncConfig = deployable.config(AmzaSyncConfig.class);
 
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-                BoundedExecutor.newBoundedExecutor(1024, "tas"),
+                deployable.newBoundedExecutor(1024, "tas"),
                 100, // TODO config
                 95, // TODO config
                 1000 // TODO config
@@ -156,7 +156,7 @@ public class AmzaSyncMain {
                 new HttpPartitionClientFactory(),
                 new HttpPartitionHostsProvider(amzaClient, tailAtScaleStrategy, mapper),
                 new RingHostHttpClientProvider(amzaClient),
-                BoundedExecutor.newBoundedExecutor(syncConfig.getAmzaCallerThreadPoolSize(), "amza-client"),
+                deployable.newBoundedExecutor(syncConfig.getAmzaCallerThreadPoolSize(), "amza-client"),
                 syncConfig.getAmzaAwaitLeaderElectionForNMillis(),
                 -1,
                 -1);

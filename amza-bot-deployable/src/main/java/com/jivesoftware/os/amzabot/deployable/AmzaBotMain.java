@@ -48,7 +48,6 @@ import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
 import com.jivesoftware.os.routing.bird.http.client.TailAtScaleStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
-import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.File;
 import java.util.Arrays;
@@ -118,7 +117,7 @@ public class AmzaBotMain {
             AmzaBotRandomOpConfig amzaBotRandomOpConfig = configBinder.bind(AmzaBotRandomOpConfig.class);
 
             TailAtScaleStrategy tailAtScaleStrategy = new TailAtScaleStrategy(
-                BoundedExecutor.newBoundedExecutor(1024, "tas"),
+                deployable.newBoundedExecutor(1024, "tas"),
                 100, // TODO config
                 95, // TODO config
                 1000 // TODO config

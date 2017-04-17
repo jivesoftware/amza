@@ -238,6 +238,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return txFpStream.stream(txId, fp, true, value);
             }
         }
+        //TODO split hydrateValues=false into its own method
         return txFpStream.stream(txId, fp, !hydrateValues, null);
     }
 
@@ -261,6 +262,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return stream.stream(prefix, key, timestamp, tombstoned, version, fp, false, null);
             }
         }
+        //TODO split hydrateValues=false into its own method
         return stream.stream(prefix, key, timestamp, tombstoned, version, -1, !hydrateValues, null);
     }
 
@@ -288,6 +290,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, fp, false, null);
             }
         }
+        //TODO split hydrateValues=false into its own method
         return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, -1, !hydrateValues, null);
     }
 
@@ -390,8 +393,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         lock.acquire();
         try {
             return keys.consume((key) -> getPointerInternal(prefix, key,
-                (_prefix, _key, timestamp, tombstoned, version, fp, indexValue, value) -> {
-                    boolean contained = fp != -1 && !tombstoned;
+                (_prefix, _key, timestamp, tombstoned, version, fp, hasValue, value) -> {
+                    boolean contained = (fp != -1 || hasValue) && !tombstoned;
                     stream.stream(prefix, key, contained, timestamp, version);
                     return true;
                 }));
@@ -418,17 +421,20 @@ public class LABPointerIndexWALIndex implements WALIndex {
             long[] delta = new long[1];
             boolean completed = keyPointers.consume(
                 (prefix, key, requestTimestamp, requestTombstoned, requestVersion, requestFp, requestIndexValue, requestValue)
-                -> getPointerInternal(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, _indexValue, _value) -> {
-                    // indexFp, indexTombstoned, requestTombstoned, delta
-                    // -1       false            false              1
-                    // -1       false            true               0
-                    //  1       false            false              0
-                    //  1       false            true               -1
-                    //  1       true             false              1
-                    //  1       true             true               0
-                    if (!requestTombstoned && (indexFp == -1 && !indexTombstoned || indexFp != -1 && indexTombstoned)) {
+                -> getPointerInternal(prefix, key, (_prefix, _key, indexTimestamp, indexTombstoned, indexVersion, indexFp, indexHasValue, indexValue) -> {
+                    // indexFp, indexHasValue, backingHasValue, indexTombstoned, requestTombstoned, delta
+                    // -1       false          false            false            false              1
+                    // -1       true           true             false            false              0
+                    // -1       false          false            false            true               0
+                    // -1       true           true             false            true               -1
+                    //  1       false          true             false            false              0
+                    //  1       false          true             false            true               -1
+                    //  1       false          true             true             false              1
+                    //  1       false          true             true             true               0
+                    boolean backingHasValue = (indexFp != -1 || indexHasValue);
+                    if (!requestTombstoned && (!backingHasValue && !indexTombstoned || backingHasValue && indexTombstoned)) {
                         delta[0]++;
-                    } else if (indexFp != -1 && !indexTombstoned && requestTombstoned) {
+                    } else if (backingHasValue && !indexTombstoned && requestTombstoned) {
                         delta[0]--;
                     }
                     return true;

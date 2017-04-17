@@ -530,7 +530,8 @@ public class BinaryWALTx implements WALTx {
             (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 compactableWALIndex.getPointer(prefix, key,
                     (_prefix, _key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp, hasValue1, value1) -> {
-                        if (pointerFp == -1 || CompareTimestampVersions.compare(valueTimestamp, valueVersion, pointerTimestamp, pointerVersion) >= 0) {
+                        if ((pointerFp == -1 && !hasValue1)
+                            || CompareTimestampVersions.compare(valueTimestamp, valueVersion, pointerTimestamp, pointerVersion) >= 0) {
                             if (valueTombstoned && (valueTimestamp < tombstoneTimestampId || valueVersion < tombstoneVersion)) {
                                 tombstoneCount.increment();
                             } else if (valueTimestamp < ttlTimestampId || valueVersion < ttlVersion) {

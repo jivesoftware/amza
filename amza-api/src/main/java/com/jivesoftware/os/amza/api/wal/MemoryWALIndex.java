@@ -167,17 +167,21 @@ public class MemoryWALIndex implements WALIndex {
             WALPointer got = index.get(pk);
             long indexFp = got != null ? got.getFp() : -1;
             boolean indexTombstoned = got != null && got.getTombstoned();
+            boolean indexHasValue = got != null && got.getValue() != null;
 
-            // indexFp, indexTombstoned, requestTombstoned, delta
-            // -1       false            false              1
-            // -1       false            true               0
-            //  1       false            false              0
-            //  1       false            true               -1
-            //  1       true             false              1
-            //  1       true             true               0
-            if (!requestTombstoned && (indexFp == -1 && !indexTombstoned || indexFp != -1 && indexTombstoned)) {
+            // indexFp, indexHasValue, backingHasValue, indexTombstoned, requestTombstoned, delta
+            // -1       false          false            false            false              1
+            // -1       true           true             false            false              0
+            // -1       false          false            false            true               0
+            // -1       true           true             false            true               -1
+            //  1       false          true             false            false              0
+            //  1       false          true             false            true               -1
+            //  1       false          true             true             false              1
+            //  1       false          true             true             true               0
+            boolean backingHasValue = (indexFp != -1 || indexHasValue);
+            if (!requestTombstoned && (!backingHasValue && !indexTombstoned || backingHasValue && indexTombstoned)) {
                 delta[0]++;
-            } else if (indexFp != -1 && !indexTombstoned && requestTombstoned) {
+            } else if (backingHasValue && !indexTombstoned && requestTombstoned) {
                 delta[0]--;
             }
             return true;

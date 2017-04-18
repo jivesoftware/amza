@@ -550,6 +550,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append("<p>");
         addIoStats("load-", amzaStats.loadIoStats, sb);
         addIoStats("take-", amzaStats.takeIoStats, sb);
+        addIoStats("get-", amzaStats.getIoStats, sb);
         addIoStats("merge-", amzaStats.mergeIoStats, sb);
         addIoStats("update-", amzaStats.updateIoStats, sb);
         addIoStats("compact-ts-", amzaStats.compactTombstoneIoStats, sb);

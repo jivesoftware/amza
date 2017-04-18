@@ -60,11 +60,11 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public void initLeaps(long fpOfLastLeap, long updates) throws Exception {
+    public void initLeaps(IoStats ioStats, long fpOfLastLeap, long updates) throws Exception {
         Preconditions.checkState(updatesBetweenLeaps > 0);
         if (fpOfLastLeap > -1) {
             try {
-                rowReader.read(
+                rowReader.read(ioStats,
                     fpStream -> fpStream.stream(fpOfLastLeap),
                     (rowFP, rowTxId, rowType, row) -> {
                         if (rowType == RowType.system) {
@@ -158,8 +158,8 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public boolean read(Fps fps, RowStream rowStream) throws Exception {
-        return rowReader.read(fps, rowStream);
+    public boolean read(IoStats ioStats, Fps fps, RowStream rowStream) throws Exception {
+        return rowReader.read(ioStats, fps, rowStream);
     }
 
     @Override

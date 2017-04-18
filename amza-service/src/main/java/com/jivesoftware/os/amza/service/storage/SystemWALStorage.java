@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
@@ -20,6 +19,7 @@ import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**
@@ -27,24 +27,21 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
  */
 public class SystemWALStorage {
 
-    private final IoStats updateIoStats;
-    private final IoStats takenIoStats;
+    private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
     private final PrimaryRowMarshaller rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final RowChanges allRowChanges;
     private final boolean hardFlush;
 
-    public SystemWALStorage(IoStats updateIoStats,
-        IoStats takenIoStats,
+    public SystemWALStorage(AmzaStats amzaStats,
         PartitionIndex partitionIndex,
         PrimaryRowMarshaller rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         RowChanges allRowChanges,
         boolean hardFlush) {
-        this.updateIoStats = updateIoStats;
-        this.takenIoStats = takenIoStats;
 
+        this.amzaStats = amzaStats;
         this.partitionIndex = partitionIndex;
         this.rowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -66,7 +63,7 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(updateIoStats, true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(amzaStats.updateIoStats, true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }
@@ -88,7 +85,11 @@ public class SystemWALStorage {
         UnprefixedWALKeys keys,
         KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.getSystemPartition(versionedPartitionName).streamValues(prefix, keys,
+
+
+        long start = System.currentTimeMillis();
+
+        boolean got = partitionIndex.getSystemPartition(versionedPartitionName).streamValues(prefix, keys,
             (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (valueTimestamp == -1) {
                     return stream.stream(prefix, key, null, -1, false, -1);
@@ -96,6 +97,9 @@ public class SystemWALStorage {
                     return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                 }
             });
+
+        amzaStats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+        return got;
     }
 
     public boolean containsKeys(VersionedPartitionName versionedPartitionName,
@@ -123,7 +127,7 @@ public class SystemWALStorage {
         TxKeyValueStream txKeyValueStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(takenIoStats, transactionId,
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(amzaStats.takeIoStats, transactionId,
             (rowFP, rowTxId, rowType, row) -> {
                 if (rowType == RowType.highwater && highwaters != null) {
                     WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
@@ -157,7 +161,7 @@ public class SystemWALStorage {
     public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, long transactionId, RowStream rowStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(takenIoStats, transactionId, rowStream);
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(amzaStats.takeIoStats, transactionId, rowStream);
     }
 
     public boolean rowScan(VersionedPartitionName versionedPartitionName, KeyValueStream keyValueStream, boolean hydrateValues) throws Exception {
@@ -167,7 +171,14 @@ public class SystemWALStorage {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return partitionStore.getWalStorage().rowScan(keyValueStream, hydrateValues);
+            long start = System.currentTimeMillis();
+            boolean got = partitionStore.getWalStorage().rowScan(keyValueStream, hydrateValues);
+            if (hydrateValues) {
+                amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            } else {
+                amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            }
+            return got;
         }
     }
 
@@ -185,7 +196,14 @@ public class SystemWALStorage {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            return partitionStore.getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream, hydrateValues);
+            long start = System.currentTimeMillis();
+            boolean got = partitionStore.getWalStorage().rangeScan(fromPrefix, fromKey, toPrefix, toKey, keyValueStream, hydrateValues);
+            if (hydrateValues) {
+                amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            } else {
+                amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            }
+            return got;
         }
     }
 
@@ -204,7 +222,7 @@ public class SystemWALStorage {
         return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().count(keyStream -> true);
     }
 
-     public long approximateCount(VersionedPartitionName versionedPartitionName) throws Exception {
+    public long approximateCount(VersionedPartitionName versionedPartitionName) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().approximateCount();
     }

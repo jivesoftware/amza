@@ -45,6 +45,7 @@ public class AmzaStats {
     public final Multiset<RingMember> takeErrors = ConcurrentHashMultiset.create();
 
     public final IoStats loadIoStats = new IoStats();
+    public final IoStats getIoStats = new IoStats();
     public final IoStats takeIoStats = new IoStats();
     public final IoStats mergeIoStats = new IoStats();
     public final IoStats updateIoStats = new IoStats();

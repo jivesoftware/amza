@@ -84,8 +84,7 @@ public class AmzaStateStorageNGTest {
             4,
             Executors.newCachedThreadPool());
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(amzaSystemStats.updateIoStats,
-            amzaSystemStats.takeIoStats,
+        SystemWALStorage systemWALStorage = new SystemWALStorage(amzaSystemStats,
             partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,

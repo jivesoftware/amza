@@ -235,8 +235,7 @@ public class AmzaServiceInitializer {
             amzaThreadPoolProvider.allocateThreadPool(numProc, "partition-loader"));
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(
-            amzaSystemStats.updateIoStats,
-            amzaSystemStats.takeIoStats,
+            amzaSystemStats,
             partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,

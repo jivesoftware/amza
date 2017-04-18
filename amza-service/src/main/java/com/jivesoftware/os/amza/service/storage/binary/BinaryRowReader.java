@@ -335,7 +335,7 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public boolean read(Fps fps, RowStream rowStream) throws Exception {
+    public boolean read(IoStats ioStats, Fps fps, RowStream rowStream) throws Exception {
         IReadable[] filerRef = { parent.reader(null, 0, false, 0) };
         byte[] rawLength = new byte[4];
         byte[] rowTypeByteAndTxId = new byte[1 + 8];
@@ -359,6 +359,7 @@ public class BinaryRowReader implements WALReader {
                 }
 
                 filerRef[0] = filer;
+                ioStats.read.add(4 + length);
                 return rowStream.row(fp, rowTxId, rowType, row);
             } catch (NegativeArraySizeException x) {
                 LOG.error("FAILED to read length:" + length + " bytes at position:" + fp + " in file:" + parent);

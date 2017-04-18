@@ -108,12 +108,13 @@ class PartitionDelta {
         partitionDelta.release();
     }
 
-    private boolean streamRawValues(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
-        return deltaWAL.hydrate(fpStream -> {
+    private boolean streamRawValues(IoStats ioStats, byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
+        return deltaWAL.hydrate(ioStats, fpStream -> {
             PartitionDelta mergingPartitionDelta = acquireMerging();
             if (mergingPartitionDelta != null) {
                 try {
-                    return mergingPartitionDelta.streamRawValues(prefix,
+                    return mergingPartitionDelta.streamRawValues(ioStats,
+                        prefix,
                         mergingKeyStream -> keys.consume((key) -> {
                             WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
                             if (got == null) {
@@ -157,8 +158,8 @@ class PartitionDelta {
         }, fpKeyValueStream);
     }
 
-    boolean get(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
-        return streamRawValues(prefix, keys, fpKeyValueStream);
+    boolean get(IoStats ioStats, byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
+        return streamRawValues(ioStats, prefix, keys, fpKeyValueStream);
     }
 
     WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
@@ -395,11 +396,11 @@ class PartitionDelta {
         updatesSinceLastHighwaterFlush.addAndGet(rowFPs.length);
     }
 
-    public boolean takeRowsFromTransactionId(long transactionId, RowStream rowStream) throws Exception {
+    public boolean takeRowsFromTransactionId(IoStats ioStats, long transactionId, RowStream rowStream) throws Exception {
         PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
             try {
-                if (!partitionDelta.takeRowsFromTransactionId(transactionId, rowStream)) {
+                if (!partitionDelta.takeRowsFromTransactionId(ioStats, transactionId, rowStream)) {
                     return false;
                 }
             } finally {
@@ -411,14 +412,14 @@ class PartitionDelta {
             return true;
         }
 
-        return deltaWAL.takeRows(txFpsStream -> txIdWAL.streamFromTxId(transactionId, false, txFpsStream), rowStream);
+        return deltaWAL.takeRows(ioStats, txFpsStream -> txIdWAL.streamFromTxId(transactionId, false, txFpsStream), rowStream);
     }
 
-    public boolean takeRowsFromTransactionId(byte[] prefix, long transactionId, RowStream rowStream) throws Exception {
+    public boolean takeRowsFromTransactionId(IoStats ioStats, byte[] prefix, long transactionId, RowStream rowStream) throws Exception {
         PartitionDelta partitionDelta = acquireMerging();
         if (partitionDelta != null) {
             try {
-                if (!partitionDelta.takeRowsFromTransactionId(prefix, transactionId, rowStream)) {
+                if (!partitionDelta.takeRowsFromTransactionId(ioStats, prefix, transactionId, rowStream)) {
                     return false;
                 }
             } finally {
@@ -431,7 +432,7 @@ class PartitionDelta {
             return true;
         }
 
-        return deltaWAL.takeRows(txFpsStream -> prefixTxFps.streamFromTxId(transactionId, false, txFpsStream), rowStream);
+        return deltaWAL.takeRows(ioStats, txFpsStream -> prefixTxFps.streamFromTxId(transactionId, false, txFpsStream), rowStream);
     }
 
     public static class MergeResult {
@@ -491,7 +492,7 @@ class PartitionDelta {
                             txId,
                             txFps.prefix,
                             (highwaters, scan) -> WALKey.decompose(
-                                txFpRawKeyValueStream -> merge.deltaWAL.hydrateKeyValueHighwaters(
+                                txFpRawKeyValueStream -> merge.deltaWAL.hydrateKeyValueHighwaters(ioStats,
                                     fpStream -> {
                                         for (long fp : txFps.fps) {
                                             if (!fpStream.stream(fp)) {

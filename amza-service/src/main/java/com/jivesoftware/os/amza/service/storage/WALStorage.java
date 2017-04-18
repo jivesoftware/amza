@@ -492,7 +492,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 keyCount.set(loadKeyCount[0] + updatesSinceLastMergeMarker[0]);
                 clobberCount.set(loadClobberCount[0]);
 
-                io.initLeaps(fpOfLastLeap[0], updatesSinceLastLeap[0]);
+                io.initLeaps(ioStats, fpOfLastLeap[0], updatesSinceLastLeap[0]);
 
                 if (loadKeyHighwaterTimestamps != null) {
                     LOG.info("Loaded highwater timestamps for {}", versionedPartitionName);
@@ -1119,7 +1119,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             long[] excessRows = new long[1];
             WALIndex wali = walIndex.get();
             boolean readFromTransactionId = wali == null || walTx.tx(
-                io -> io.read(
+                io -> io.read(amzaStats.takeIoStats,
                     fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp, hasValue, value) -> fpStream.stream(fp)),
                     (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {

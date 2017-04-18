@@ -36,6 +36,6 @@ public interface WALReader {
 
     byte[] readTypeByteTxIdAndRow(long fp) throws Exception;
 
-    boolean read(Fps fps, RowStream rowStream) throws Exception;
+    boolean read(IoStats ioStats, Fps fps, RowStream rowStream) throws Exception;
 
 }

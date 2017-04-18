@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
@@ -42,11 +43,11 @@ public class DeltaWALFactory {
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;
     }
 
-    public DeltaWAL create(long prevId) throws Exception {
-        return createOrOpen(idProvider.nextId(), prevId);
+    public DeltaWAL create(IoStats ioStats, long prevId) throws Exception {
+        return createOrOpen(ioStats, idProvider.nextId(), prevId);
     }
 
-    private DeltaWAL createOrOpen(long id, long prevId) throws Exception {
+    private DeltaWAL createOrOpen(IoStats ioStats, long id, long prevId) throws Exception {
         WALTx deltaWALRowsTx = new BinaryWALTx(
             String.valueOf(prevId) + "_" + String.valueOf(id),
             ioProvider,
@@ -54,9 +55,10 @@ public class DeltaWALFactory {
             Integer.MAX_VALUE,
             64);
         MutableLong rows = new MutableLong();
-        deltaWALRowsTx.open(walDir,
+        deltaWALRowsTx.open(
+            walDir,
             io -> {
-                io.validate(true, false,
+                io.validate(ioStats, true, false,
                     (rowFP, rowTxId, rowType, row) -> {
                         rows.increment();
                         return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;
@@ -68,14 +70,14 @@ public class DeltaWALFactory {
         return new DeltaWAL(id, prevId, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }
 
-    public List<DeltaWAL> list() throws Exception {
+    public List<DeltaWAL> list(IoStats ioStats) throws Exception {
         List<DeltaWAL> deltaWALs = new ArrayList<>();
         for (String filename : BinaryWALTx.listExisting(walDir, ioProvider)) {
             try {
                 String[] parts = filename.split("_");
                 long prevId = Long.parseLong(parts[0]);
                 long id = Long.parseLong(parts[1]);
-                deltaWALs.add(createOrOpen(id, prevId));
+                deltaWALs.add(createOrOpen(ioStats, id, prevId));
             } catch (Exception x) {
                 LOG.warn("Encountered {} which doesn't conform to a WAL file naming conventions.", filename);
             }

@@ -131,6 +131,7 @@ public class EmbedAmzaServiceInitializer {
         String clusterName,
         AmzaServiceConfig amzaServiceConfig,
         LABPointerIndexConfig indexConfig,
+        AmzaStats amzaSystemStats,
         AmzaStats amzaStats,
         AmzaInterner amzaInterner,
         SnowflakeIdPacker idPacker,
@@ -202,7 +203,7 @@ public class EmbedAmzaServiceInitializer {
 
         deployable.addHealthCheck(new TenantAwareHttpClientHealthCheck("stripeTakes", stripedTakeClient));
 
-        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaStats, systemTakeClient, mapper, amzaInterner);
+        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaSystemStats, systemTakeClient, mapper, amzaInterner);
         RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, amzaInterner);
 
         TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
@@ -228,6 +229,7 @@ public class EmbedAmzaServiceInitializer {
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaInterner,
             aquariumStats,
+            amzaSystemStats,
             amzaStats,
             quorumLatency,
             systemRingSize::get,

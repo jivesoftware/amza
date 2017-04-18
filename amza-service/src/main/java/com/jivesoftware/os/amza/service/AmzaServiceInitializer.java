@@ -165,6 +165,7 @@ public class AmzaServiceInitializer {
     public AmzaService initialize(AmzaServiceConfig config,
         AmzaInterner amzaInterner,
         AquariumStats aquariumStats,
+        AmzaStats amzaSystemStats,
         AmzaStats amzaStats,
         HealthTimer quorumLatency,
         SystemRingSizeProvider systemRingSizeProvider,
@@ -192,7 +193,6 @@ public class AmzaServiceInitializer {
 
         //TODO configure
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
-            amzaStats.ioStats,
             config.initialBufferSegmentSize,
             config.maxBufferSegmentSize,
             config.updatesBetweenLeaps,
@@ -200,7 +200,6 @@ public class AmzaServiceInitializer {
             new DirectByteBufferFactory());
 
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
-            amzaStats.ioStats,
             config.updatesBetweenLeaps,
             config.maxLeaps,
             config.useMemMap);
@@ -228,13 +227,17 @@ public class AmzaServiceInitializer {
 
         int numProc = Runtime.getRuntime().availableProcessors();
 
-        PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
+        PartitionIndex partitionIndex = new PartitionIndex(amzaSystemStats,
+            amzaStats,
             orderIdProvider,
             walStorageProvider,
             numProc,
             amzaThreadPoolProvider.allocateThreadPool(numProc, "partition-loader"));
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
+        SystemWALStorage systemWALStorage = new SystemWALStorage(
+            amzaSystemStats.updateIoStats,
+            amzaSystemStats.takeIoStats,
+            partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             amzaSystemPartitionWatcher,
@@ -305,12 +308,11 @@ public class AmzaServiceInitializer {
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        AckWaters ackWaters = new AckWaters(amzaStats, quorumLatency, config.ackWatersStripingLevel, config.ackWatersVerboseLogTimeouts);
+        AckWaters ackWaters = new AckWaters(amzaSystemStats, amzaStats, quorumLatency, config.ackWatersStripingLevel, config.ackWatersVerboseLogTimeouts);
 
         DeltaStripeWALStorage[] deltaStripeWALStorages = new DeltaStripeWALStorage[numberOfStripes];
 
         BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
-            amzaStats.ioStats,
             -1,
             0,
             config.useMemMap);
@@ -358,7 +360,7 @@ public class AmzaServiceInitializer {
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(systemWALStorage,
             ringMember,
-            amzaStats,
+            amzaSystemStats, amzaStats,
             orderIdProvider,
             idPacker,
             partitionCreator,
@@ -434,7 +436,7 @@ public class AmzaServiceInitializer {
             amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length, "stripe-flusher")
         );
 
-        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader,
+        PartitionComposter partitionComposter = new PartitionComposter(amzaSystemStats, amzaStats, partitionIndex, partitionCreator, ringStoreReader,
             partitionStripeProvider, storageVersionProvider, amzaInterner, numProc);
         amzaSystemPartitionWatcher.watch(PartitionCreator.REGION_INDEX.getPartitionName(), partitionComposter);
         amzaSystemPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), partitionComposter);
@@ -488,7 +490,8 @@ public class AmzaServiceInitializer {
             });
         }
 
-        RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
+        RowChangeTaker changeTaker = new RowChangeTaker(amzaSystemStats,
+            amzaStats,
             numberOfStripes,
             storageVersionProvider,
             ringStoreReader,
@@ -519,6 +522,7 @@ public class AmzaServiceInitializer {
             numberOfStripes);
 
         return new AmzaService(orderIdProvider,
+            amzaSystemStats,
             amzaStats,
             numberOfStripes,
             indexProviderRegistry,

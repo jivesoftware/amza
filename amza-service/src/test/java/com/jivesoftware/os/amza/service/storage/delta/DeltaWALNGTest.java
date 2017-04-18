@@ -9,7 +9,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
-import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
@@ -36,12 +36,13 @@ public class DeltaWALNGTest {
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller(amzaInterner);
         String[] workingDirs = new String[] { tmp.getAbsolutePath() };
 
-        BinaryRowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(new IoStats(), 4_096, 64, false);
+        IoStats ioStats = new IoStats();
+        BinaryRowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(4_096, 64, false);
 
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, binaryRowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, 1);
 
-        DeltaWAL deltaWAL = deltaWALFactory.create(-1);
+        DeltaWAL deltaWAL = deltaWALFactory.create(ioStats, -1);
 
         Map<WALKey, WALValue> apply1 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {
@@ -49,7 +50,7 @@ public class DeltaWALNGTest {
             long timestampAndVersion = ids.nextId();
             apply1.put(new WALKey(bytes, bytes), new WALValue(RowType.primary, (i + "v").getBytes(), timestampAndVersion, false, timestampAndVersion));
         }
-        DeltaWAL.DeltaWALApplied update1 = deltaWAL.update(RowType.primary, versionedPartitionName, apply1, null);
+        DeltaWAL.DeltaWALApplied update1 = deltaWAL.update(ioStats, RowType.primary, versionedPartitionName, apply1, null);
         for (DeltaWAL.KeyValueHighwater kvh : update1.keyValueHighwaters) {
             System.out.println("update1 k=" + new String(kvh.key) + " v=" + new WALValue(kvh.rowType, kvh.value, kvh.valueTimestamp, kvh.valueTombstone,
                 kvh.valueVersion));
@@ -61,13 +62,13 @@ public class DeltaWALNGTest {
             long timestampAndVersion = ids.nextId();
             apply2.put(new WALKey(bytes, bytes), new WALValue(RowType.primary, (i + "v").getBytes(), timestampAndVersion, false, timestampAndVersion));
         }
-        DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(RowType.primary, versionedPartitionName, apply2, null);
+        DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(ioStats, RowType.primary, versionedPartitionName, apply2, null);
         for (DeltaWAL.KeyValueHighwater kvh : update2.keyValueHighwaters) {
             System.out.println("update2 k=" + new String(kvh.key) + " v=" + new WALValue(kvh.rowType, kvh.value, kvh.valueTimestamp, kvh.valueTombstone,
                 kvh.valueVersion));
         }
 
-        deltaWAL.load((long rowFP, long rowTxId, RowType rowType, byte[] rawRow) -> {
+        deltaWAL.load(ioStats, (long rowFP, long rowTxId, RowType rowType, byte[] rawRow) -> {
             if (rowType == RowType.primary) {
                 primaryRowMarshaller.fromRows(fpRowStream -> fpRowStream.stream(rowFP, rowType, rawRow),
                     (fp, rowType2, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {

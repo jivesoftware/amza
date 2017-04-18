@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
@@ -26,17 +27,24 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
  */
 public class SystemWALStorage {
 
+    private final IoStats updateIoStats;
+    private final IoStats takenIoStats;
     private final PartitionIndex partitionIndex;
     private final PrimaryRowMarshaller rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final RowChanges allRowChanges;
     private final boolean hardFlush;
 
-    public SystemWALStorage(PartitionIndex partitionIndex,
+    public SystemWALStorage(IoStats updateIoStats,
+        IoStats takenIoStats,
+        PartitionIndex partitionIndex,
         PrimaryRowMarshaller rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         RowChanges allRowChanges,
         boolean hardFlush) {
+        this.updateIoStats = updateIoStats;
+        this.takenIoStats = takenIoStats;
+
         this.partitionIndex = partitionIndex;
         this.rowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -58,7 +66,7 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(updateIoStats, true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }
@@ -115,7 +123,7 @@ public class SystemWALStorage {
         TxKeyValueStream txKeyValueStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId,
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(takenIoStats, transactionId,
             (rowFP, rowTxId, rowType, row) -> {
                 if (rowType == RowType.highwater && highwaters != null) {
                     WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
@@ -149,7 +157,7 @@ public class SystemWALStorage {
     public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, long transactionId, RowStream rowStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId, rowStream);
+        return partitionIndex.getSystemPartition(versionedPartitionName).getWalStorage().takeRowUpdatesSince(takenIoStats, transactionId, rowStream);
     }
 
     public boolean rowScan(VersionedPartitionName versionedPartitionName, KeyValueStream keyValueStream, boolean hydrateValues) throws Exception {

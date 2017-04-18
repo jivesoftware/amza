@@ -28,18 +28,21 @@ public class PartitionIndex {
     private final ConcurrentMap<PartitionName, ConcurrentLHash<PartitionStore>> partitionStores = Maps.newConcurrentMap();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
+    private final AmzaStats amzaSystemStats;
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final IndexedWALStorageProvider walStorageProvider;
     private final int concurrency;
     private final ExecutorService partitionLoadExecutorService;
 
-    public PartitionIndex(AmzaStats amzaStats,
+    public PartitionIndex(AmzaStats amzaSystemStats,
+        AmzaStats amzaStats,
         TimestampedOrderIdProvider orderIdProvider,
         IndexedWALStorageProvider walStorageProvider,
         int concurrency,
         ExecutorService partitionLoadExecutorService) {
 
+        this.amzaSystemStats = amzaSystemStats;
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.walStorageProvider = walStorageProvider;
@@ -137,7 +140,8 @@ public class PartitionIndex {
 
             File baseKey = walStorageProvider.baseKey(versionedPartitionName, stripe);
             WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties);
-            partitionStore = new PartitionStore(amzaStats, orderIdProvider, versionedPartitionName, walStorage, properties);
+            partitionStore = new PartitionStore(versionedPartitionName.getPartitionName().isSystemPartition() ? amzaSystemStats : amzaStats,
+                orderIdProvider, versionedPartitionName, walStorage, properties);
             partitionStore.load(baseKey, deltaWALId, prevDeltaWALId, stripe, partitionLoadExecutorService);
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);

@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -37,7 +38,7 @@ public class PartitionStripe {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaStats stats;
+    private final AmzaStats amzaStats;
     private final String name;
     private final int stripeIndex;
     private final PartitionCreator partitionCreator;
@@ -46,7 +47,7 @@ public class PartitionStripe {
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
 
-    public PartitionStripe(AmzaStats stats,
+    public PartitionStripe(AmzaStats amzaStats,
         String name,
         int stripeIndex,
         PartitionCreator partitionCreator,
@@ -55,7 +56,7 @@ public class PartitionStripe {
         PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller) {
 
-        this.stats = stats;
+        this.amzaStats = amzaStats;
         this.name = name;
         this.stripeIndex = stripeIndex;
         this.partitionCreator = partitionCreator;
@@ -108,7 +109,9 @@ public class PartitionStripe {
         if (partitionStore == null) {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
-            RowsChanged changes = storage.update(directApply,
+            RowsChanged changes = storage.update(
+                amzaStats.updateIoStats,
+                directApply,
                 partitionStore.getProperties().rowType,
                 highwaterStorage,
                 versionedPartitionName,
@@ -156,7 +159,7 @@ public class PartitionStripe {
                         return keyValueStream.stream(prefix1, key1, value, valueTimestamp, valueTombstoned, valueVersion);
                     }
                 });
-            stats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            amzaStats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return got;
         }
     }
@@ -186,7 +189,7 @@ public class PartitionStripe {
                         return stream.stream(prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion);
                     }
                 });
-            stats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            amzaStats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return got;
         }
 
@@ -217,9 +220,9 @@ public class PartitionStripe {
                     }
                 }, hydrateValues);
             if (hydrateValues) {
-                stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             } else {
-                stats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             }
         }
 
@@ -256,9 +259,9 @@ public class PartitionStripe {
                 }, hydrateValues);
 
             if (hydrateValues) {
-                stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             } else {
-                stats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             }
         }
 
@@ -280,12 +283,13 @@ public class PartitionStripe {
         if (versionedPartitionName != null && livelyEndState != null) {
             PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
             if (partitionStore != null) {
-                storage.takeAllRows(versionedPartitionName, partitionStore.getWalStorage(), rowStream);
+                storage.takeAllRows(amzaStats.takeIoStats, versionedPartitionName, partitionStore.getWalStorage(), rowStream);
             }
         }
     }
 
-    public <R> R takeRowUpdatesSince(VersionedAquarium versionedAquarium,
+    public <R> R takeRowUpdatesSince(IoStats ioStats,
+        VersionedAquarium versionedAquarium,
         long transactionId,
         TakeRowUpdates<R> takeRowUpdates) throws Exception {
 
@@ -299,13 +303,14 @@ public class PartitionStripe {
             return takeRowUpdates.give(null, null, null);
         } else {
             RowStreamer streamer = (livelyEndState.getCurrentState() != State.expunged)
-                ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
+                ? rowStream -> storage.takeRowsFromTransactionId(ioStats, versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                 : null;
             return takeRowUpdates.give(versionedPartitionName, livelyEndState, streamer);
         }
     }
 
-    public WALHighwater takeFromTransactionId(VersionedAquarium versionedAquarium,
+    public WALHighwater takeFromTransactionId(IoStats ioStats,
+        VersionedAquarium versionedAquarium,
         long transactionId,
         boolean requiresOnline,
         HighwaterStorage highwaterStorage,
@@ -335,7 +340,7 @@ public class PartitionStripe {
                     }
                     return true;
                 };
-                if (storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, stream)) {
+                if (storage.takeRowsFromTransactionId(ioStats, versionedPartitionName, partitionStore.getWalStorage(), transactionId, stream)) {
                     highwater[0] = partitionHighwater;
                 }
                 return true;
@@ -472,7 +477,7 @@ public class PartitionStripe {
                         return stream.stream(prefix1, key, contained1, timestamp, version);
                     }
                 });
-            stats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+            amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
             return contained;
         }
 

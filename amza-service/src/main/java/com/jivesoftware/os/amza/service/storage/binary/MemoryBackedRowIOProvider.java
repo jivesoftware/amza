@@ -4,7 +4,6 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
-import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import java.io.File;
 import java.io.IOException;
@@ -17,7 +16,6 @@ import java.util.Map;
  */
 public class MemoryBackedRowIOProvider implements RowIOProvider {
 
-    private final IoStats ioStats;
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
     private final int defaultUpdatesBetweenLeaps;
@@ -26,13 +24,12 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
 
     private final Map<File, MemoryBackedWALFiler> filers = Maps.newConcurrentMap();
 
-    public MemoryBackedRowIOProvider(IoStats ioStats,
+    public MemoryBackedRowIOProvider(
         long initialBufferSegmentSize,
         long maxBufferSegmentSize,
         int defaultUpdatesBetweenLeaps,
         int defaultMaxLeaps,
         ByteBufferFactory byteBufferFactory) {
-        this.ioStats = ioStats;
         this.initialBufferSegmentSize = initialBufferSegmentSize;
         this.maxBufferSegmentSize = maxBufferSegmentSize;
         this.defaultUpdatesBetweenLeaps = defaultUpdatesBetweenLeaps;
@@ -54,8 +51,8 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     public RowIO open(File key, String name, boolean createIfAbsent, int updatesBetweenLeaps, int maxLeaps) throws Exception {
         File file = new File(key, name);
         MemoryBackedWALFiler filer = getFiler(file);
-        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
-        BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
+        BinaryRowReader rowReader = new BinaryRowReader(filer);
+        BinaryRowWriter rowWriter = new BinaryRowWriter(filer);
         return new BinaryRowIO(key,
             name,
             rowReader,

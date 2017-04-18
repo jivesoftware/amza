@@ -64,6 +64,7 @@ public class RowChangeTaker implements RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats amzaSystemStats;
     private final AmzaStats amzaStats;
     private final int numberOfStripes;
     private final StorageVersionProvider storageVersionProvider;
@@ -98,7 +99,8 @@ public class RowChangeTaker implements RowChanges {
     private final Map<RingMember, AvailableRowsReceiver> systemAvailableRowsReceivers = Maps.newConcurrentMap();
     private final Map<RingMember, AvailableRowsReceiver> stripedAvailableRowsReceivers = Maps.newConcurrentMap();
 
-    public RowChangeTaker(AmzaStats amzaStats,
+    public RowChangeTaker(AmzaStats amzaSystemStats,
+        AmzaStats amzaStats,
         int numberOfStripes,
         StorageVersionProvider storageVersionProvider,
         AmzaRingStoreReader amzaRingReader,
@@ -119,6 +121,7 @@ public class RowChangeTaker implements RowChanges {
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller) {
 
+        this.amzaSystemStats = amzaSystemStats;
         this.amzaStats = amzaStats;
         this.numberOfStripes = numberOfStripes;
         this.storageVersionProvider = storageVersionProvider;
@@ -342,13 +345,15 @@ public class RowChangeTaker implements RowChanges {
 
         @Override
         public void run() {
+            AmzaStats stats = system ? amzaSystemStats : amzaStats;
+
             while (!disposed.get()) {
                 try {
                     if (!system) {
                         systemReady.await(10_000L); //TODO config
                     }
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
-                    amzaStats.longPolled(remoteRingMember);
+                    stats.longPolled(remoteRingMember);
                     long sessionId = sessionIdProvider.nextId();
                     String sharedKey = new BigInteger(130, new SecureRandom()).toString(32);
                     activeSessionId.set(sessionId);
@@ -362,7 +367,7 @@ public class RowChangeTaker implements RowChanges {
                         sharedKey,
                         longPollTimeoutMillis,
                         (remoteVersionedPartitionName, txId) -> {
-                            amzaStats.longPollAvailables(remoteRingMember);
+                            stats.longPollAvailables(remoteRingMember);
                             // yeah yeah I hear ya
                             ping.set(System.currentTimeMillis());
 
@@ -401,7 +406,7 @@ public class RowChangeTaker implements RowChanges {
                             }
                         },
                         () -> {
-                            amzaStats.pingsReceived.increment();
+                            stats.pingsReceived.increment();
                             ping.set(System.currentTimeMillis());
                         });
                 } catch (InterruptedException ie) {
@@ -661,6 +666,8 @@ public class RowChangeTaker implements RowChanges {
             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
 
             try {
+                AmzaStats stats = partitionName.isSystemPartition() ? amzaSystemStats : amzaStats;
+
                 CommitChanges commitChanges = partitionName.isSystemPartition() ? systemPartitionCommitChanges : stripedPartitionCommitChanges;
                 commitChanges.commit(localVersionedPartitionName, (highwaterStorage, versionedAquarium, commitTo) -> {
 
@@ -675,7 +682,7 @@ public class RowChangeTaker implements RowChanges {
                             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
                             Waterline leader = versionedAquarium.getLeader();
                             long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
-                            TakeRowStream takeRowStream = new TakeRowStream(amzaStats,
+                            TakeRowStream takeRowStream = new TakeRowStream(stats,
                                 remoteVersionedPartitionName,
                                 commitTo,
                                 remoteRingMember,
@@ -685,8 +692,8 @@ public class RowChangeTaker implements RowChanges {
 
                             if (highwaterMark >= takeToTxId.get()) {
                                 LOG.inc("take>fully>all");
-                                amzaStats.took(remoteRingMember);
-                                amzaStats.takeErrors.setCount(remoteRingMember, 0);
+                                stats.took(remoteRingMember);
+                                stats.takeErrors.setCount(remoteRingMember, 0);
                                 if (takeFailureListener.isPresent()) {
                                     takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                 }
@@ -715,24 +722,24 @@ public class RowChangeTaker implements RowChanges {
                                     if (takeFailureListener.isPresent()) {
                                         takeFailureListener.get().failedToTake(remoteRingMember, remoteRingHost, rowsResult.error);
                                     }
-                                    if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
+                                    if (stats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.warn("Error while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Error while taking from member:{} host:{} partition:{}",
                                             new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, rowsResult.error);
                                     }
-                                    amzaStats.takeErrors.add(remoteRingMember);
+                                    stats.takeErrors.add(remoteRingMember);
                                 } else if (rowsResult.unreachable != null) {
                                     LOG.inc("take>unreachable>all");
                                     if (takeFailureListener.isPresent()) {
                                         takeFailureListener.get().failedToTake(remoteRingMember, remoteRingHost, rowsResult.unreachable);
                                     }
-                                    if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
+                                    if (stats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.debug("Unreachable while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Unreachable while taking from member:{} host:{} partition:{}",
                                             new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName },
                                             rowsResult.unreachable);
                                     }
-                                    amzaStats.takeErrors.add(remoteRingMember);
+                                    stats.takeErrors.add(remoteRingMember);
                                 } else {
                                     updates = takeRowStream.flush();
                                 }
@@ -779,8 +786,8 @@ public class RowChangeTaker implements RowChanges {
                                     }
 
                                     LOG.inc("take>fully>all");
-                                    amzaStats.took(remoteRingMember);
-                                    amzaStats.takeErrors.setCount(remoteRingMember, 0);
+                                    stats.took(remoteRingMember);
+                                    stats.takeErrors.setCount(remoteRingMember, 0);
                                     if (takeFailureListener.isPresent()) {
                                         takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                     }

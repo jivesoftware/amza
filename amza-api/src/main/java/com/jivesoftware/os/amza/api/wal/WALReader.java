@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.api.wal;
 
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 
@@ -23,15 +24,15 @@ public interface WALReader {
     /**
      * Scans from the given fp offset (must be the start of a row) to the end of the WAL.
      *
-     * @param offsetFp the fp offset
+     * @param offsetFp     the fp offset
      * @param allowRepairs whether to allow repairs/truncation if WAL corruption is detected (otherwise an exception is thrown)
-     * @param rowStream the callback stream
+     * @param rowStream    the callback stream
      * @return true if the scan reaches the end of the WAL, otherwise false
      * @throws Exception if an error occurred
      */
-    boolean scan(long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception;
+    boolean scan(IoStats ioStats, long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception;
 
-    boolean reverseScan(RowStream rowStream) throws Exception;
+    boolean reverseScan(IoStats ioStats, RowStream rowStream) throws Exception;
 
     byte[] readTypeByteTxIdAndRow(long fp) throws Exception;
 

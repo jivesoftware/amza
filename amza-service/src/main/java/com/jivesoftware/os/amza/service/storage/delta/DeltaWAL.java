@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -83,9 +84,9 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         return prevId;
     }
 
-    public void load(final RowStream rowStream) throws Exception {
+    public void load(IoStats ioStats, RowStream rowStream) throws Exception {
         wal.tx(io -> {
-            io.scan(0, true, rowStream);
+            io.scan(ioStats, 0, true, rowStream);
             return null;
         });
     }
@@ -125,7 +126,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         }
     }
 
-    public DeltaWALApplied update(RowType rowType,
+    public DeltaWALApplied update(IoStats ioStats,
+        RowType rowType,
         VersionedPartitionName versionedPartitionName,
         Map<WALKey, WALValue> apply,
         WALHighwater highwaterHint) throws Exception {
@@ -156,7 +158,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                     int valueSizeInBytes = sizeWithAppendedHighwaterHints(kvh.value, kvh.highwater);
                     estimatedSizeInBytes += primaryRowMarshaller.maximumSizeInBytes(rowType, pkSizeInBytes, valueSizeInBytes);
                 }
-                io.write(transactionId,
+                io.write(ioStats,
+                    transactionId,
                     rowType,
                     keyValueHighwaters.length,
                     estimatedSizeInBytes,

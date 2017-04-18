@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Maps;
 import com.google.common.primitives.Longs;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowStream;
@@ -25,7 +26,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -456,7 +456,7 @@ class PartitionDelta {
         }
     }
 
-    MergeResult merge(PartitionIndex partitionIndex, PartitionProperties properties, int stripe, boolean validate) throws Exception {
+    MergeResult merge(IoStats ioStats, PartitionIndex partitionIndex, PartitionProperties properties, int stripe, boolean validate) throws Exception {
         long merged = 0;
         long lastTxId = 0;
         WALIndex walIndex = null;
@@ -529,7 +529,7 @@ class PartitionDelta {
                                 }));
                         return !eos.booleanValue();
                     });
-                    partitionStore.getWalStorage().endOfMergeMarker(merge.getDeltaWALId(), lastTxId);
+                    partitionStore.getWalStorage().endOfMergeMarker(ioStats, merge.getDeltaWALId(), lastTxId);
                     walIndex = partitionStore.getWalStorage().commitIndex(true, lastTxId);
                     LOG.info("Merged deltas for {}", merge.versionedPartitionName);
                 }

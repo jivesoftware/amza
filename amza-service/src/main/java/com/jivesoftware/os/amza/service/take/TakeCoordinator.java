@@ -5,6 +5,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -28,8 +29,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.math.BigInteger;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +52,7 @@ public class TakeCoordinator {
 
     private final SystemWALStorage systemWALStorage;
     private final RingMember rootMember;
+    private final AmzaStats amzaSystemStats;
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final IdPacker idPacker;
@@ -80,7 +80,7 @@ public class TakeCoordinator {
 
     public TakeCoordinator(SystemWALStorage systemWALStorage,
         RingMember rootMember,
-        AmzaStats amzaStats,
+        AmzaStats amzaSystemStats, AmzaStats amzaStats,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
@@ -90,8 +90,10 @@ public class TakeCoordinator {
         long reofferDeltaMillis,
         long reofferMaxElectionsPerHeartbeat,
         long hangupAvailableRowsAfterUnresponsiveMillis) {
+
         this.systemWALStorage = systemWALStorage;
         this.rootMember = rootMember;
+        this.amzaSystemStats = amzaSystemStats;
         this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
@@ -228,14 +230,18 @@ public class TakeCoordinator {
         }
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName, system ? -1 : 0);
+        AmzaStats stats;
         if (system) {
+            stats = amzaSystemStats;
             ensureRingCoordinator(system, ringName, null, -1, () -> ring)
                 .update(ring, versionedPartitionName, txId, invalidateOnline);
         } else {
+            stats = amzaStats;
             ensureRingCoordinator(system, ringName, null, -1, () -> ring)
                 .update(ring, versionedPartitionName, txId, invalidateOnline);
         }
-        amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
+
+        stats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         for (Session session : takeSessions.values()) {
             if (system && session.system || !system && !session.system) {
                 synchronized (session.dirtySet) {
@@ -382,11 +388,14 @@ public class TakeCoordinator {
             session.sessionThread.set(Thread.currentThread());
         }
         try {
+
+            AmzaStats stats = system ? amzaSystemStats : amzaStats;
+
             AtomicLong offered = new AtomicLong();
             AvailableStream watchAvailableStream = (versionedPartitionName, txId) -> {
                 offered.incrementAndGet();
                 availableStream.available(versionedPartitionName, txId);
-                amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
+                stats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
             };
 
             int systemRingHash = BAHasher.SINGLETON.hashCode(AmzaRingReader.SYSTEM_RING, 0, AmzaRingReader.SYSTEM_RING.length);
@@ -495,7 +504,7 @@ public class TakeCoordinator {
                 while (true) {
                     long currentOffer = offered.get();
                     if (currentOffer == 0) {
-                        amzaStats.pingsSent.increment();
+                        stats.pingsSent.increment();
                         pingCallback.call(); // Ping aka keep the socket alive
                         break;
                     } else if (offered.compareAndSet(currentOffer, 0)) {
@@ -517,7 +526,7 @@ public class TakeCoordinator {
                         while (true) {
                             long currentOffer = offered.get();
                             if (currentOffer == 0) {
-                                amzaStats.pingsSent.increment();
+                                stats.pingsSent.increment();
                                 pingCallback.call(); // Ping aka keep the socket alive
                                 break;
                             } else if (offered.compareAndSet(currentOffer, 0)) {
@@ -569,7 +578,9 @@ public class TakeCoordinator {
                 ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
             }
             pongInternal(System.currentTimeMillis(), session);
-            amzaStats.acks(remoteRingMember, versionedAquarium.getVersionedPartitionName().getPartitionName(), 1, localTxId);
+            PartitionName partitionName = versionedAquarium.getVersionedPartitionName().getPartitionName();
+            AmzaStats stats = partitionName.isSystemPartition() ? amzaSystemStats : amzaStats;
+            stats.acks(remoteRingMember, partitionName, 1, localTxId);
         } else {
             LOG.warn("Ignored stale rowsTaken from:{} session:{}", remoteRingMember, takeSessionId);
         }

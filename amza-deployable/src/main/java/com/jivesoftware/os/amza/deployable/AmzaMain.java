@@ -136,6 +136,7 @@ public class AmzaMain {
             amzaServiceConfig.pongIntervalMillis = amzaConfig.getPongIntervalMillis();
             amzaServiceConfig.rowsTakerLimit = amzaConfig.getRowsTakerLimit();
 
+            AmzaStats amzaSystemStats = new AmzaStats();
             AmzaStats amzaStats = new AmzaStats();
             AmzaInterner amzaInterner = new AmzaInterner();
             SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
@@ -171,6 +172,7 @@ public class AmzaMain {
                 instanceConfig.getClusterName(),
                 amzaServiceConfig,
                 labConfig,
+                amzaSystemStats,
                 amzaStats,
                 amzaInterner,
                 idPacker,

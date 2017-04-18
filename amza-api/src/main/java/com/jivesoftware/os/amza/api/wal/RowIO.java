@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.api.wal;
 
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import java.io.File;
 
@@ -26,7 +27,8 @@ public interface RowIO extends WALReader, WALWriter {
 
     long getFpOfLastLeap();
 
-    void validate(boolean backwardScan,
+    void validate(IoStats ioStats,
+        boolean backwardScan,
         boolean truncateToLastRowFp,
         ValidationStream backward,
         ValidationStream forward,

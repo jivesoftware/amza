@@ -5,9 +5,9 @@ import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALCompactionStats;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
@@ -44,7 +44,13 @@ public class AmzaStats {
 
     public final Multiset<RingMember> takeErrors = ConcurrentHashMultiset.create();
 
-    public final IoStats ioStats = new IoStats();
+    public final IoStats loadIoStats = new IoStats();
+    public final IoStats takeIoStats = new IoStats();
+    public final IoStats mergeIoStats = new IoStats();
+    public final IoStats updateIoStats = new IoStats();
+    public final IoStats compactTombstoneIoStats = new IoStats();
+
+
     public final NetStats netStats = new NetStats();
 
     public final LongAdder addMember = new LongAdder();
@@ -168,7 +174,7 @@ public class AmzaStats {
         return got.longValue();
     }
 
-    public static enum CompactionFamily {
+    public enum CompactionFamily {
         expunge, tombstone, merge, load;
     }
 
@@ -415,10 +421,6 @@ public class AmzaStats {
 
     public Map<PartitionName, Totals> getPartitionTotals() {
         return partitionTotals;
-    }
-
-    long lag(RowsChanged changed) {
-        return lag(changed.getSmallestCommittedTxId());
     }
 
     long lag(long oldest) {

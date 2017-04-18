@@ -74,7 +74,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final TimestampedOrderIdProvider orderIdProvider;
-    private final AmzaStats amzaStats;
+    public final AmzaStats amzaSystemStats;
+    public final AmzaStats amzaStats;
     private final int numberOfStripes;
     private final WALIndexProviderRegistry indexProviderRegistry;
     private final StorageVersionProvider storageVersionProvider;
@@ -98,6 +99,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final Liveliness liveliness;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
+        AmzaStats amzaSystemStats,
         AmzaStats amzaStats,
         int numberOfStripes,
         WALIndexProviderRegistry indexProviderRegistry,
@@ -121,11 +123,12 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         TakeFullySystemReady systemReady,
         Liveliness liveliness) {
 
+        this.orderIdProvider = orderIdProvider;
+        this.amzaSystemStats = amzaSystemStats;
         this.amzaStats = amzaStats;
         this.numberOfStripes = numberOfStripes;
         this.indexProviderRegistry = indexProviderRegistry;
         this.storageVersionProvider = storageVersionProvider;
-        this.orderIdProvider = orderIdProvider;
         this.ringStoreReader = ringReader;
         this.ringStoreWriter = amzaHostRing;
         this.ackWaters = ackWaters;
@@ -397,7 +400,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public Partition getPartition(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return new SystemPartition(amzaStats,
+            return new SystemPartition(amzaSystemStats,
                 orderIdProvider,
                 walUpdated,
                 ringStoreReader.getRingMember(),
@@ -612,6 +615,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             MutableLong bytes = new MutableLong(0);
             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
             PartitionName partitionName = versionedPartitionName.getPartitionName();
+            AmzaStats stats = partitionName.isSystemPartition() ? amzaSystemStats : amzaStats;
+
 
             if (versionedPartitionName.getPartitionVersion() != localVersionedPartitionName.getPartitionVersion()) {
                 streamBootstrap(localLeadershipToken, dos, bytes, null, -1, null);
@@ -634,7 +639,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     });
             } else {
                 needsToMarkAsKetchup = txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                    return partitionStripe.takeRowUpdatesSince(versionedAquarium, localTxId,
+                    return partitionStripe.takeRowUpdatesSince(stats.takeIoStats, versionedAquarium, localTxId,
                         (versionedPartitionName1, livelyEndState, streamer) -> {
                             if (streamer != null) {
                                 return streamOnline(remoteRingMember,
@@ -653,7 +658,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 });
             }
 
-            amzaStats.netStats.wrote.add(bytes.longValue());
+            stats.netStats.wrote.add(bytes.longValue());
 
             if (needsToMarkAsKetchup) {
                 try {

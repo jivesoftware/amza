@@ -32,7 +32,6 @@ import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
@@ -46,7 +45,6 @@ public class SystemPartition implements Partition {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final WALUpdated walUpdated;
     private final RingMember ringMember;
@@ -57,8 +55,7 @@ public class SystemPartition implements Partition {
     private final AmzaRingStoreReader ringReader;
     private final TakeCoordinator takeCoordinator;
 
-    public SystemPartition(AmzaStats amzaStats,
-        OrderIdProvider orderIdProvider,
+    public SystemPartition(OrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
         RingMember ringMember,
         PartitionName partitionName,
@@ -68,7 +65,6 @@ public class SystemPartition implements Partition {
         AmzaRingStoreReader ringReader,
         TakeCoordinator takeCoordinator) {
 
-        this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
         this.ringMember = ringMember;
@@ -124,9 +120,7 @@ public class SystemPartition implements Partition {
 
     @Override
     public boolean get(Consistency consistency, byte[] prefix, boolean requiresOnline, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
-        long start = System.currentTimeMillis();
         boolean got = systemWALStorage.get(versionedPartitionName, prefix, keys, stream);
-        amzaStats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
         return got;
     }
 
@@ -134,19 +128,11 @@ public class SystemPartition implements Partition {
     public boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
         for (ScanRange range : ranges) {
             if (range.fromKey == null && range.toKey == null) {
-                long start = System.currentTimeMillis();
                 boolean result = systemWALStorage.rowScan(versionedPartitionName, stream, true);
-                if (hydrateValues) {
-                    amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
-                } else {
-                    amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
-                }
                 if (!result) {
                     return false;
                 }
             } else {
-                long start = System.currentTimeMillis();
-
                 boolean result = systemWALStorage.rangeScan(versionedPartitionName,
                     range.fromPrefix,
                     range.fromKey,
@@ -154,13 +140,6 @@ public class SystemPartition implements Partition {
                     range.toKey,
                     stream,
                     true);
-
-                if (hydrateValues) {
-                    amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
-                } else {
-                    amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
-                }
-
                 if (!result) {
                     return false;
                 }

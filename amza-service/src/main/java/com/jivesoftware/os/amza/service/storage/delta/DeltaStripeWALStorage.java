@@ -780,14 +780,14 @@ public class DeltaStripeWALStorage {
         acquireOne();
         try {
             return txPartitionDelta(versionedPartitionName, delta -> {
-                return delta.takeRowsFromTransactionId(transactionId, rowStream);
+                return delta.takeRowsFromTransactionId(ioStats, transactionId, rowStream);
             });
         } finally {
             releaseOne();
         }
     }
 
-    public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName,
+    public boolean takeRowsFromTransactionId(IoStats ioStats, VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         byte[] prefix,
         long transactionId,
@@ -811,7 +811,7 @@ public class DeltaStripeWALStorage {
         acquireOne();
         try {
             return txPartitionDelta(versionedPartitionName, delta -> {
-                return delta.takeRowsFromTransactionId(prefix, transactionId, rowStream);
+                return delta.takeRowsFromTransactionId(ioStats, prefix, transactionId, rowStream);
             });
         } finally {
             releaseOne();
@@ -827,7 +827,7 @@ public class DeltaStripeWALStorage {
         acquireOne();
         try {
             return txPartitionDelta(versionedPartitionName, delta -> {
-                return delta.takeRowsFromTransactionId(0, rowStream);
+                return delta.takeRowsFromTransactionId(ioStats, 0, rowStream);
             });
         } finally {
             releaseOne();
@@ -835,9 +835,10 @@ public class DeltaStripeWALStorage {
     }
 
     // for testing
-    WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, byte[] prefix, byte[] key) throws Exception {
+    WALValue get(IoStats ioStats, VersionedPartitionName versionedPartitionName, WALStorage storage, byte[] prefix, byte[] key) throws Exception {
         WALValue[] walValue = new WALValue[1];
-        get(versionedPartitionName,
+        get(ioStats,
+            versionedPartitionName,
             storage,
             prefix,
             stream -> stream.stream(key),
@@ -850,7 +851,7 @@ public class DeltaStripeWALStorage {
         return walValue[0];
     }
 
-    public boolean get(VersionedPartitionName versionedPartitionName,
+    public boolean get(IoStats ioStats, VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         byte[] prefix,
         UnprefixedWALKeys keys,
@@ -860,7 +861,7 @@ public class DeltaStripeWALStorage {
         try {
             return txPartitionDelta(versionedPartitionName, partitionDelta -> {
                 return storage.streamValues(prefix,
-                    storageStream -> partitionDelta.get(prefix, keys, (fp, rowType, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    storageStream -> partitionDelta.get(ioStats, prefix, keys, (fp, rowType, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                         if (valueTimestamp != -1) {
                             return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                         } else {

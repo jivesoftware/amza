@@ -148,7 +148,8 @@ public class PartitionStripe {
         } else {
             long start = System.currentTimeMillis();
             long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
-            boolean got = storage.get(versionedPartitionName,
+            boolean got = storage.get(amzaStats.getIoStats,
+                versionedPartitionName,
                 partitionStore.getWalStorage(),
                 prefix,
                 (stream) -> stream.stream(key),
@@ -181,7 +182,8 @@ public class PartitionStripe {
         } else {
             long start = System.currentTimeMillis();
             long disposalVersion = partitionCreator.getPartitionDisposal(versionedPartitionName.getPartitionName());
-            boolean got = storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, keys,
+            boolean got = storage.get(amzaStats.getIoStats,
+                versionedPartitionName, partitionStore.getWalStorage(), prefix, keys,
                 (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueVersion != -1 && valueVersion < disposalVersion) {
                         return stream.stream(prefix1, key, null, -1, false, -1);
@@ -387,7 +389,8 @@ public class PartitionStripe {
                     }
                     return true;
                 };
-                if (storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), prefix, transactionId, stream)) {
+                if (storage.takeRowsFromTransactionId(amzaStats.takeIoStats, versionedPartitionName, partitionStore.getWalStorage(), prefix, transactionId,
+                    stream)) {
                     highwater[0] = partitionHighwater;
                 }
                 return true;

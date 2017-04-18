@@ -206,10 +206,11 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         boolean consume(TxFpsStream txFpsStream) throws Exception;
     }
 
-    boolean takeRows(ConsumeTxFps consumeTxFps, RowStream rowStream) throws Exception {
+    boolean takeRows(IoStats ioStats, ConsumeTxFps consumeTxFps, RowStream rowStream) throws Exception {
         byte[] intBuffer = new byte[4];
         return wal.tx(io -> primaryRowMarshaller.fromRows(
             txFpRowStream -> consumeTxFps.consume(txFps -> io.read(
+                ioStats,
                 fpStream -> {
                     for (long fp : txFps.fps) {
                         if (!fpStream.stream(fp)) {
@@ -258,12 +259,12 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     }
 
     @Override
-    public boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
+    public boolean hydrate(IoStats ioStats, Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
         try {
             return WALKey.decompose(
                 decomposeStream -> {
                     return primaryRowMarshaller.fromRows(
-                        fpRowStream -> wal.tx(io -> io.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
+                        fpRowStream -> wal.tx(io -> io.read(ioStats, fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
                         (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
                             return decomposeStream.stream(-1, fp, rowType, key, true, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
@@ -277,11 +278,11 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         }
     }
 
-    public boolean hydrateKeyValueHighwaters(Fps fps, FpKeyValueHighwaterStream stream) throws Exception {
+    public boolean hydrateKeyValueHighwaters(IoStats ioStats, Fps fps, FpKeyValueHighwaterStream stream) throws Exception {
         byte[] intBuffer = new byte[4];
         return primaryRowMarshaller.fromRows(
             fpRowStream -> wal.tx(
-                io -> io.read(fps,
+                io -> io.read(ioStats, fps,
                     (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, rowType, row))),
             (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 try {

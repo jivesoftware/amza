@@ -21,7 +21,7 @@ public interface RowIO extends WALReader, WALWriter {
 
     void close() throws Exception;
 
-    void initLeaps(long fpOfLastLeap, long updates) throws Exception;
+    void initLeaps(IoStats ioStats, long fpOfLastLeap, long updates) throws Exception;
 
     long getUpdatesSinceLeap();
 

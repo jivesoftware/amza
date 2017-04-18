@@ -170,8 +170,7 @@ public class DeltaStripeWALStorageNGTest {
             }
         };
 
-        systemWALStorage = new SystemWALStorage(amzaSystemStats.updateIoStats,
-            amzaSystemStats.takeIoStats,
+        systemWALStorage = new SystemWALStorage(amzaSystemStats,
             partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,
@@ -269,7 +268,7 @@ public class DeltaStripeWALStorageNGTest {
         byte[] prefix = UIO.intBytes(-1);
         WALKey walKey = key(prefix, 1);
 
-        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key));
+        Assert.assertNull(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, walKey.prefix, walKey.key));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(false));
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
@@ -279,7 +278,7 @@ public class DeltaStripeWALStorageNGTest {
             new IntUpdate(testRowType1, 1, 1, 2, false),
             updated);
 
-        deltaStripeWALStorage.get(versionedPartitionName1, storage1, prefix, keyStream -> keyStream.stream(walKey.key),
+        deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, prefix, keyStream -> keyStream.stream(walKey.key),
             (_prefix, key, value, timestamp, tombstoned, version) -> {
                 Assert.assertFalse(tombstoned);
                 Assert.assertEquals(key, walKey.key);
@@ -287,7 +286,7 @@ public class DeltaStripeWALStorageNGTest {
                 return true;
             });
 
-        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key),
+        Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, walKey.prefix, walKey.key),
             new WALValue(null, UIO.intBytes(1), 2, false, 2));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
@@ -295,7 +294,7 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.merge(ioStats, partitionIndex, partitionCreator, currentVersionProvider, true);
 
-        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key),
+        Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, walKey.prefix, walKey.key),
             new WALValue(null, UIO.intBytes(1), 2, false, 2));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(storage1.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(2, 2, UIO.intBytes(1)));
@@ -304,7 +303,7 @@ public class DeltaStripeWALStorageNGTest {
         deltaStripeWALStorage.update(ioStats, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 1, false),
             updated);
-        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key),
+        Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, walKey.prefix, walKey.key),
             new WALValue(null, UIO.intBytes(1), 2, false, 2));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(storage1.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(2, 2, UIO.intBytes(1)));
@@ -315,13 +314,13 @@ public class DeltaStripeWALStorageNGTest {
         deltaStripeWALStorage.update(ioStats, true, testRowType1, highwaterStorage, versionedPartitionName1, partitionStore1, prefix,
             new IntUpdate(testRowType1, 1, 1, 3, true),
             updated);
-        Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key).getTombstoned());
+        Assert.assertTrue(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, walKey.prefix, walKey.key).getTombstoned());
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(false));
         Assert.assertEquals(storage1.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(2, 2, UIO.intBytes(1)));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
         deltaStripeWALStorage.merge(ioStats, partitionIndex, partitionCreator, currentVersionProvider, true);
-        Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName1, storage1, walKey.prefix, walKey.key).getTombstoned());
+        Assert.assertTrue(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, walKey.prefix, walKey.key).getTombstoned());
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage1, prefix, keys(1), assertKeyIsContained(false));
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
@@ -355,9 +354,9 @@ public class DeltaStripeWALStorageNGTest {
 
         for (int i = 2; i <= 10; i++) {
             WALKey addWalKey = key(prefix, i);
-            Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, addWalKey.prefix, addWalKey.key),
+            Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, addWalKey.prefix, addWalKey.key),
                 new WALValue(null, UIO.intBytes(i), 4, false, 4));
-            Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName2, storage2, addWalKey.prefix, addWalKey.key),
+            Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName2, storage2, addWalKey.prefix, addWalKey.key),
                 new WALValue(null, UIO.intBytes(i), 4, false, 4));
         }
 
@@ -371,12 +370,12 @@ public class DeltaStripeWALStorageNGTest {
 
         for (int i = 2; i <= 10; i++) {
             WALKey addWalKey = key(prefix, i);
-            Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage1, addWalKey.prefix, addWalKey.key),
+            Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage1, addWalKey.prefix, addWalKey.key),
                 new WALValue(null, UIO.intBytes(i), 4, false, 4));
             if (i == 10) {
-                Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName2, storage2, addWalKey.prefix, addWalKey.key));
+                Assert.assertNull(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName2, storage2, addWalKey.prefix, addWalKey.key));
             } else {
-                Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName2, storage2, addWalKey.prefix, addWalKey.key),
+                Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName2, storage2, addWalKey.prefix, addWalKey.key),
                     new WALValue(null, UIO.intBytes(i), 4, false, 4));
             }
         }
@@ -389,8 +388,8 @@ public class DeltaStripeWALStorageNGTest {
         byte[] key1 = UIO.intBytes(1);
         byte[] key2 = UIO.intBytes(2);
 
-        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, key1));
-        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, key2));
+        Assert.assertNull(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, key1));
+        Assert.assertNull(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, key2));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage, prefix, keys(1), assertKeyIsContained(false));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage, prefix, keys(2), assertKeyIsContained(false));
         Assert.assertNull(storage.getTimestampedValue(prefix, key1));
@@ -404,25 +403,27 @@ public class DeltaStripeWALStorageNGTest {
             new IntUpdate(testRowType1, 2, 2, 1, false),
             updated);
 
-        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, key1),
+        Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, key1),
             new WALValue(null, UIO.intBytes(1), 1, false, 1));
-        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, key2),
+        Assert.assertEquals(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, key2),
             new WALValue(null, UIO.intBytes(2), 1, false, 1));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage, prefix, keys(1), assertKeyIsContained(true));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage, prefix, keys(2), assertKeyIsContained(true));
 
-        deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, keys(1), (_prefix, key, value, timestamp, tombstoned, version) -> {
-            Assert.assertFalse(tombstoned);
-            Assert.assertEquals(key, key1);
-            Assert.assertEquals(value, UIO.intBytes(1));
-            return true;
-        });
-        deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, keys(2), (_prefix, key, value, timestamp, tombstoned, version) -> {
-            Assert.assertFalse(tombstoned);
-            Assert.assertEquals(key, key2);
-            Assert.assertEquals(value, UIO.intBytes(2));
-            return true;
-        });
+        deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, keys(1),
+            (_prefix, key, value, timestamp, tombstoned, version) -> {
+                Assert.assertFalse(tombstoned);
+                Assert.assertEquals(key, key1);
+                Assert.assertEquals(value, UIO.intBytes(1));
+                return true;
+            });
+        deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, keys(2),
+            (_prefix, key, value, timestamp, tombstoned, version) -> {
+                Assert.assertFalse(tombstoned);
+                Assert.assertEquals(key, key2);
+                Assert.assertEquals(value, UIO.intBytes(2));
+                return true;
+            });
 
         deltaStripeWALStorage.merge(ioStats, partitionIndex, partitionCreator, currentVersionProvider, false);
 
@@ -433,25 +434,27 @@ public class DeltaStripeWALStorageNGTest {
             new IntUpdate(testRowType1, 2, 2, 2, true),
             updated);
 
-        Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, key1).getTombstoned());
-        Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, key2).getTombstoned());
+        Assert.assertTrue(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, key1).getTombstoned());
+        Assert.assertTrue(deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, key2).getTombstoned());
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage, prefix, keys(1), assertKeyIsContained(false));
         deltaStripeWALStorage.containsKeys(versionedPartitionName1, storage, prefix, keys(2), assertKeyIsContained(false));
 
-        deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, keys(1), (_prefix, key, value, timestamp, tombstoned, version) -> {
-            Assert.assertTrue(tombstoned);
-            Assert.assertEquals(key, key1);
-            Assert.assertNull(value);
-            Assert.assertEquals(timestamp, 2);
-            return true;
-        });
-        deltaStripeWALStorage.get(versionedPartitionName1, storage, prefix, keys(2), (_prefix, key, value, timestamp, tombstoned, version) -> {
-            Assert.assertTrue(tombstoned);
-            Assert.assertEquals(key, key2);
-            Assert.assertNull(value);
-            Assert.assertEquals(timestamp, 2);
-            return true;
-        });
+        deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, keys(1),
+            (_prefix, key, value, timestamp, tombstoned, version) -> {
+                Assert.assertTrue(tombstoned);
+                Assert.assertEquals(key, key1);
+                Assert.assertNull(value);
+                Assert.assertEquals(timestamp, 2);
+                return true;
+            });
+        deltaStripeWALStorage.get(amzaStats.getIoStats, versionedPartitionName1, storage, prefix, keys(2),
+            (_prefix, key, value, timestamp, tombstoned, version) -> {
+                Assert.assertTrue(tombstoned);
+                Assert.assertEquals(key, key2);
+                Assert.assertNull(value);
+                Assert.assertEquals(timestamp, 2);
+                return true;
+            });
     }
 
     @Test
@@ -488,7 +491,7 @@ public class DeltaStripeWALStorageNGTest {
             updated);
 
         int[] index = new int[1];
-        deltaStripeWALStorage.takeRowsFromTransactionId(versionedPartitionName1, storage, prefixA, 0, (rowFP, rowTxId, rowType, row) -> {
+        deltaStripeWALStorage.takeRowsFromTransactionId(amzaStats.takeIoStats, versionedPartitionName1, storage, prefixA, 0, (rowFP, rowTxId, rowType, row) -> {
             if (rowType == testRowType1) {
                 index[0]++;
                 byte[] value = primaryRowMarshaller.valueFromRow(rowType, row, 0);
@@ -501,7 +504,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(index[0], 4);
 
         index[0] = 0;
-        deltaStripeWALStorage.takeRowsFromTransactionId(versionedPartitionName1, storage, prefixB, 0, (rowFP, rowTxId, rowType, row) -> {
+        deltaStripeWALStorage.takeRowsFromTransactionId(amzaStats.takeIoStats, versionedPartitionName1, storage, prefixB, 0, (rowFP, rowTxId, rowType, row) -> {
             if (rowType == testRowType1) {
                 index[0]++;
                 byte[] value = primaryRowMarshaller.valueFromRow(rowType, row, 0);
@@ -516,7 +519,7 @@ public class DeltaStripeWALStorageNGTest {
         deltaStripeWALStorage.merge(ioStats, partitionIndex, partitionCreator, currentVersionProvider, false);
 
         index[0] = 0;
-        deltaStripeWALStorage.takeRowsFromTransactionId(versionedPartitionName1, storage, prefixA, 0, (rowFP, rowTxId, rowType, row) -> {
+        deltaStripeWALStorage.takeRowsFromTransactionId(amzaStats.takeIoStats, versionedPartitionName1, storage, prefixA, 0, (rowFP, rowTxId, rowType, row) -> {
             if (rowType == testRowType1) {
                 index[0]++;
                 byte[] value = primaryRowMarshaller.valueFromRow(rowType, row, 0);
@@ -529,7 +532,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(index[0], 4);
 
         index[0] = 0;
-        deltaStripeWALStorage.takeRowsFromTransactionId(versionedPartitionName1, storage, prefixB, 0, (rowFP, rowTxId, rowType, row) -> {
+        deltaStripeWALStorage.takeRowsFromTransactionId(amzaStats.takeIoStats, versionedPartitionName1, storage, prefixB, 0, (rowFP, rowTxId, rowType, row) -> {
             if (rowType == testRowType1) {
                 index[0]++;
                 byte[] value = primaryRowMarshaller.valueFromRow(rowType, row, 0);

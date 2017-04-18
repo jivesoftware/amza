@@ -36,7 +36,7 @@ public class BinaryRowIONGTest {
             new BinaryRowWriter(filer),
             4096,
             64);
-        binaryRowIO.initLeaps(-1, 0);
+        binaryRowIO.initLeaps(ioStats, -1, 0);
         write(ioStats, 10_000, () -> binaryRowIO);
     }
 
@@ -51,7 +51,7 @@ public class BinaryRowIONGTest {
             new BinaryRowWriter(filer),
             4096,
             64);
-        binaryRowIO.initLeaps(-1, 0);
+        binaryRowIO.initLeaps(ioStats, -1, 0);
         write(ioStats, 500, () -> binaryRowIO);
     }
 
@@ -119,7 +119,7 @@ public class BinaryRowIONGTest {
         leap(ioStats,
             () -> {
                 BinaryRowIO io = new BinaryRowIO(file, "test", new BinaryRowReader(filer), new BinaryRowWriter(filer), 4096, 64);
-                io.initLeaps(-1, 0);
+                io.initLeaps(ioStats, -1, 0);
                 return io;
             },
             64);
@@ -132,7 +132,7 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(), "test", new BinaryRowReader(filer), new BinaryRowWriter(filer),
             4096, 64);
-        binaryRowIO.initLeaps(-1, 0);
+        binaryRowIO.initLeaps(ioStats, -1, 0);
         leap(ioStats, () -> binaryRowIO, 4096);
     }
 

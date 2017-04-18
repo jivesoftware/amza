@@ -267,7 +267,7 @@ public class BinaryWALTx implements WALTx {
             throw new IOException("Failed remove " + compactingKey);
         }
         RowIO compactionIO = ioProvider.open(compactingKey, name, true, updatesBetweenLeaps, maxLeaps);
-        compactionIO.initLeaps(-1, 0);
+        compactionIO.initLeaps(ioStats,-1, 0);
 
         MutableLong oldestTimestamp = new MutableLong(Long.MAX_VALUE);
         MutableLong oldestVersion = new MutableLong(Long.MAX_VALUE);
@@ -415,7 +415,7 @@ public class BinaryWALTx implements WALTx {
                                 throw new IOException("Failed to reopen " + toKey);
                             }
                             rowIO.flush(true);
-                            rowIO.initLeaps(fpOfLastLeap, updatesSinceLeap);
+                            rowIO.initLeaps(ioStats, fpOfLastLeap, updatesSinceLeap);
                         } finally {
                             compactionStats.stop("completion-commit-reopen-" + completionPass[0]);
                         }

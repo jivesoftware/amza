@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
@@ -64,7 +65,7 @@ public class DeltaPeekableElmoIteratorNGTest {
 
             WALRowHydrator hydrator = new WALRowHydrator() {
                 @Override
-                public boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
+                public boolean hydrate(IoStats ioStats, Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
                     return fps.consume(fp -> {
                         WALRow row = fpRows.get(fp);
                         return fpKeyValueStream.stream(fp, row.rowType, row.prefix, row.key, row.value, row.timestamp, row.tombstoned, row.version);

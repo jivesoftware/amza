@@ -86,7 +86,7 @@ public class DeltaWALNGTest {
             System.out.println(update1.fps[i] + " hydrate k=" + new String(kvh.key)
                 + " v=" + new WALValue(kvh.rowType, kvh.value, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion));
             long fp1 = update1.fps[i];
-            deltaWAL.hydrate(fpStream -> fpStream.stream(fp1),
+            deltaWAL.hydrate(new IoStats(), fpStream -> fpStream.stream(fp1),
                 (fp, rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     System.out.println(fp + " hydrated:" + new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion));
                     Assert.assertEquals(
@@ -101,7 +101,7 @@ public class DeltaWALNGTest {
             System.out.println(update2.fps[i] + " hydrate k=" + new String(kvh.key)
                 + " v=" + new WALValue(kvh.rowType, kvh.value, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion));
             long fp2 = update2.fps[i];
-            deltaWAL.hydrate(fpStream -> fpStream.stream(fp2),
+            deltaWAL.hydrate(new IoStats(), fpStream -> fpStream.stream(fp2),
                 (fp, rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     System.out.println(fp + " hydrated:" + new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion));
                     Assert.assertEquals(

@@ -400,7 +400,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public Partition getPartition(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return new SystemPartition(amzaSystemStats,
+            return new SystemPartition(
                 orderIdProvider,
                 walUpdated,
                 ringStoreReader.getRingMember(),

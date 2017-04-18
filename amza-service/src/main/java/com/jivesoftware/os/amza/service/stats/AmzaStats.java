@@ -296,31 +296,37 @@ public class AmzaStats {
         grandTotals.updates.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.updates.add(count);
-        long lag = lag(smallestTxId);
-        totals.updatesLag = lag;
-        grandTotals.updatesLag = (grandTotals.updatesLag + lag) / 2;
+        if (smallestTxId != -1) {
+            long lag = lag(smallestTxId);
+            totals.updatesLag = lag;
+            grandTotals.updatesLag = (grandTotals.updatesLag + lag) / 2;
+        }
     }
 
     public void offers(RingMember to, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.offers.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.offers.add(count);
-        long lag = lag(smallestTxId);
-        totals.offersLag = lag;
-        grandTotals.offersLag = (grandTotals.offersLag + lag) / 2;
-        grandTotals.memberOffersLag.computeIfAbsent(to, ringMember1 -> new AtomicLong())
-            .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
+        if (smallestTxId != -1) {
+            long lag = lag(smallestTxId);
+            totals.offersLag = lag;
+            grandTotals.offersLag = (grandTotals.offersLag + lag) / 2;
+            grandTotals.memberOffersLag.computeIfAbsent(to, ringMember1 -> new AtomicLong())
+                .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
+        }
     }
 
     public void acks(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.acks.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.acks.add(count);
-        long lag = lag(smallestTxId);
-        totals.acksLag = lag;
-        grandTotals.acksLag = (grandTotals.acksLag + lag) / 2;
-        grandTotals.memberAcksLag.computeIfAbsent(from, ringMember1 -> new AtomicLong())
-            .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
+        if (smallestTxId != -1) {
+            long lag = lag(smallestTxId);
+            totals.acksLag = lag;
+            grandTotals.acksLag = (grandTotals.acksLag + lag) / 2;
+            grandTotals.memberAcksLag.computeIfAbsent(from, ringMember1 -> new AtomicLong())
+                .accumulateAndGet(lag, (left, right) -> (left + right) / 2);
+        }
     }
 
     public void quorums(PartitionName partitionName, int count, long lag, List<RingMember> tookFrom) {
@@ -345,27 +351,33 @@ public class AmzaStats {
         grandTotals.takes.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.takes.add(count);
-        long lag = lag(smallestTxId);
-        totals.takesLag = lag;
-        grandTotals.takesLag = (grandTotals.takesLag + lag) / 2;
+        if (smallestTxId != -1) {
+            long lag = lag(smallestTxId);
+            totals.takesLag = lag;
+            grandTotals.takesLag = (grandTotals.takesLag + lag) / 2;
+        }
     }
 
     public void tookApplied(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.takeApplies.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.takeApplies.add(count);
-        long lag = lag(smallestTxId);
-        totals.takeAppliesLag = lag;
-        grandTotals.takeAppliesLag = (grandTotals.takeAppliesLag + lag) / 2;
+        if (smallestTxId != -1) {
+            long lag = lag(smallestTxId);
+            totals.takeAppliesLag = lag;
+            grandTotals.takeAppliesLag = (grandTotals.takeAppliesLag + lag) / 2;
+        }
     }
 
     public void direct(PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.directApplies.add(count);
         Totals totals = partitionTotals(partitionName);
         totals.directApplies.add(count);
-        long lag = lag(smallestTxId);
-        totals.directAppliesLag = lag;
-        grandTotals.directAppliesLag = (grandTotals.directAppliesLag + lag) / 2;
+        if (smallestTxId != -1) {
+            long lag = lag(smallestTxId);
+            totals.directAppliesLag = lag;
+            grandTotals.directAppliesLag = (grandTotals.directAppliesLag + lag) / 2;
+        }
     }
 
     public void gets(PartitionName partitionName, int count, long lag) {

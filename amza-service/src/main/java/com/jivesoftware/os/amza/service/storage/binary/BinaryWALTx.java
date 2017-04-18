@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
@@ -130,7 +131,7 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> I openIndex(File baseKey, WALIndexProvider<I> walIndexProvider,
+    public <I extends CompactableWALIndex> I openIndex(IoStats ioStats, File baseKey, WALIndexProvider<I> walIndexProvider,
         VersionedPartitionName versionedPartitionName,
         int maxValueSizeInIndex,
         int stripe) throws Exception {
@@ -140,7 +141,7 @@ public class BinaryWALTx implements WALTx {
 
             I walIndex = walIndexProvider.createIndex(versionedPartitionName, maxValueSizeInIndex, stripe);
             if (!walIndex.exists()) {
-                rebuildIndex(versionedPartitionName, walIndex, true);
+                rebuildIndex(ioStats, versionedPartitionName, walIndex, true);
             }
 
             return walIndex;
@@ -149,12 +150,12 @@ public class BinaryWALTx implements WALTx {
         }
     }
 
-    private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName,
+    private <I extends CompactableWALIndex> void rebuildIndex(IoStats ioStats, VersionedPartitionName versionedPartitionName,
         I compactableWALIndex,
         boolean fsync) throws Exception {
 
         boolean[] isEmpty = { true };
-        rowIO.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
+        rowIO.scan(ioStats, 0, true, (rowPointer, rowTxId, rowType, row) -> {
             if (rowType.isPrimary()) {
                 isEmpty[0] = false;
                 return false;
@@ -176,7 +177,7 @@ public class BinaryWALTx implements WALTx {
             stream -> primaryRowMarshaller.fromRows(
                 txFpRowStream -> {
                     // scan with allowRepairs=true to truncate at point of corruption
-                    return rowIO.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
+                    return rowIO.scan(ioStats, 0, true, (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType.isPrimary()) {
                             return txFpRowStream.stream(rowTxId, rowPointer, rowType, row);
                         }
@@ -237,7 +238,8 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> Compacted<I> compact(WALCompactionStats compactionStats,
+    public <I extends CompactableWALIndex> Compacted<I> compact(IoStats ioStats,
+        WALCompactionStats compactionStats,
         File fromBaseKey,
         File toBaseKey,
         RowType compactToRowType,
@@ -291,7 +293,8 @@ public class BinaryWALTx implements WALTx {
                 try {
                     compactionStats.add("compact", 1);
                     compactionStats.start("compact-" + compactionPass);
-                    carryOverEndOfMerge = compact(compactToRowType,
+                    carryOverEndOfMerge = compact(ioStats,
+                        compactToRowType,
                         prevEndOfLastRow,
                         endOfLastRow,
                         carryOverEndOfMerge,
@@ -342,7 +345,8 @@ public class BinaryWALTx implements WALTx {
                 compactionStats.start("completion-all" + completionPass[0]);
                 compactionStats.start("completion-compact-" + completionPass[0]);
                 try {
-                    compact(compactToRowType,
+                    compact(ioStats,
+                        compactToRowType,
                         finalEndOfLastRow,
                         Long.MAX_VALUE,
                         finalCarryOverEndOfMerge,
@@ -457,7 +461,8 @@ public class BinaryWALTx implements WALTx {
 
     }
 
-    private byte[] compact(RowType compactToRowType,
+    private byte[] compact(IoStats ioStats,
+        RowType compactToRowType,
         long startAtRow,
         long endOfLastRow,
         byte[] carryOverEndOfMerge,
@@ -488,7 +493,7 @@ public class BinaryWALTx implements WALTx {
         MutableLong flushTxId = new MutableLong(-1);
         byte[][] keepCarryingOver = {carryOverEndOfMerge};
         primaryRowMarshaller.fromRows(
-            txFpRowStream -> rowIO.scan(startAtRow, false,
+            txFpRowStream -> rowIO.scan(ioStats, startAtRow, false,
                 (rowFP, rowTxId, rowType, row) -> {
                     if (rowFP >= endOfLastRow) {
                         return false;
@@ -499,7 +504,8 @@ public class BinaryWALTx implements WALTx {
 
                     if (flushTxId.longValue() != rowTxId) {
                         if (flushTxId.longValue() != -1 && !flushables.isEmpty()) {
-                            flushBatch(compactToRowType,
+                            flushBatch(ioStats,
+                                compactToRowType,
                                 compactionWALIndex,
                                 compactionIO,
                                 flushables.size(),
@@ -519,7 +525,7 @@ public class BinaryWALTx implements WALTx {
                             return false;
                         }
                     } else if (rowType == RowType.highwater) {
-                        compactionIO.writeHighwater(row);
+                        compactionIO.writeHighwater(ioStats, row);
                     } else if (rowType == RowType.end_of_merge) {
                         keepCarryingOver[0] = row;
                     } else {
@@ -561,7 +567,8 @@ public class BinaryWALTx implements WALTx {
         }
 
         if (flushTxId.longValue() != -1 && !flushables.isEmpty()) {
-            flushBatch(compactToRowType,
+            flushBatch(ioStats,
+                compactToRowType,
                 compactionWALIndex,
                 compactionIO,
                 flushables.size(),
@@ -581,7 +588,8 @@ public class BinaryWALTx implements WALTx {
                 compactionIO.getFpOfLastLeap(),
                 compactionIO.getUpdatesSinceLeap());
 
-            compactionIO.write(highestTxId.longValue(),
+            compactionIO.write(ioStats,
+                highestTxId.longValue(),
                 RowType.end_of_merge,
                 1,
                 finallyAnEndOfMerge.length,
@@ -597,7 +605,8 @@ public class BinaryWALTx implements WALTx {
         return keepCarryingOver[0];
     }
 
-    private void flushBatch(RowType rowType,
+    private void flushBatch(IoStats ioStats,
+        RowType rowType,
         CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
         int estimatedNumberOfRows,
@@ -626,7 +635,8 @@ public class BinaryWALTx implements WALTx {
 
         if (compactionWALIndex != null) {
             compactionWALIndex.merge((stream) -> {
-                compactionIO.write(flushTxId,
+                compactionIO.write(ioStats,
+                    flushTxId,
                     rowType,
                     estimatedNumberOfRows,
                     estimatedSizeInBytes,
@@ -639,7 +649,8 @@ public class BinaryWALTx implements WALTx {
                 return true;
             });
         } else {
-            compactionIO.write(flushTxId,
+            compactionIO.write(ioStats,
+                flushTxId,
                 rowType,
                 estimatedNumberOfRows,
                 estimatedSizeInBytes,

@@ -11,7 +11,7 @@ import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -51,19 +51,19 @@ public class AmzaStateStorageNGTest {
         File partitionTmpDir = Files.createTempDir();
         File[] workingDirectories = { partitionTmpDir };
         IoStats ioStats = new IoStats();
-        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(ioStats,
+        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             1_024,
             1_024 * 1_024,
             4_096,
             64,
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
-            ioStats,
             4_096,
             64,
             false);
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
+        AmzaStats amzaSystemStats = new AmzaStats();
         AmzaStats amzaStats = new AmzaStats();
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(amzaStats,
             workingDirectories,
@@ -78,13 +78,15 @@ public class AmzaStateStorageNGTest {
 
         TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
             new JiveEpochTimestampProvider());
-        PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
+        PartitionIndex partitionIndex = new PartitionIndex(amzaSystemStats, amzaStats,
             orderIdProvider,
             indexedWALStorageProvider,
             4,
             Executors.newCachedThreadPool());
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
+        SystemWALStorage systemWALStorage = new SystemWALStorage(amzaSystemStats.updateIoStats,
+            amzaSystemStats.takeIoStats,
+            partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             null,

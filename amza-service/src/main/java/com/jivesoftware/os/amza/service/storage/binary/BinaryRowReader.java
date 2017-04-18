@@ -23,7 +23,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.RowIO.PreTruncationNotifier;
 import com.jivesoftware.os.amza.api.wal.RowIO.ValidationStream;
 import com.jivesoftware.os.amza.api.wal.WALReader;
-import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -34,14 +34,13 @@ public class BinaryRowReader implements WALReader {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final WALFiler parent;
-    private final IoStats ioStats;
 
-    public BinaryRowReader(WALFiler parent, IoStats ioStats) {
+    public BinaryRowReader(WALFiler parent) {
         this.parent = parent;
-        this.ioStats = ioStats;
     }
 
-    void validate(boolean backwardScan,
+    void validate(IoStats ioStats,
+        boolean backwardScan,
         boolean truncateToLastRowFp,
         ValidationStream backward,
         ValidationStream forward,
@@ -115,7 +114,7 @@ public class BinaryRowReader implements WALReader {
             }
 
             long[] truncateAfterRowAtFp = new long[] { Long.MIN_VALUE };
-            scan(0, true, true, 1024 * 1024, preTruncationNotifier, (rowFP, rowTxId, rowType, row) -> {
+            scan(ioStats, 0, true, true, 1024 * 1024, preTruncationNotifier, (rowFP, rowTxId, rowType, row) -> {
                 long result = forward.row(rowFP, rowTxId, rowType, row);
                 if (result != -1) {
                     if (result < -1) {
@@ -147,11 +146,11 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public boolean reverseScan(RowStream stream) throws Exception {
-        return reverseScan(stream, false, 0); //TODO config
+    public boolean reverseScan(IoStats ioStats, RowStream stream) throws Exception {
+        return reverseScan(ioStats, stream, false, 0); //TODO config
     }
 
-    private boolean reverseScan(RowStream stream, boolean fallBackToChannelReader, int bufferSize) throws Exception {
+    private boolean reverseScan(IoStats ioStats, RowStream stream, boolean fallBackToChannelReader, int bufferSize) throws Exception {
         long boundaryFp = parent.length(); // last length int
         IReadable parentFiler = parent.reader(null, boundaryFp, fallBackToChannelReader, bufferSize);
         if (boundaryFp < 0) {
@@ -198,16 +197,18 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public boolean scan(long offsetFp, boolean allowRepairs, RowStream stream) throws Exception {
-        return scan(offsetFp, allowRepairs, false, 1024 * 1024, null, stream); //TODO config
+    public boolean scan(IoStats ioStats, long offsetFp, boolean allowRepairs, RowStream stream) throws Exception {
+        return scan(ioStats, offsetFp, allowRepairs, false, 1024 * 1024, null, stream); //TODO config
     }
 
-    private boolean scan(long offsetFp,
+    private boolean scan(IoStats ioStats,
+        long offsetFp,
         boolean allowRepairs,
         boolean fallBackToChannelReader,
         int bufferSize,
         PreTruncationNotifier preTruncationNotifier,
         RowStream stream) throws Exception {
+
         long fileLength = 0;
         long read = 0;
         try {

@@ -129,7 +129,7 @@ public class PartitionStripeProvider {
                 AmzaStats.CompactionStats compactionStats = stats.beginCompaction(AmzaStats.CompactionFamily.load,
                     "delta-stripe-" + deltaStripeWALStorage.getId());
                 try {
-                    deltaStripeWALStorage.load(partitionIndex, partitionCreator, storageVersionProvider, primaryRowMarshaller);
+                    deltaStripeWALStorage.load(stats.loadIoStats, partitionIndex, partitionCreator, storageVersionProvider, primaryRowMarshaller);
                 } catch (Exception x) {
                     LOG.error("Failed while loading {} ", new Object[] { deltaStripeWALStorage }, x);
                     throw new RuntimeException(x);
@@ -160,7 +160,7 @@ public class PartitionStripeProvider {
                     try {
                         if (deltaStripeWALStorage.mergeable()) {
                             try {
-                                deltaStripeWALStorage.merge(partitionIndex, partitionCreator, storageVersionProvider, false);
+                                deltaStripeWALStorage.merge(stats.mergeIoStats, partitionIndex, partitionCreator, storageVersionProvider, false);
                             } catch (Throwable x) {
                                 LOG.error("Compactor failed.", x);
                             }
@@ -225,7 +225,7 @@ public class PartitionStripeProvider {
     public void mergeAll(boolean force) {
         for (DeltaStripeWALStorage deltaStripeWALStorage : deltaStripeWALStorages) {
             try {
-                deltaStripeWALStorage.merge(partitionIndex, partitionCreator, storageVersionProvider, force);
+                deltaStripeWALStorage.merge(stats.mergeIoStats, partitionIndex, partitionCreator, storageVersionProvider, force);
             } catch (Throwable x) {
                 LOG.error("mergeAll failed.", x);
             }

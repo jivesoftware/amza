@@ -301,7 +301,7 @@ public class StripedPartition implements Partition {
                         highwaters,
                         txKeyValueStream);
                 } else {
-                    return partitionStripe.takeFromTransactionId(versionedAquarium,
+                    return partitionStripe.takeFromTransactionId(amzaStats.takeIoStats, versionedAquarium,
                         txId,
                         requiresOnline,
                         highwaterStorage,

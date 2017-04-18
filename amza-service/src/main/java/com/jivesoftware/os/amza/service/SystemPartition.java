@@ -98,6 +98,7 @@ public class SystemPartition implements Partition {
         }
 
         long timestampAndVersion = orderIdProvider.nextId();
+        long start = System.currentTimeMillis();
         RowsChanged commit = systemWALStorage.update(versionedPartitionName,
             prefix,
             (highwaters, scan) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
@@ -105,7 +106,6 @@ public class SystemPartition implements Partition {
                 return scan.row(-1L, key, value, timestamp, valueTombstone, timestampAndVersion);
             }),
             walUpdated);
-        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getSmallestCommittedTxId());
 
         if (takeQuorum > 0) {
             LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
@@ -124,18 +124,29 @@ public class SystemPartition implements Partition {
 
     @Override
     public boolean get(Consistency consistency, byte[] prefix, boolean requiresOnline, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
-        return systemWALStorage.get(versionedPartitionName, prefix, keys, stream);
+        long start = System.currentTimeMillis();
+        boolean got = systemWALStorage.get(versionedPartitionName, prefix, keys, stream);
+        amzaStats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+        return got;
     }
 
     @Override
     public boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
         for (ScanRange range : ranges) {
             if (range.fromKey == null && range.toKey == null) {
+                long start = System.currentTimeMillis();
                 boolean result = systemWALStorage.rowScan(versionedPartitionName, stream, true);
+                if (hydrateValues) {
+                    amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                } else {
+                    amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                }
                 if (!result) {
                     return false;
                 }
             } else {
+                long start = System.currentTimeMillis();
+
                 boolean result = systemWALStorage.rangeScan(versionedPartitionName,
                     range.fromPrefix,
                     range.fromKey,
@@ -143,6 +154,13 @@ public class SystemPartition implements Partition {
                     range.toKey,
                     stream,
                     true);
+
+                if (hydrateValues) {
+                    amzaStats.scans(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                } else {
+                    amzaStats.scanKeys(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+                }
+
                 if (!result) {
                     return false;
                 }

@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
-import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import java.io.File;
@@ -32,12 +32,12 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO(file,
             "test",
-            new BinaryRowReader(filer, ioStats),
-            new BinaryRowWriter(filer, ioStats),
+            new BinaryRowReader(filer),
+            new BinaryRowWriter(filer),
             4096,
             64);
         binaryRowIO.initLeaps(-1, 0);
-        write(10_000, () -> binaryRowIO);
+        write(ioStats, 10_000, () -> binaryRowIO);
     }
 
     @Test
@@ -47,15 +47,15 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(),
             "test",
-            new BinaryRowReader(filer, ioStats),
-            new BinaryRowWriter(filer, ioStats),
+            new BinaryRowReader(filer),
+            new BinaryRowWriter(filer),
             4096,
             64);
         binaryRowIO.initLeaps(-1, 0);
-        write(500, () -> binaryRowIO);
+        write(ioStats, 500, () -> binaryRowIO);
     }
 
-    private void write(int numRows, Callable<BinaryRowIO> reopen) throws Exception {
+    private void write(IoStats ioStats, int numRows, Callable<BinaryRowIO> reopen) throws Exception {
         BinaryRowIO rowIO = reopen.call();
 
         List<Long> rowTxIds = Lists.newArrayList();
@@ -69,7 +69,8 @@ public class BinaryRowIONGTest {
             rowTxIds.add(nextTxId);
             rows.add(UIO.longBytes(i));
             byte[] row = UIO.longBytes(i);
-            rowIO.write(nextTxId,
+            rowIO.write(ioStats,
+                nextTxId,
                 RowType.primary,
                 1,
                 row.length,
@@ -82,31 +83,32 @@ public class BinaryRowIONGTest {
 
         rowIO = reopen.call();
 
-        rowIO.scan(0, false, new RowStream() {
+        rowIO.scan(ioStats,
+            0, false, new RowStream() {
 
-            private long lastTxId = -1;
-            private long expectedValue = 0;
-            private boolean lastWasLeap = false;
+                private long lastTxId = -1;
+                private long expectedValue = 0;
+                private boolean lastWasLeap = false;
 
-            @Override
-            public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] row) throws Exception {
-                if (rowType == RowType.primary) {
-                    if (lastWasLeap) {
-                        assertTrue(rowTxId > lastTxId);
-                        lastWasLeap = false;
+                @Override
+                public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] row) throws Exception {
+                    if (rowType == RowType.primary) {
+                        if (lastWasLeap) {
+                            assertTrue(rowTxId > lastTxId);
+                            lastWasLeap = false;
+                        }
+
+                        assertTrue(rowTxId >= lastTxId);
+                        lastTxId = rowTxId;
+
+                        assertEquals(UIO.bytesLong(row), expectedValue);
+                        expectedValue++;
+                    } else if (rowType == RowType.system) {
+                        lastWasLeap = true;
                     }
-
-                    assertTrue(rowTxId >= lastTxId);
-                    lastTxId = rowTxId;
-
-                    assertEquals(UIO.bytesLong(row), expectedValue);
-                    expectedValue++;
-                } else if (rowType == RowType.system) {
-                    lastWasLeap = true;
+                    return false;
                 }
-                return false;
-            }
-        });
+            });
     }
 
     @Test
@@ -114,11 +116,13 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false, 0);
         IoStats ioStats = new IoStats();
-        leap(() -> {
-            BinaryRowIO io = new BinaryRowIO(file, "test", new BinaryRowReader(filer, ioStats), new BinaryRowWriter(filer, ioStats), 4096, 64);
-            io.initLeaps(-1, 0);
-            return io;
-        }, 64);
+        leap(ioStats,
+            () -> {
+                BinaryRowIO io = new BinaryRowIO(file, "test", new BinaryRowReader(filer), new BinaryRowWriter(filer), 4096, 64);
+                io.initLeaps(-1, 0);
+                return io;
+            },
+            64);
     }
 
     @Test
@@ -126,19 +130,20 @@ public class BinaryRowIONGTest {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(), "test", new BinaryRowReader(filer, ioStats), new BinaryRowWriter(filer, ioStats),
+        BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(), "test", new BinaryRowReader(filer), new BinaryRowWriter(filer),
             4096, 64);
         binaryRowIO.initLeaps(-1, 0);
-        leap(() -> binaryRowIO, 4096);
+        leap(ioStats, () -> binaryRowIO, 4096);
     }
 
-    private void leap(Callable<BinaryRowIO> reopen, int updatesBetweenLeaps) throws Exception {
+    private void leap(IoStats ioStats, Callable<BinaryRowIO> reopen, int updatesBetweenLeaps) throws Exception {
         BinaryRowIO rowIO = reopen.call();
         int numRows = 10_000;
 
         for (long i = 0; i < numRows; i++) {
             byte[] row = UIO.longBytes(i);
-            rowIO.write(i,
+            rowIO.write(ioStats,
+                i,
                 RowType.primary,
                 1,
                 row.length,
@@ -177,7 +182,7 @@ public class BinaryRowIONGTest {
         for (long i = 0; i < numRows; i += (updatesBetweenLeaps / 10)) {
             final long txId = i;
             long nextStartOfRow = rowIO.getInclusiveStartOfRow(txId);
-            rowIO.scan(nextStartOfRow, false, new RowStream() {
+            rowIO.scan(ioStats, nextStartOfRow, false, new RowStream() {
 
                 private int count = 0;
 

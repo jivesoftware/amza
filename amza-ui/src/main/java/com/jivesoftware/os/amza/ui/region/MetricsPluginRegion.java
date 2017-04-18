@@ -6,6 +6,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.AmzaInterner;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
@@ -23,6 +24,7 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.Totals;
+import com.jivesoftware.os.amza.service.stats.NetStats;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.LivelyEndState;
@@ -72,7 +74,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     private final SoyRenderer renderer;
     private final AmzaRingReader ringReader;
     private final AmzaService amzaService;
-    private final AmzaStats amzaStats;
     private final TimestampProvider timestampProvider;
     private final IdPacker idPacker;
     private final AmzaInterner amzaInterner;
@@ -99,7 +100,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         this.renderer = renderer;
         this.ringReader = ringReader;
         this.amzaService = amzaService;
-        this.amzaStats = amzaStats;
         this.timestampProvider = timestampProvider;
         this.idPacker = idPacker;
         this.amzaInterner = amzaInterner;
@@ -206,6 +206,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         try {
 
+            AmzaStats amzaStats = amzaService.amzaStats;
+
             data.put("ringName", input.ringName);
             data.put("partitionName", input.partitionName);
             data.put("exact", input.exact);
@@ -263,6 +265,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     public String renderStats(String filter, boolean exact) {
         Map<String, Object> data = Maps.newHashMap();
         try {
+            AmzaStats amzaStats = amzaService.amzaStats;
+
             List<Map<String, String>> longPolled = new ArrayList<>();
             for (Entry<RingMember, LongAdder> polled : amzaStats.longPolled.entrySet()) {
                 LongAdder longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
@@ -495,20 +499,38 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     }
 
     public String renderOverview(Set<String> expandKeys) throws Exception {
-
         StringBuilder sb = new StringBuilder();
+
         sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.longValue(), false)).append(
-            "</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;diskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.longValue(), false)).append(
-            "</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.longValue(), false)).append(
-            "</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;netW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.longValue(), false)).append(
-            "</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaStats.deltaFirstCheckRemoves.longValue()).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaStats.deltaSecondCheckRemoves.longValue()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaService.amzaStats.deltaFirstCheckRemoves.longValue()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaService.amzaStats.deltaSecondCheckRemoves.longValue()).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;baIntern<span class=\"badge\">").append(amzaInterner.size()).append("</span>");
+        sb.append("</p>");
+
+        renderOverview(sb, amzaService.amzaStats,expandKeys);
+
+        sb.append("<p> System </p>");
+
+        renderOverview(sb, amzaService.amzaSystemStats,expandKeys);
+
+        return sb.toString();
+    }
+
+
+    private void renderOverview(StringBuilder sb, AmzaStats amzaStats, Set<String> expandKeys) throws Exception {
+
+
+        sb.append("<p>");
+        addIoStats("load-",amzaStats.loadIoStats, sb);
+        addIoStats("take-", amzaStats.takeIoStats, sb);
+        addIoStats("merge-", amzaStats.mergeIoStats, sb);
+        addIoStats("update-", amzaStats.updateIoStats, sb);
+        addIoStats("compact-ts-", amzaStats.compactTombstoneIoStats, sb);
+        addNetStats("", amzaStats.netStats, sb);
+        sb.append("</p>");
+
+
+        sb.append("<p>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
@@ -670,7 +692,21 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) ((expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge),
             null, null));
 
-        return sb.toString();
+
+    }
+
+    private void addNetStats(String name, NetStats netStats, StringBuilder sb) {
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "netR<span class=\"badge\">").append(humanReadableByteCount(netStats.read.longValue(), false)).append(
+            "</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "netW<span class=\"badge\">").append(humanReadableByteCount(netStats.wrote.longValue(), false)).append(
+            "</span>");
+    }
+
+    private void addIoStats(String name, IoStats ioStats, StringBuilder sb) {
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "diskR<span class=\"badge\">").append(humanReadableByteCount(ioStats.read.longValue(), false)).append(
+            "</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "diskW<span class=\"badge\">").append(humanReadableByteCount(ioStats.wrote.longValue(), false)).append(
+            "</span>");
     }
 
     private String progress(String title, int progress, String value, String progressKey, List<Map<String, Object>> subProgress) {

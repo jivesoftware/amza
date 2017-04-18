@@ -290,6 +290,7 @@ public class AmzaTestCluster {
         };
 
         AmzaInterner amzaInterner = new AmzaInterner();
+        AmzaStats amzaSystemStats = new AmzaStats();
         AmzaStats amzaStats = new AmzaStats();
         SickThreads sickThreads = new SickThreads();
         SickPartitions sickPartitions = new SickPartitions();
@@ -302,6 +303,7 @@ public class AmzaTestCluster {
         AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
             amzaInterner,
             aquariumStats,
+            amzaSystemStats,
             amzaStats,
             new HealthTimer(CountersAndTimers.getOrCreate("test"), "test", new NoOpHealthChecker<>("test")),
             cluster::size,

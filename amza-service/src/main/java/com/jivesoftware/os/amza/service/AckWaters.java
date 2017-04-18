@@ -25,13 +25,20 @@ public class AckWaters {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats amzaSystemStats;
     private final AmzaStats amzaStats;
     private final HealthTimer quorumLatency;
     private final AwaitNotify<VersionedPartitionName> awaitNotify;
     private final boolean verboseLogTimeouts;
     private final Map<RingMember, Map<VersionedPartitionName, LeadershipTokenAndTxId>> ackWaters = Maps.newConcurrentMap();
 
-    public AckWaters(AmzaStats amzaStats, HealthTimer quorumLatency, int stripingLevel, boolean verboseLogTimeouts) {
+    public AckWaters(AmzaStats amzaSystemStats,
+        AmzaStats amzaStats,
+        HealthTimer quorumLatency,
+        int stripingLevel,
+        boolean verboseLogTimeouts) {
+
+        this.amzaSystemStats = amzaSystemStats;
         this.amzaStats = amzaStats;
         this.quorumLatency = quorumLatency;
         this.awaitNotify = new AwaitNotify<>(stripingLevel);
@@ -86,6 +93,8 @@ public class AckWaters {
         long leadershipToken,
         TakeCoordinator takeCoordinator) throws Exception {
 
+        AmzaStats stats = versionedPartitionName.getPartitionName().isSystemPartition() ? amzaSystemStats : amzaStats;
+
         RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
         int[] passed = new int[1];
         long[] tookToTxId = new long[ringMembers.length];
@@ -117,7 +126,7 @@ public class AckWaters {
                 }
                 return null;
             }, toMillis);
-            amzaStats.quorums(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start, tookFrom);
+            stats.quorums(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start, tookFrom);
             return quorum;
         } catch (TimeoutException e) {
             if (verboseLogTimeouts) {
@@ -135,7 +144,7 @@ public class AckWaters {
                 LOG.warn("Failed to achieve quorum for partition:{} desiredTxId:{} desiredTakeQuorum:{} passed:{} leadershipToken:{} tookToTxId:{} details:{}",
                     versionedPartitionName, desiredTxId, desiredTakeQuorum, passed[0], leadershipToken, Arrays.toString(tookToTxId), buf);
             }
-            amzaStats.quorumTimeouts(versionedPartitionName.getPartitionName(), 1);
+            stats.quorumTimeouts(versionedPartitionName.getPartitionName(), 1);
             throw e;
         } finally {
             quorumLatency.stopTimer("Commit Quorum Latency", "Check network connectivity and neighbor health.");

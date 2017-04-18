@@ -53,6 +53,7 @@ public class PartitionStore implements RangeScannable {
         VersionedPartitionName versionedPartitionName,
         WALStorage walStorage,
         PartitionProperties properties) {
+
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.versionedPartitionName = versionedPartitionName;
@@ -68,7 +69,13 @@ public class PartitionStore implements RangeScannable {
         return walStorage;
     }
 
-    public void load(File baseKey, long deltaWALId, long prevDeltaWALId, int stripe, ExecutorService executorService) throws Exception {
+    public void load(
+        File baseKey,
+        long deltaWALId,
+        long prevDeltaWALId,
+        int stripe,
+        ExecutorService executorService) throws Exception {
+
         if (checkIfLoaded(deltaWALId)) {
             return;
         }
@@ -85,9 +92,11 @@ public class PartitionStore implements RangeScannable {
                 PartitionProperties stackProperties = this.properties;
                 boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
                 boolean truncateToEndOfMergeMarker = deltaWALId != -1 && stackProperties.replicated;
-                walStorage.load(baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker, stackProperties.maxValueSizeInIndex, stripe);
+                walStorage.load(amzaStats.loadIoStats, baseKey, deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker,
+                    stackProperties.maxValueSizeInIndex, stripe);
+
                 if (stackProperties.forceCompactionOnStartup) {
-                    compactTombstone(amzaStats,
+                    compactTombstone(
                         true,
                         baseKey,
                         baseKey,
@@ -141,7 +150,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream, hydrateValues);
     }
 
-    public void compactTombstone(AmzaStats amzaStats,
+    public void compactTombstone(
         boolean force,
         File fromBaseKey,
         File toBaseKey,
@@ -192,7 +201,8 @@ public class PartitionStore implements RangeScannable {
                     LOG.info("Compacting tombstoneTimestampId:{} tombstoneVersion:{} ttlTimestampId:{} ttlVersion:{} versionedPartitionName:{}",
                         tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
                     boolean expectedEndOfMerge = !versionedPartitionName.getPartitionName().isSystemPartition();
-                    walStorage.compactTombstone(compactionStats,
+                    walStorage.compactTombstone(amzaStats.compactTombstoneIoStats,
+                        compactionStats,
                         fromBaseKey,
                         toBaseKey,
                         stackProperties.rowType,
@@ -213,7 +223,7 @@ public class PartitionStore implements RangeScannable {
                     tombstoneCompactTimestamp, tombstoneCompactVersion, ttlCompactTimestamp, ttlCompactVersion, versionedPartitionName);
             }
         } catch (Exception x) {
-            LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
+            LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
         }
 
     }
@@ -248,7 +258,7 @@ public class PartitionStore implements RangeScannable {
     }
 
     public boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        return walStorage.takeRowUpdatesSince(transactionId, rowStream);
+        return walStorage.takeRowUpdatesSince(amzaStats.takeIoStats, transactionId, rowStream);
     }
 
     public RowsChanged merge(boolean generateRowsChanged,
@@ -256,7 +266,7 @@ public class PartitionStore implements RangeScannable {
         long forceTxId,
         byte[] prefix,
         Commitable updates) throws Exception {
-        return walStorage.update(generateRowsChanged, partitionProperties.rowType, forceTxId, true, prefix, updates);
+        return walStorage.update(amzaStats.mergeIoStats, generateRowsChanged, partitionProperties.rowType, forceTxId, true, prefix, updates);
     }
 
     public void updateProperties(PartitionProperties properties) throws Exception {

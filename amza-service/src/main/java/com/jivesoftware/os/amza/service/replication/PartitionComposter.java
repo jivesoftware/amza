@@ -40,6 +40,7 @@ public class PartitionComposter implements RowChanges {
 
     private ScheduledExecutorService scheduledThreadPool;
 
+    private final AmzaStats amzaSystemStats;
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
     private final PartitionCreator partitionCreator;
@@ -52,7 +53,8 @@ public class PartitionComposter implements RowChanges {
 
     private volatile boolean coldstart = true;
 
-    public PartitionComposter(AmzaStats amzaStats,
+    public PartitionComposter(AmzaStats amzaSystemStats,
+        AmzaStats amzaStats,
         PartitionIndex partitionIndex,
         PartitionCreator partitionCreator,
         AmzaRingStoreReader amzaRingReader,
@@ -61,6 +63,7 @@ public class PartitionComposter implements RowChanges {
         AmzaInterner amzaInterner,
         int concurrency) {
 
+        this.amzaSystemStats = amzaSystemStats;
         this.amzaStats = amzaStats;
         this.partitionIndex = partitionIndex;
         this.partitionCreator = partitionCreator;
@@ -220,7 +223,8 @@ public class PartitionComposter implements RowChanges {
     private void deletePartition(VersionedPartitionName versionedPartitionName) {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         long partitionVersion = versionedPartitionName.getPartitionVersion();
-        CompactionStats compactionStats = amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
+        AmzaStats stats = partitionName.isSystemPartition() ? amzaSystemStats : amzaStats;
+        CompactionStats compactionStats = stats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
         try {
             LOG.info("Expunging {} {}.", partitionName, partitionVersion);
             partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {

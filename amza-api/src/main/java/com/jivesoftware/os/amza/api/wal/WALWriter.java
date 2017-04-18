@@ -15,11 +15,13 @@
  */
 package com.jivesoftware.os.amza.api.wal;
 
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.stream.RowType;
 
 public interface WALWriter {
 
-    int write(long txId,
+    int write(IoStats ioStats,
+        long txId,
         RowType rowType,
         int estimatedNumberOfRows,
         int estimatedSizeInBytes,
@@ -29,9 +31,9 @@ public interface WALWriter {
         boolean addToLeapCount,
         boolean hardFsyncBeforeLeapBoundary) throws Exception;
 
-    long writeSystem(byte[] row) throws Exception;
+    long writeSystem(IoStats ioStats, byte[] row) throws Exception;
 
-    long writeHighwater(byte[] row) throws Exception;
+    long writeHighwater(IoStats ioStats, byte[] row) throws Exception;
 
     long getEndOfLastRow() throws Exception;
 

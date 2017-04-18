@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.api.wal;
 
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -17,7 +18,8 @@ public interface WALTx {
 
     <R> R open(File baseKey, Tx<R> tx) throws Exception;
 
-    <I extends CompactableWALIndex> I openIndex(File baseKey,
+    <I extends CompactableWALIndex> I openIndex(IoStats ioStats,
+        File baseKey,
         WALIndexProvider<I> walIndexProvider,
         VersionedPartitionName partitionName,
         int maxValueSizeInIndex,
@@ -29,7 +31,8 @@ public interface WALTx {
 
     void delete(File baseKey) throws Exception;
 
-    <I extends CompactableWALIndex> Compacted<I> compact(WALCompactionStats compactionStats,
+    <I extends CompactableWALIndex> Compacted<I> compact(IoStats ioStats,
+        WALCompactionStats compactionStats,
         File fromBaseKey,
         File toBaseKey,
         RowType compactToRowType,

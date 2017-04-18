@@ -131,7 +131,7 @@ public class PartitionTombstoneCompactor {
                                 }
                             }
                             int effectivelyFinalRebalanceToStripe = rebalanceToStripe;
-                            partitionStore.compactTombstone(amzaStats,
+                            partitionStore.compactTombstone(
                                 forced,
                                 fromBaseKey,
                                 toBaseKey,

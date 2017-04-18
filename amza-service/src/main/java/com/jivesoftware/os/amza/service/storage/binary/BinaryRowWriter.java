@@ -20,7 +20,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALWriter;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
-import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import gnu.trove.iterator.TLongIterator;
 import gnu.trove.list.array.TLongArrayList;
@@ -29,15 +29,14 @@ import java.io.IOException;
 public class BinaryRowWriter implements WALWriter {
 
     private final IAppendOnly appendOnly;
-    private final IoStats ioStats;
 
-    public BinaryRowWriter(WALFiler filer, IoStats ioStats) throws IOException {
+    public BinaryRowWriter(WALFiler filer) throws IOException {
         this.appendOnly = filer.appender();
-        this.ioStats = ioStats;
     }
 
     @Override
-    public int write(long txId,
+    public int write(IoStats ioStats,
+        long txId,
         RowType rowType,
         int estimatedNumberOfRows,
         int estimatedSizeInBytes,
@@ -77,18 +76,19 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public long writeHighwater(byte[] row) throws Exception {
-        return writeRowInternal(row, RowType.highwater);
+    public long writeHighwater(IoStats ioStats, byte[] row) throws Exception {
+        return writeRowInternal(ioStats, row, RowType.highwater);
     }
 
     @Override
-    public long writeSystem(byte[] row) throws Exception {
-        return writeRowInternal(row, RowType.system);
+    public long writeSystem(IoStats ioStats, byte[] row) throws Exception {
+        return writeRowInternal(ioStats, row, RowType.system);
     }
 
-    private long writeRowInternal(byte[] row, RowType type) throws Exception {
+    private long writeRowInternal(IoStats ioStats, byte[] row, RowType type) throws Exception {
         long[] fps = new long[1];
-        write(-1L,
+        write(ioStats,
+            -1L,
             type,
             1,
             row.length,

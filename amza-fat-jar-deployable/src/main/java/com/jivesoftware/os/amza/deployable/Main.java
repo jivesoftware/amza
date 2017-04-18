@@ -165,6 +165,7 @@ public class Main {
         mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
 
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
+        final AmzaStats amzaSystemStats = new AmzaStats();
         final AmzaStats amzaStats = new AmzaStats();
         final SickThreads sickThreads = new SickThreads();
         final SickPartitions sickPartitions = new SickPartitions();
@@ -248,6 +249,7 @@ public class Main {
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaInterner,
             aquariumStats,
+            amzaSystemStats,
             amzaStats,
             new HealthTimer(CountersAndTimers.getOrCreate("quorumLatency"), "quorumLatency", new NoOpHealthChecker<>("quorumLatency")),
             () -> amzaServiceConfig.systemRingSize,

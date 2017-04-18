@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
@@ -103,12 +104,13 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public void validate(boolean backwardScan,
+    public void validate(IoStats ioStats,
+        boolean backwardScan,
         boolean truncateToLastRowFp,
         ValidationStream backward,
         ValidationStream forward,
         PreTruncationNotifier preTruncationNotifier) throws Exception {
-        rowReader.validate(backwardScan, truncateToLastRowFp, backward, forward, preTruncationNotifier);
+        rowReader.validate(ioStats, backwardScan, truncateToLastRowFp, backward, forward, preTruncationNotifier);
     }
 
     @Override
@@ -117,8 +119,8 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public boolean scan(long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception {
-        return rowReader.scan(offsetFp, allowRepairs, rowStream);
+    public boolean scan(IoStats ioStats, long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception {
+        return rowReader.scan(ioStats, offsetFp, allowRepairs, rowStream);
     }
 
     @Override
@@ -146,8 +148,8 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public boolean reverseScan(RowStream rowStream) throws Exception {
-        return rowReader.reverseScan(rowStream);
+    public boolean reverseScan(IoStats ioStats, RowStream rowStream) throws Exception {
+        return rowReader.reverseScan(ioStats, rowStream);
     }
 
     @Override
@@ -161,17 +163,18 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public long writeHighwater(byte[] row) throws Exception {
-        return rowWriter.writeHighwater(row);
+    public long writeHighwater(IoStats ioStats, byte[] row) throws Exception {
+        return rowWriter.writeHighwater(ioStats, row);
     }
 
     @Override
-    public long writeSystem(byte[] row) throws Exception {
-        return rowWriter.writeSystem(row);
+    public long writeSystem(IoStats ioStats, byte[] row) throws Exception {
+        return rowWriter.writeSystem(ioStats, row);
     }
 
     @Override
-    public int write(long txId,
+    public int write(IoStats ioStats,
+        long txId,
         RowType rowType,
         int estimatedNumberOfRows,
         int estimatedSizeInBytes,
@@ -180,7 +183,8 @@ public class BinaryRowIO implements RowIO {
         TxKeyPointerFpStream stream,
         boolean addToLeapCount,
         boolean hardFsyncBeforeLeapBoundary) throws Exception {
-        int count = rowWriter.write(txId,
+        int count = rowWriter.write(ioStats,
+            txId,
             rowType,
             estimatedNumberOfRows,
             estimatedSizeInBytes,
@@ -194,7 +198,7 @@ public class BinaryRowIO implements RowIO {
             rowWriter.flush(hardFsyncBeforeLeapBoundary);
             LeapFrog latest = latestLeapFrog.get();
             Leaps leaps = computeNextLeaps(txId, latest, maxLeaps);
-            long leapFp = rowWriter.writeSystem(leaps.toBytes());
+            long leapFp = rowWriter.writeSystem(ioStats, leaps.toBytes());
             latestLeapFrog.set(new LeapFrog(leapFp, leaps));
             updatesSinceLeap.set(0);
         }

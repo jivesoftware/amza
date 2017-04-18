@@ -503,34 +503,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem1<span class=\"badge\">").append(amzaService.amzaStats.deltaFirstCheckRemoves.longValue()).append("</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaService.amzaStats.deltaSecondCheckRemoves.longValue()).append("</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;deltaRem2<span class=\"badge\">").append(amzaService.amzaStats.deltaSecondCheckRemoves.longValue()).append(
+            "</span>");
         sb.append("&nbsp;&nbsp;&nbsp;&nbsp;baIntern<span class=\"badge\">").append(amzaInterner.size()).append("</span>");
-        sb.append("</p>");
-
-        renderOverview(sb, amzaService.amzaStats,expandKeys);
-
-        sb.append("<p> System </p>");
-
-        renderOverview(sb, amzaService.amzaSystemStats,expandKeys);
-
-        return sb.toString();
-    }
-
-
-    private void renderOverview(StringBuilder sb, AmzaStats amzaStats, Set<String> expandKeys) throws Exception {
-
-
-        sb.append("<p>");
-        addIoStats("load-",amzaStats.loadIoStats, sb);
-        addIoStats("take-", amzaStats.takeIoStats, sb);
-        addIoStats("merge-", amzaStats.mergeIoStats, sb);
-        addIoStats("update-", amzaStats.updateIoStats, sb);
-        addIoStats("compact-ts-", amzaStats.compactTombstoneIoStats, sb);
-        addNetStats("", amzaStats.netStats, sb);
-        sb.append("</p>");
-
-
-        sb.append("<p>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
@@ -554,6 +529,35 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (gcLoad * 100),
             getDurationBreakdown(s) + " total gc",
             null, null));
+
+        sb.append("</p>");
+
+        sb.append("<p><h3> Striped </h3></p>");
+
+        renderOverview(sb, amzaService.amzaStats, expandKeys);
+
+        sb.append("<p><h3> System </h3></p>");
+
+        renderOverview(sb, amzaService.amzaSystemStats, expandKeys);
+
+        return sb.toString();
+    }
+
+
+    private void renderOverview(StringBuilder sb, AmzaStats amzaStats, Set<String> expandKeys) throws Exception {
+
+
+        sb.append("<p>");
+        addIoStats("load-", amzaStats.loadIoStats, sb);
+        addIoStats("take-", amzaStats.takeIoStats, sb);
+        addIoStats("merge-", amzaStats.mergeIoStats, sb);
+        addIoStats("update-", amzaStats.updateIoStats, sb);
+        addIoStats("compact-ts-", amzaStats.compactTombstoneIoStats, sb);
+        addNetStats("", amzaStats.netStats, sb);
+        sb.append("</p>");
+
+
+        sb.append("<p>");
 
         Totals grandTotal = amzaStats.getGrandTotal();
 
@@ -703,10 +707,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     }
 
     private void addIoStats(String name, IoStats ioStats, StringBuilder sb) {
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "diskR<span class=\"badge\">").append(humanReadableByteCount(ioStats.read.longValue(), false)).append(
-            "</span>");
-        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "diskW<span class=\"badge\">").append(humanReadableByteCount(ioStats.wrote.longValue(), false)).append(
-            "</span>");
+        sb.append("&nbsp;&nbsp;&nbsp;&nbsp;" + name + "disk <span class=\"badge\"> R:").append(humanReadableByteCount(ioStats.read.longValue(), false));
+        sb.append(" W:").append(humanReadableByteCount(ioStats.wrote.longValue(), false));
+        sb.append("</span>");
     }
 
     private String progress(String title, int progress, String value, String progressKey, List<Map<String, Object>> subProgress) {

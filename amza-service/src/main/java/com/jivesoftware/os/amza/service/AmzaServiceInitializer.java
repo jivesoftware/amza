@@ -406,13 +406,16 @@ public class AmzaServiceInitializer {
 
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
 
-        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(amzaInterner,
+        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(amzaSystemStats,
+            amzaStats,
+            amzaInterner,
             orderIdProvider,
             ringMember,
             partitionCreator,
             systemWALStorage,
             walUpdated,
-            config.flushHighwatersAfterNUpdates);
+            config.flushHighwatersAfterNUpdates,
+            numberOfStripes);
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
             amzaStats,

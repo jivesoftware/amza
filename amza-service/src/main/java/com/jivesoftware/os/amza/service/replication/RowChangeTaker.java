@@ -781,7 +781,7 @@ public class RowChangeTaker implements RowChanges {
                                         highwaterStorage.setIfLarger(otherHighwaterMark.getKey(),
                                             localVersionedPartitionName,
                                             otherHighwaterMark.getValue(),
-                                            -1,
+                                            takeRowStream.lastDeltaIndex.intValue(),
                                             0);
                                     }
 
@@ -873,6 +873,7 @@ public class RowChangeTaker implements RowChanges {
         private final MutableLong highWaterMark;
         private final List<WALRow> batch = new ArrayList<>();
         private final MutableLong oldestTxId = new MutableLong(Long.MAX_VALUE);
+        private final MutableLong lastDeltaIndex;
         private final MutableLong lastTxId;
         private final MutableLong flushedTxId;
         private final AtomicInteger streamed = new AtomicInteger(0);
@@ -894,6 +895,7 @@ public class RowChangeTaker implements RowChanges {
             this.commitTo = commitTo;
             this.ringMember = ringMember;
             this.highWaterMark = new MutableLong(lastHighwaterMark);
+            this.lastDeltaIndex = new MutableLong(-1);
             this.lastTxId = new MutableLong(Long.MIN_VALUE);
             this.primaryRowMarshaller = primaryRowMarshaller;
             this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
@@ -951,6 +953,7 @@ public class RowChangeTaker implements RowChanges {
                                     mergeHighwater(changes.getDeltaIndex(), memberHighwater.ringMember, memberHighwater.transactionId);
                                 }
                             }
+                            lastDeltaIndex.setValue(changes.getDeltaIndex());
                             mergeHighwater(changes.getDeltaIndex(), ringMember, highWaterMark.longValue());
                             flushed.set(streamed.get());
                             int numFlushed = changes.getApply().size();

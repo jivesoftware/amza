@@ -58,7 +58,8 @@ public class PartitionStripeProvider {
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
 
-    private final AsyncStripeFlusher[] flushers;
+    private final AsyncStripeFlusher systemFlusher;
+    private final AsyncStripeFlusher[] stripeFlusher;
     private final long deltaStripeCompactionIntervalInMillis;
 
     public PartitionStripeProvider(AmzaStats stats,
@@ -114,10 +115,22 @@ public class PartitionStripeProvider {
         this.compactDeltasThreadPool = compactDeltasThreadPool;
         this.flusherExecutor = flusherExecutor;
 
-        this.flushers = new AsyncStripeFlusher[numberOfStripes];
+        this.stripeFlusher = new AsyncStripeFlusher[numberOfStripes];
         for (int i = 0; i < numberOfStripes; i++) {
-            this.flushers[i] = new AsyncStripeFlusher(this.deltaStripeWALStorages[i], this.highwaterStorage, asyncFlushIntervalMillis);
+            int index = i;
+            this.stripeFlusher[i] = new AsyncStripeFlusher(index,
+                this.highwaterStorage,
+                asyncFlushIntervalMillis,
+                () -> {
+                    this.deltaStripeWALStorages[index].flush(true);
+                    return null;
+                });
         }
+
+        this.systemFlusher = new AsyncStripeFlusher(-1,
+            this.highwaterStorage,
+            asyncFlushIntervalMillis,
+            null);
     }
 
     public void load() throws Exception {
@@ -145,7 +158,7 @@ public class PartitionStripeProvider {
                 future.get();
                 index++;
             } catch (InterruptedException | ExecutionException x) {
-                LOG.error("Failed to load stripe:{}.", partitionStripes[index], x);
+                LOG.error("Failed to load stripe:{}.", new Object[] { partitionStripes[index] }, x);
                 throw x;
             }
         }
@@ -176,13 +189,16 @@ public class PartitionStripeProvider {
             });
         }
 
-        for (AsyncStripeFlusher flusher : flushers) {
+        systemFlusher.start(flusherExecutor);
+
+        for (AsyncStripeFlusher flusher : stripeFlusher) {
             flusher.start(flusherExecutor);
         }
+
     }
 
     public void stop() {
-        for (AsyncStripeFlusher flusher : flushers) {
+        for (AsyncStripeFlusher flusher : stripeFlusher) {
             flusher.stop();
         }
 
@@ -217,7 +233,7 @@ public class PartitionStripeProvider {
         storageVersionProvider.tx(partitionName,
             storageVersion,
             (deltaIndex, stripeIndex, storageVersion1) -> {
-                flushers[deltaIndex].forceFlush(durability, waitForFlushInMillis);
+                stripeFlusher[deltaIndex].forceFlush(durability, waitForFlushInMillis);
                 return null;
             });
     }
@@ -297,7 +313,7 @@ public class PartitionStripeProvider {
 
     private final static class AsyncStripeFlusher implements Runnable {
 
-        private final DeltaStripeWALStorage deltaStripeWALStorage;
+        private final int id;
         private final HighwaterStorage highwaterStorage;
         private final AtomicBoolean running = new AtomicBoolean(false);
         private final AtomicLong asyncVersion = new AtomicLong(0);
@@ -308,17 +324,15 @@ public class PartitionStripeProvider {
         private final long asyncFlushIntervalMillis;
         private final Callable<Void> flushDelta;
 
-        public AsyncStripeFlusher(DeltaStripeWALStorage deltaStripeWALStorage,
+        public AsyncStripeFlusher(int id,
             HighwaterStorage highwaterStorage,
-            long asyncFlushIntervalMillis) {
+            long asyncFlushIntervalMillis,
+            Callable<Void> flushDelta) {
 
-            this.deltaStripeWALStorage = deltaStripeWALStorage;
+            this.id = id;
             this.highwaterStorage = highwaterStorage;
             this.asyncFlushIntervalMillis = asyncFlushIntervalMillis;
-            this.flushDelta = () -> {
-                deltaStripeWALStorage.flush(true);
-                return null;
-            };
+            this.flushDelta = flushDelta;
         }
 
         public void forceFlush(Durability durability, long waitForFlushInMillis) throws Exception {
@@ -396,7 +410,7 @@ public class PartitionStripeProvider {
                             try {
                                 force.wait(asyncFlushIntervalMillis);
                             } catch (InterruptedException ex) {
-                                LOG.warn("Async flusher for {} was interrupted.", deltaStripeWALStorage);
+                                LOG.warn("Async flusher for {} was interrupted.", id);
                                 return;
                             }
                         }
@@ -408,8 +422,10 @@ public class PartitionStripeProvider {
         }
 
         private void flush() throws Exception {
-            if (!highwaterStorage.flush(deltaStripeWALStorage.getId(), flushDelta)) {
-                flushDelta.call();
+            if (!highwaterStorage.flush(id, flushDelta)) {
+                if (flushDelta != null) {
+                    flushDelta.call();
+                }
             }
         }
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.AmzaInterner;
+import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -29,11 +30,11 @@ import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
+import com.jivesoftware.os.amza.service.replication.AsyncStripeFlusher;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionStats;
-import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -170,11 +171,16 @@ public class DeltaStripeWALStorageNGTest {
             }
         };
 
+        AsyncStripeFlusher systemFlusher = new AsyncStripeFlusher(-1,
+            1_000,
+            null);
+
         systemWALStorage = new SystemWALStorage(amzaSystemStats,
             partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             null,
+            systemFlusher,
             false);
 
         partitionCreator = new PartitionCreator(ids,

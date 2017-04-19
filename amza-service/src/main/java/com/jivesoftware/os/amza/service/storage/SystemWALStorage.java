@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
@@ -19,6 +20,7 @@ import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.replication.AsyncStripeFlusher;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.aquarium.LivelyEndState;
@@ -33,6 +35,7 @@ public class SystemWALStorage {
     private final PrimaryRowMarshaller rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final RowChanges allRowChanges;
+    private final AsyncStripeFlusher systemFlusher;
     private final boolean hardFlush;
 
     public SystemWALStorage(AmzaStats amzaStats,
@@ -40,6 +43,7 @@ public class SystemWALStorage {
         PrimaryRowMarshaller rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         RowChanges allRowChanges,
+        AsyncStripeFlusher systemFlusher,
         boolean hardFlush) {
 
         this.amzaStats = amzaStats;
@@ -47,6 +51,7 @@ public class SystemWALStorage {
         this.rowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.allRowChanges = allRowChanges;
+        this.systemFlusher = systemFlusher;
         this.hardFlush = hardFlush;
     }
 
@@ -74,6 +79,7 @@ public class SystemWALStorage {
             updated.updated(versionedPartitionName, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
+        systemFlusher.forceFlush(Durability.fsync_async, 0);
 
         amzaStats.direct(partitionName, changed.getApply().size(), changed.getSmallestCommittedTxId());
         return changed;

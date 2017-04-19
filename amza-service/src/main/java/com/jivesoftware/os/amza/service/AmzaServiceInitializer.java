@@ -30,6 +30,7 @@ import com.jivesoftware.os.amza.service.TakeFullySystemReady.SystemRingSizeProvi
 import com.jivesoftware.os.amza.service.filer.DirectByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
+import com.jivesoftware.os.amza.service.replication.AsyncStripeFlusher;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
@@ -234,12 +235,17 @@ public class AmzaServiceInitializer {
             numProc,
             amzaThreadPoolProvider.allocateThreadPool(numProc, "partition-loader"));
 
+        AsyncStripeFlusher systemFlusher = new AsyncStripeFlusher(-1,
+            config.asyncFsyncIntervalMillis,
+            null);
+
         SystemWALStorage systemWALStorage = new SystemWALStorage(
             amzaSystemStats,
             partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             amzaSystemPartitionWatcher,
+            systemFlusher,
             config.hardFsync);
 
         File[] walDirs = new File[numberOfStripes];
@@ -417,6 +423,17 @@ public class AmzaServiceInitializer {
             config.flushHighwatersAfterNUpdates,
             numberOfStripes);
 
+        AsyncStripeFlusher[] stripeFlusher = new AsyncStripeFlusher[numberOfStripes];
+        for (int i = 0; i < numberOfStripes; i++) {
+            int index = i;
+            stripeFlusher[i] = new AsyncStripeFlusher(index,
+                config.asyncFsyncIntervalMillis,
+                () -> {
+                    deltaStripeWALStorages[index].flush(true);
+                    return null;
+                });
+        }
+
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(
             amzaStats,
             partitionCreator,
@@ -432,7 +449,8 @@ public class AmzaServiceInitializer {
             takeCoordinator,
             awaitOnline,
             amzaStripedPartitionWatcher,
-            config.asyncFsyncIntervalMillis,
+            systemFlusher,
+            stripeFlusher,
             config.deltaStripeCompactionIntervalInMillis,
             amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length, "compact-deltas"),
             amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length + 1, "stripe-flusher")

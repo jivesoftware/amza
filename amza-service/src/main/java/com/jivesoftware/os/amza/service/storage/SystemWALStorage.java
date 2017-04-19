@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -61,7 +62,8 @@ public class SystemWALStorage {
         Commitable updates,
         WALUpdated updated) throws Exception {
 
-        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        Preconditions.checkArgument(partitionName.isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
         RowsChanged changed = partitionStore.getWalStorage().update(amzaStats.updateIoStats, true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
@@ -72,12 +74,17 @@ public class SystemWALStorage {
             updated.updated(versionedPartitionName, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
+
+        amzaStats.direct(partitionName, changed.getApply().size(), changed.getSmallestCommittedTxId());
         return changed;
     }
 
     public TimestampedValue getTimestampedValue(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.getSystemPartition(versionedPartitionName).getTimestampedValue(prefix, key);
+        long start = System.currentTimeMillis();
+        TimestampedValue timestampedValue = partitionIndex.getSystemPartition(versionedPartitionName).getTimestampedValue(prefix, key);
+        amzaStats.gets(versionedPartitionName.getPartitionName(), 1, System.currentTimeMillis() - start);
+        return timestampedValue;
     }
 
     public boolean get(VersionedPartitionName versionedPartitionName,
@@ -86,9 +93,7 @@ public class SystemWALStorage {
         KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
-
         long start = System.currentTimeMillis();
-
         boolean got = partitionIndex.getSystemPartition(versionedPartitionName).streamValues(prefix, keys,
             (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (valueTimestamp == -1) {

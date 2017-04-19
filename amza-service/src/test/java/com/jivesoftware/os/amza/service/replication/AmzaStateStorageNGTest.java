@@ -84,11 +84,16 @@ public class AmzaStateStorageNGTest {
             4,
             Executors.newCachedThreadPool());
 
+        AsyncStripeFlusher systemFlusher = new AsyncStripeFlusher(-1,
+            1_000,
+            null);
+
         SystemWALStorage systemWALStorage = new SystemWALStorage(amzaSystemStats,
             partitionIndex,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             null,
+            systemFlusher,
             false);
 
         WALUpdated updated = (versionedPartitionName, txId) -> {

@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.RemoteVersionedState;
@@ -27,12 +26,9 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.BoundedExecutor;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -57,7 +53,6 @@ public class PartitionStripeProvider {
     private final TakeCoordinator takeCoordinator;
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
-
     private final AsyncStripeFlusher systemFlusher;
     private final AsyncStripeFlusher[] stripeFlusher;
     private final long deltaStripeCompactionIntervalInMillis;
@@ -76,8 +71,7 @@ public class PartitionStripeProvider {
         TakeCoordinator takeCoordinator,
         AwaitNotify<PartitionName> awaitNotify,
         AmzaPartitionWatcher amzaStripedPartitionWatcher,
-        long asyncFlushIntervalMillis,
-        long deltaStripeCompactionIntervalInMillis,
+        AsyncStripeFlusher systemFlusher, AsyncStripeFlusher[] stripeFlusher, long deltaStripeCompactionIntervalInMillis,
         ExecutorService compactDeltasThreadPool,
         ExecutorService flusherExecutor) {
 
@@ -94,6 +88,8 @@ public class PartitionStripeProvider {
         this.takeCoordinator = takeCoordinator;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = awaitNotify;
+        this.systemFlusher = systemFlusher;
+        this.stripeFlusher = stripeFlusher;
         this.deltaStripeCompactionIntervalInMillis = deltaStripeCompactionIntervalInMillis;
 
         int numberOfStripes = deltaStripeWALStorages.length;
@@ -114,23 +110,6 @@ public class PartitionStripeProvider {
 
         this.compactDeltasThreadPool = compactDeltasThreadPool;
         this.flusherExecutor = flusherExecutor;
-
-        this.stripeFlusher = new AsyncStripeFlusher[numberOfStripes];
-        for (int i = 0; i < numberOfStripes; i++) {
-            int index = i;
-            this.stripeFlusher[i] = new AsyncStripeFlusher(index,
-                this.highwaterStorage,
-                asyncFlushIntervalMillis,
-                () -> {
-                    this.deltaStripeWALStorages[index].flush(true);
-                    return null;
-                });
-        }
-
-        this.systemFlusher = new AsyncStripeFlusher(-1,
-            this.highwaterStorage,
-            asyncFlushIntervalMillis,
-            null);
     }
 
     public void load() throws Exception {
@@ -189,10 +168,10 @@ public class PartitionStripeProvider {
             });
         }
 
-        systemFlusher.start(flusherExecutor);
+        systemFlusher.start(flusherExecutor, highwaterStorage);
 
         for (AsyncStripeFlusher flusher : stripeFlusher) {
-            flusher.start(flusherExecutor);
+            flusher.start(flusherExecutor, highwaterStorage);
         }
 
     }
@@ -308,132 +287,6 @@ public class PartitionStripeProvider {
             });
             return null;
         });
-
-    }
-
-    private final static class AsyncStripeFlusher implements Runnable {
-
-        private final int id;
-        private final HighwaterStorage highwaterStorage;
-        private final AtomicBoolean running = new AtomicBoolean(false);
-        private final AtomicLong asyncVersion = new AtomicLong(0);
-        private final AtomicLong forceVersion = new AtomicLong(0);
-        private final AtomicLong asyncFlushedToVersion = new AtomicLong(0);
-        private final AtomicLong forceFlushedToVersion = new AtomicLong(0);
-        private final Object force = new Object();
-        private final long asyncFlushIntervalMillis;
-        private final Callable<Void> flushDelta;
-
-        public AsyncStripeFlusher(int id,
-            HighwaterStorage highwaterStorage,
-            long asyncFlushIntervalMillis,
-            Callable<Void> flushDelta) {
-
-            this.id = id;
-            this.highwaterStorage = highwaterStorage;
-            this.asyncFlushIntervalMillis = asyncFlushIntervalMillis;
-            this.flushDelta = flushDelta;
-        }
-
-        public void forceFlush(Durability durability, long waitForFlushInMillis) throws Exception {
-            if (durability == Durability.ephemeral || durability == Durability.fsync_never) {
-                return;
-            }
-            long waitForVersion = 0;
-            AtomicLong flushedVersion;
-            AtomicLong flushedToVersion;
-            if (durability == Durability.fsync_async) {
-                waitForVersion = asyncVersion.incrementAndGet();
-                flushedVersion = asyncVersion;
-                flushedToVersion = asyncFlushedToVersion;
-            } else {
-                waitForVersion = forceVersion.incrementAndGet();
-                flushedVersion = forceVersion;
-                flushedToVersion = forceFlushedToVersion;
-                synchronized (force) {
-                    force.notifyAll();
-                }
-            }
-
-            if (waitForFlushInMillis > 0) {
-                long end = System.currentTimeMillis() + asyncFlushIntervalMillis;
-                while (waitForVersion > flushedVersion.get()) {
-                    synchronized (flushedToVersion) {
-                        flushedToVersion.wait(Math.max(0, end - System.currentTimeMillis()));
-                    }
-                    if (end < System.currentTimeMillis()) {
-                        throw new FailedToAchieveQuorumException("We couldn't fsync within " + waitForFlushInMillis + " millis.");
-                    }
-                }
-            }
-        }
-
-        public void stop() {
-            running.compareAndSet(true, false);
-        }
-
-        @Override
-        public void run() {
-            try {
-                long lastAsyncV = 0;
-                long lastForcedV = 0;
-                while (running.get()) {
-                    long asyncV = asyncVersion.get();
-                    long forcedV = forceVersion.get();
-
-                    if (lastAsyncV != asyncV || lastForcedV != forcedV) {
-                        try {
-                            flush();
-                            lastAsyncV = asyncV;
-                            lastForcedV = forcedV;
-                        } catch (Throwable t) {
-                            LOG.error("Excountered the following while flushing.", t);
-                        }
-                    }
-
-                    if (lastAsyncV != asyncV) {
-                        asyncFlushedToVersion.set(asyncV);
-                        synchronized (asyncFlushedToVersion) {
-                            asyncFlushedToVersion.notifyAll();
-                        }
-
-                    }
-                    if (lastForcedV != forcedV) {
-                        forceFlushedToVersion.set(forcedV);
-                        synchronized (forceFlushedToVersion) {
-                            forceFlushedToVersion.notifyAll();
-                        }
-                    }
-
-                    synchronized (force) {
-                        if (forceVersion.get() == forcedV) {
-                            try {
-                                force.wait(asyncFlushIntervalMillis);
-                            } catch (InterruptedException ex) {
-                                LOG.warn("Async flusher for {} was interrupted.", id);
-                                return;
-                            }
-                        }
-                    }
-                }
-            } finally {
-                running.set(false);
-            }
-        }
-
-        private void flush() throws Exception {
-            if (!highwaterStorage.flush(id, flushDelta)) {
-                if (flushDelta != null) {
-                    flushDelta.call();
-                }
-            }
-        }
-
-        private void start(ExecutorService flusherExecutor) {
-            if (running.compareAndSet(false, true)) {
-                flusherExecutor.submit(this);
-            }
-        }
 
     }
 

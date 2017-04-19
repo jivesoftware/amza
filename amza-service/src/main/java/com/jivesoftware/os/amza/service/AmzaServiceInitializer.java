@@ -435,7 +435,7 @@ public class AmzaServiceInitializer {
             config.asyncFsyncIntervalMillis,
             config.deltaStripeCompactionIntervalInMillis,
             amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length, "compact-deltas"),
-            amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length, "stripe-flusher")
+            amzaThreadPoolProvider.allocateThreadPool(deltaStripeWALStorages.length + 1, "stripe-flusher")
         );
 
         PartitionComposter partitionComposter = new PartitionComposter(amzaSystemStats, amzaStats, partitionIndex, partitionCreator, ringStoreReader,

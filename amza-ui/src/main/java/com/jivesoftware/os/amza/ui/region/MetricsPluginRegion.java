@@ -534,17 +534,17 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         sb.append("<p><h3> Striped </h3></p>");
 
-        renderOverview(sb, amzaService.amzaStats, expandKeys);
+        renderOverview(sb, amzaService.amzaStats, expandKeys, false);
 
         sb.append("<p><h3> System </h3></p>");
 
-        renderOverview(sb, amzaService.amzaSystemStats, expandKeys);
+        renderOverview(sb, amzaService.amzaSystemStats, expandKeys, true);
 
         return sb.toString();
     }
 
 
-    private void renderOverview(StringBuilder sb, AmzaStats amzaStats, Set<String> expandKeys) throws Exception {
+    private void renderOverview(StringBuilder sb, AmzaStats amzaStats, Set<String> expandKeys, boolean includePartitionTotals) throws Exception {
 
 
         sb.append("<p>");
@@ -562,91 +562,19 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         Totals grandTotal = amzaStats.getGrandTotal();
 
-        sb.append(progress("Gets (" + numberFormat.format(grandTotal.gets.longValue()) + ")",
-            (int) (((double) grandTotal.getsLatency / 1000d) * 100),
-            getDurationBreakdown(grandTotal.getsLatency) + " lag",
-            null, null));
+        addTotals(sb, "*", expandKeys, grandTotal);
 
-        sb.append(progress("Scans (" + numberFormat.format(grandTotal.scans.longValue()) + ")",
-            (int) ((grandTotal.scansLatency / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scansLatency) + " lag",
-            null, null));
-
-        sb.append(progress("ScanKeys (" + numberFormat.format(grandTotal.scanKeys.longValue()) + ")",
-            (int) ((grandTotal.scanKeysLatency / 1000d) * 100),
-            getDurationBreakdown(grandTotal.scanKeysLatency) + " lag",
-            null, null));
-
-        sb.append(progress("Direct Applied (" + numberFormat.format(grandTotal.directApplies.longValue()) + ")",
-            (int) ((grandTotal.directAppliesLag / 1000d) * 100),
-            getDurationBreakdown(grandTotal.directAppliesLag) + " lag",
-            null, null));
-
-        sb.append(progress("Updates (" + numberFormat.format(grandTotal.updates.longValue()) + ")",
-            (int) ((grandTotal.updatesLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.updatesLag) + " lag",
-            null, null));
-
-        List<Map<String, Object>> subOffersLag = Lists.newArrayList();
-        if (expandKeys.contains("offers")) {
-            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberOffersLag.entrySet()) {
-                long latency = entry.getValue().get();
-                subOffersLag.add(progressData("Offers " + entry.getKey().getMember(),
-                    (int) ((latency / 10000d) * 100),
-                    getDurationBreakdown(latency) + " lag"));
+        if (includePartitionTotals) {
+            for (Entry<PartitionName, Totals> partitionNameTotalsEntry : amzaStats.getPartitionTotals().entrySet()) {
+                addTotals(sb, partitionNameTotalsEntry.getKey().getName().toString(), expandKeys, partitionNameTotalsEntry.getValue());
             }
         }
-
-        sb.append(progress("Offers (" + numberFormat.format(grandTotal.offers.longValue()) + ")",
-            (int) ((grandTotal.offersLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.offersLag) + " lag",
-            "offers", subOffersLag));
-
-        sb.append(progress("Took (" + numberFormat.format(grandTotal.takes.longValue()) + ")",
-            (int) ((grandTotal.takesLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.takesLag) + " lag",
-            null, null));
-
-        sb.append(progress("Took Applied (" + numberFormat.format(grandTotal.takeApplies.longValue()) + ")",
-            (int) ((grandTotal.takeAppliesLag / 1000d) * 100),
-            getDurationBreakdown(grandTotal.takeAppliesLag) + " lag",
-            null, null));
 
         sb.append(progress("Took Average Rows (" + numberFormat.format(amzaStats.takes.longValue()) + ")",
             (int) (((double) amzaStats.takeExcessRows.longValue() / amzaStats.takes.longValue()) / 4096 * 100),
             numberFormat.format(amzaStats.takeExcessRows.longValue()),
             null, null));
 
-        List<Map<String, Object>> subAcksLag = Lists.newArrayList();
-        if (expandKeys.contains("acks")) {
-            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberAcksLag.entrySet()) {
-                long latency = entry.getValue().get();
-                subAcksLag.add(progressData("Acks " + entry.getKey().getMember(),
-                    (int) ((latency / 10000d) * 100),
-                    getDurationBreakdown(latency) + " lag"));
-            }
-        }
-
-        sb.append(progress("Acks (" + numberFormat.format(grandTotal.acks.longValue()) + ")",
-            (int) ((grandTotal.acksLag / 10000d) * 100),
-            getDurationBreakdown(grandTotal.acksLag) + " lag",
-            "acks", subAcksLag));
-
-        List<Map<String, Object>> subQuorumsLatency = Lists.newArrayList();
-        if (expandKeys.contains("quorums")) {
-            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
-                long latency = entry.getValue().get();
-                subQuorumsLatency.add(progressData("Quorums " + entry.getKey().getMember(),
-                    (int) ((latency / 10000d) * 100),
-                    getDurationBreakdown(latency) + " lag"));
-            }
-        }
-
-        sb.append(progress(
-            "Quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
-            (int) ((grandTotal.quorumsLatency / 10000d) * 100),
-            getDurationBreakdown(grandTotal.quorumsLatency) + " lag",
-            "quorums", subQuorumsLatency));
 
         sb.append(progress("Active Long Polls (" + numberFormat.format(amzaStats.availableRowsStream.longValue()) + ")",
             (int) ((amzaStats.availableRowsStream.longValue() / 100d) * 100), "",
@@ -698,6 +626,90 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             null, null));
 
 
+    }
+
+    private void addTotals(StringBuilder sb, String name, Set<String> expandKeys, Totals grandTotal) {
+        sb.append(progress(name+".gets (" + numberFormat.format(grandTotal.gets.longValue()) + ")",
+            (int) (((double) grandTotal.getsLatency / 1000d) * 100),
+            getDurationBreakdown(grandTotal.getsLatency) + " lag",
+            null, null));
+
+        sb.append(progress(name+".scans (" + numberFormat.format(grandTotal.scans.longValue()) + ")",
+            (int) ((grandTotal.scansLatency / 1000d) * 100),
+            getDurationBreakdown(grandTotal.scansLatency) + " lag",
+            null, null));
+
+        sb.append(progress(name+".scanKeys (" + numberFormat.format(grandTotal.scanKeys.longValue()) + ")",
+            (int) ((grandTotal.scanKeysLatency / 1000d) * 100),
+            getDurationBreakdown(grandTotal.scanKeysLatency) + " lag",
+            null, null));
+
+        sb.append(progress(name+".direct Applied (" + numberFormat.format(grandTotal.directApplies.longValue()) + ")",
+            (int) ((grandTotal.directAppliesLag / 1000d) * 100),
+            getDurationBreakdown(grandTotal.directAppliesLag) + " lag",
+            null, null));
+
+        sb.append(progress(name+".updates (" + numberFormat.format(grandTotal.updates.longValue()) + ")",
+            (int) ((grandTotal.updatesLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.updatesLag) + " lag",
+            null, null));
+
+        List<Map<String, Object>> subOffersLag = Lists.newArrayList();
+        if (expandKeys.contains("offers")) {
+            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberOffersLag.entrySet()) {
+                long latency = entry.getValue().get();
+                subOffersLag.add(progressData("Offers " + entry.getKey().getMember(),
+                    (int) ((latency / 10000d) * 100),
+                    getDurationBreakdown(latency) + " lag"));
+            }
+        }
+
+        sb.append(progress(name+".offers (" + numberFormat.format(grandTotal.offers.longValue()) + ")",
+            (int) ((grandTotal.offersLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.offersLag) + " lag",
+            "offers", subOffersLag));
+
+        sb.append(progress(name+".took (" + numberFormat.format(grandTotal.takes.longValue()) + ")",
+            (int) ((grandTotal.takesLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.takesLag) + " lag",
+            null, null));
+
+        sb.append(progress(name+".took Applied (" + numberFormat.format(grandTotal.takeApplies.longValue()) + ")",
+            (int) ((grandTotal.takeAppliesLag / 1000d) * 100),
+            getDurationBreakdown(grandTotal.takeAppliesLag) + " lag",
+            null, null));
+
+
+        List<Map<String, Object>> subAcksLag = Lists.newArrayList();
+        if (expandKeys.contains("acks")) {
+            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberAcksLag.entrySet()) {
+                long latency = entry.getValue().get();
+                subAcksLag.add(progressData("Acks " + entry.getKey().getMember(),
+                    (int) ((latency / 10000d) * 100),
+                    getDurationBreakdown(latency) + " lag"));
+            }
+        }
+
+        sb.append(progress(name+".acks (" + numberFormat.format(grandTotal.acks.longValue()) + ")",
+            (int) ((grandTotal.acksLag / 10000d) * 100),
+            getDurationBreakdown(grandTotal.acksLag) + " lag",
+            "acks", subAcksLag));
+
+        List<Map<String, Object>> subQuorumsLatency = Lists.newArrayList();
+        if (expandKeys.contains("quorums")) {
+            for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
+                long latency = entry.getValue().get();
+                subQuorumsLatency.add(progressData(name+".quorums " + entry.getKey().getMember(),
+                    (int) ((latency / 10000d) * 100),
+                    getDurationBreakdown(latency) + " lag"));
+            }
+        }
+
+        sb.append(progress(
+            name+".quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
+            (int) ((grandTotal.quorumsLatency / 10000d) * 100),
+            getDurationBreakdown(grandTotal.quorumsLatency) + " lag",
+            "quorums", subQuorumsLatency));
     }
 
     private void addNetStats(String name, NetStats netStats, StringBuilder sb) {

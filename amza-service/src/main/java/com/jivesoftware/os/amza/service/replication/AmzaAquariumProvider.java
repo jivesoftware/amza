@@ -91,6 +91,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final long feedEveryMillis;
     private final AwaitNotify<PartitionName> awaitLivelyEndState;
     private final SickThreads sickThreads;
+    private final AmzaStateStorageFlusher stateStorageFlusher;
 
     private final ConcurrentMap<VersionedPartitionName, Aquarium> aquariums = Maps.newConcurrentMap();
     private final ExecutorService livelynessExecutorService = Executors.newSingleThreadExecutor(
@@ -135,6 +136,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         this.feedEveryMillis = feedEveryMillis;
         this.awaitLivelyEndState = awaitLivelyEndState;
         this.sickThreads = sickThreads;
+        this.stateStorageFlusher = new AmzaStateStorageFlusher(systemWALStorage, orderIdProvider, walUpdated);
+
     }
 
     public void start() {
@@ -605,11 +608,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(amzaInterner, systemWALStorage, orderIdProvider, walUpdated, partitionName, CURRENT);
+        return new AmzaStateStorage(amzaInterner, systemWALStorage, stateStorageFlusher, partitionName, CURRENT);
     }
 
     private AmzaStateStorage desiredStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(amzaInterner, systemWALStorage, orderIdProvider, walUpdated, partitionName, DESIRED);
+        return new AmzaStateStorage(amzaInterner, systemWALStorage, stateStorageFlusher, partitionName, DESIRED);
     }
 
     static byte[] stateKey(PartitionName partitionName,

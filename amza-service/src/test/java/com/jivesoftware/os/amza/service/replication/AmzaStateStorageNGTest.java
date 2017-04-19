@@ -111,7 +111,8 @@ public class AmzaStateStorageNGTest {
 
         PartitionName partitionName = new PartitionName(false, new byte[] { 20 }, new byte[] { 30 });
         byte context = 1;
-        AmzaStateStorage stateStorage = new AmzaStateStorage(amzaInterner, systemWALStorage, orderIdProvider, updated, partitionName, context);
+        AmzaStateStorageFlusher flusher = new AmzaStateStorageFlusher(systemWALStorage, orderIdProvider, updated);
+        AmzaStateStorage stateStorage = new AmzaStateStorage(amzaInterner, systemWALStorage, flusher, partitionName, context);
 
         Long lifecycle1 = 1L;
         Long lifecycle2 = 2L;

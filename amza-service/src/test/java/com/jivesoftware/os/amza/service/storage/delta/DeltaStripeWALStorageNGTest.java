@@ -222,7 +222,8 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNotNull(partitionStore1);
         Assert.assertNotNull(partitionStore2);
 
-        highwaterStorage = new PartitionBackedHighwaterStorage(amzaInterner, ids, member, partitionCreator, systemWALStorage, updated, 100);
+        highwaterStorage = new PartitionBackedHighwaterStorage(amzaSystemStats, amzaStats,
+            amzaInterner, ids, member, partitionCreator, systemWALStorage, updated, 100, 1);
 
         File tmp = Files.createTempDir();
         workingDirectories = new File[] { tmp };
@@ -245,7 +246,7 @@ public class DeltaStripeWALStorageNGTest {
     private DeltaStripeWALStorage loadDeltaStripe(IoStats ioStats) throws Exception {
         HealthTimer quorumLatency = new HealthTimer(CountersAndTimers.getOrCreate("test"), "test", new NoOpHealthChecker<>("test"));
         DeltaStripeWALStorage delta = new DeltaStripeWALStorage(amzaInterner,
-            1,
+            0,
             new AmzaStats(),
             new AckWaters(amzaSystemStats, amzaStats, quorumLatency, 2, false),
             new SickThreads(),

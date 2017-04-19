@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.AmzaInterner;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
@@ -31,6 +32,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats amzaSystemStats;
+    private final AmzaStats amzaStats;
     private final AmzaInterner memberInterner;
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
@@ -42,16 +45,22 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     private final int numPermits = 1024;
     private final Semaphore bigBird = new Semaphore(numPermits, true); // TODO expose to config
     private final Map<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> hostToPartitionToHighwaterUpdates = Maps.newConcurrentMap();
-    private final AtomicLong updatesSinceLastFlush = new AtomicLong();
+    private final AtomicLong[] stripeUpdatesSinceLastFlush;
+    private final AtomicLong systemUpdatesSinceLastFlush = new AtomicLong();
 
-    public PartitionBackedHighwaterStorage(AmzaInterner memberInterner,
+    public PartitionBackedHighwaterStorage(AmzaStats amzaSystemStats,
+        AmzaStats amzaStats,
+        AmzaInterner memberInterner,
         OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         PartitionCreator partitionCreator,
         SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
-        long flushHighwatersAfterNUpdates) {
+        long flushHighwatersAfterNUpdates,
+        int deltaStripeCount) {
 
+        this.amzaSystemStats = amzaSystemStats;
+        this.amzaStats = amzaStats;
         this.memberInterner = memberInterner;
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
@@ -59,6 +68,11 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
         this.flushHighwatersAfterNUpdates = flushHighwatersAfterNUpdates;
+
+        this.stripeUpdatesSinceLastFlush = new AtomicLong[deltaStripeCount];
+        for (int i = 0; i < deltaStripeCount; i++) {
+            stripeUpdatesSinceLastFlush[i] = new AtomicLong();
+        }
     }
 
     @Override
@@ -133,8 +147,12 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         }
 
         bigBird.acquire();
-        if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-            updatesSinceLastFlush.addAndGet(updates);
+        if (deltaIndex == -1) {
+            long pending = systemUpdatesSinceLastFlush.addAndGet(updates);
+            amzaSystemStats.highwater(0, -1, pending, pending / (double) flushHighwatersAfterNUpdates);
+        } else {
+            long pending = stripeUpdatesSinceLastFlush[deltaIndex].addAndGet(updates);
+            amzaStats.highwater(deltaIndex, -1, pending, pending / (double) flushHighwatersAfterNUpdates);
         }
         try {
             Map<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.computeIfAbsent(member,
@@ -229,6 +247,15 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public boolean flush(int deltaIndex, Callable<Void> preFlush) throws Exception {
+        AtomicLong updatesSinceLastFlush;
+        AmzaStats stats;
+        if (deltaIndex == -1) {
+            updatesSinceLastFlush = systemUpdatesSinceLastFlush;
+            stats = amzaSystemStats;
+        } else {
+            updatesSinceLastFlush = stripeUpdatesSinceLastFlush[deltaIndex];
+            stats = amzaStats;
+        }
         if (updatesSinceLastFlush.get() < flushHighwatersAfterNUpdates) {
             return false;
         }
@@ -276,7 +303,9 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         return true;
 
                     }, walUpdated);
-                updatesSinceLastFlush.addAndGet(-flushedUpdates);
+
+                long pending = updatesSinceLastFlush.addAndGet(-flushedUpdates);
+                stats.highwater(deltaIndex == -1 ? 0 : deltaIndex, flushedUpdates, pending, pending / (double) flushHighwatersAfterNUpdates);
                 return true;
             }
         } finally {

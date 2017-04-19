@@ -622,6 +622,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) ((mergeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.merge),
             null, null));
 
+        for (int i = 0; i < amzaStats.highwaterPendingLoad.length; i++) {
+            sb.append(progress("High water flushed " + i + " (" + numberFormat.format(amzaStats.highwaterPending[i]) + ")",
+                (int) (amzaStats.highwaterPendingLoad[i] * 100), " total:" + amzaStats.highwaterFlushed[i],
+                null, null));
+        }
+
         sb.append(progress("Expunge Compactions (" + numberFormat.format(expungeCompaction) + ")",
             (int) ((expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge),
             null, null));
@@ -630,27 +636,27 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     }
 
     private void addTotals(StringBuilder sb, String name, Set<String> expandKeys, Totals grandTotal) {
-        sb.append(progress(name+".gets (" + numberFormat.format(grandTotal.gets.longValue()) + ")",
+        sb.append(progress(name + ".gets (" + numberFormat.format(grandTotal.gets.longValue()) + ")",
             (int) (((double) grandTotal.getsLatency / 1000d) * 100),
             getDurationBreakdown(grandTotal.getsLatency) + " lag",
             null, null));
 
-        sb.append(progress(name+".scans (" + numberFormat.format(grandTotal.scans.longValue()) + ")",
+        sb.append(progress(name + ".scans (" + numberFormat.format(grandTotal.scans.longValue()) + ")",
             (int) ((grandTotal.scansLatency / 1000d) * 100),
             getDurationBreakdown(grandTotal.scansLatency) + " lag",
             null, null));
 
-        sb.append(progress(name+".scanKeys (" + numberFormat.format(grandTotal.scanKeys.longValue()) + ")",
+        sb.append(progress(name + ".scanKeys (" + numberFormat.format(grandTotal.scanKeys.longValue()) + ")",
             (int) ((grandTotal.scanKeysLatency / 1000d) * 100),
             getDurationBreakdown(grandTotal.scanKeysLatency) + " lag",
             null, null));
 
-        sb.append(progress(name+".direct Applied (" + numberFormat.format(grandTotal.directApplies.longValue()) + ")",
+        sb.append(progress(name + ".direct Applied (" + numberFormat.format(grandTotal.directApplies.longValue()) + ")",
             (int) ((grandTotal.directAppliesLag / 1000d) * 100),
             getDurationBreakdown(grandTotal.directAppliesLag) + " lag",
             null, null));
 
-        sb.append(progress(name+".updates (" + numberFormat.format(grandTotal.updates.longValue()) + ")",
+        sb.append(progress(name + ".updates (" + numberFormat.format(grandTotal.updates.longValue()) + ")",
             (int) ((grandTotal.updatesLag / 10000d) * 100),
             getDurationBreakdown(grandTotal.updatesLag) + " lag",
             null, null));
@@ -665,17 +671,17 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
         }
 
-        sb.append(progress(name+".offers (" + numberFormat.format(grandTotal.offers.longValue()) + ")",
+        sb.append(progress(name + ".offers (" + numberFormat.format(grandTotal.offers.longValue()) + ")",
             (int) ((grandTotal.offersLag / 10000d) * 100),
             getDurationBreakdown(grandTotal.offersLag) + " lag",
             "offers", subOffersLag));
 
-        sb.append(progress(name+".took (" + numberFormat.format(grandTotal.takes.longValue()) + ")",
+        sb.append(progress(name + ".took (" + numberFormat.format(grandTotal.takes.longValue()) + ")",
             (int) ((grandTotal.takesLag / 10000d) * 100),
             getDurationBreakdown(grandTotal.takesLag) + " lag",
             null, null));
 
-        sb.append(progress(name+".took Applied (" + numberFormat.format(grandTotal.takeApplies.longValue()) + ")",
+        sb.append(progress(name + ".took Applied (" + numberFormat.format(grandTotal.takeApplies.longValue()) + ")",
             (int) ((grandTotal.takeAppliesLag / 1000d) * 100),
             getDurationBreakdown(grandTotal.takeAppliesLag) + " lag",
             null, null));
@@ -691,7 +697,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
         }
 
-        sb.append(progress(name+".acks (" + numberFormat.format(grandTotal.acks.longValue()) + ")",
+        sb.append(progress(name + ".acks (" + numberFormat.format(grandTotal.acks.longValue()) + ")",
             (int) ((grandTotal.acksLag / 10000d) * 100),
             getDurationBreakdown(grandTotal.acksLag) + " lag",
             "acks", subAcksLag));
@@ -700,14 +706,15 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         if (expandKeys.contains("quorums")) {
             for (Entry<RingMember, AtomicLong> entry : grandTotal.memberQuorumsLatency.entrySet()) {
                 long latency = entry.getValue().get();
-                subQuorumsLatency.add(progressData(name+".quorums " + entry.getKey().getMember(),
+                subQuorumsLatency.add(progressData(name + ".quorums " + entry.getKey().getMember(),
                     (int) ((latency / 10000d) * 100),
                     getDurationBreakdown(latency) + " lag"));
             }
         }
 
         sb.append(progress(
-            name+".quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(grandTotal.quorumTimeouts.longValue()) + ")",
+            name + ".quorums (" + numberFormat.format(grandTotal.quorums.longValue()) + " / " + numberFormat.format(
+                grandTotal.quorumTimeouts.longValue()) + ")",
             (int) ((grandTotal.quorumsLatency / 10000d) * 100),
             getDurationBreakdown(grandTotal.quorumsLatency) + " lag",
             "quorums", subQuorumsLatency));

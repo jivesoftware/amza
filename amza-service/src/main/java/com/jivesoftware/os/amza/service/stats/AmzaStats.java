@@ -127,6 +127,41 @@ public class AmzaStats {
         copy[index] = load;
     }
 
+
+    public long[] highwaterFlushed = new long[0];
+    public long[] highwaterPending = new long[0];
+    public double[] highwaterPendingLoad = new double[0];
+
+    public void highwater(int index, long flushed, long pending, double load) {
+        long[] copyFlushed = highwaterFlushed;
+        long[] copyPending = highwaterPending;
+        double[] copyLoad = highwaterPendingLoad;
+        if (index >= copyLoad.length) {
+            long[] newArrayFlushed = new long[index + 1];
+            long[] newArrayPending = new long[index + 1];
+            double[] newArray = new double[index + 1];
+            System.arraycopy(copyFlushed, 0, newArrayFlushed, 0, copyFlushed.length);
+            System.arraycopy(copyPending, 0, newArrayPending, 0, copyPending.length);
+            System.arraycopy(copyLoad, 0, newArray, 0, copyLoad.length);
+            copyFlushed = newArrayFlushed;
+            copyPending = newArrayPending;
+            copyLoad = newArray;
+            highwaterFlushed = copyFlushed;
+            highwaterPending = copyPending;
+            highwaterPendingLoad = copyLoad;
+        }
+        if (flushed > 0) {
+            copyFlushed[index] += flushed;
+        }
+        if (pending >= 0) {
+            copyPending[index] = pending;
+        }
+        if (load >= 0) {
+            copyLoad[index] = load;
+        }
+    }
+
+
     static public class Totals {
 
         public final LongAdder gets = new LongAdder();

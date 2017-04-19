@@ -566,7 +566,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         if (includePartitionTotals) {
             for (Entry<PartitionName, Totals> partitionNameTotalsEntry : amzaStats.getPartitionTotals().entrySet()) {
-                addTotals(sb, partitionNameTotalsEntry.getKey().getName().toString(), expandKeys, partitionNameTotalsEntry.getValue());
+                addTotals(sb, partitionNameTotalsEntry.getKey().toString(), expandKeys, partitionNameTotalsEntry.getValue());
             }
         }
 

@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -31,6 +32,7 @@ import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeoutException;
@@ -60,13 +62,16 @@ public class AmzaReplicationRestEndpoints {
     private final AmzaStats amzaStats;
     private final AmzaInstance amzaInstance;
     private final AmzaInterner amzaInterner;
+    private final ObjectMapper objectMapper;
 
     public AmzaReplicationRestEndpoints(@Context AmzaStats amzaStats,
         @Context AmzaInstance amzaInstance,
-        @Context AmzaInterner amzaInterner) {
+        @Context AmzaInterner amzaInterner,
+        @Context ObjectMapper objectMapper) {
         this.amzaStats = amzaStats;
         this.amzaInstance = amzaInstance;
         this.amzaInterner = amzaInterner;
+        this.objectMapper = objectMapper;
     }
 
     @POST
@@ -79,7 +84,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("txId") long txId,
         @PathParam("leadershipToken") long leadershipToken,
         @PathParam("limit") long limit,
-        String takeSharedKey) {
+        byte[] takeSharedKey) {
 
         try {
             amzaStats.rowsStream.increment();
@@ -93,7 +98,7 @@ public class AmzaReplicationRestEndpoints {
                         new RingMember(ringMemberString),
                         VersionedPartitionName.fromBase64(versionedPartitionName, amzaInterner),
                         takeSessionId,
-                        takeSharedKey,
+                        objectMapper.readValue(takeSharedKey, String.class),
                         txId,
                         leadershipToken,
                         limit);
@@ -131,7 +136,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("ringTimestampId") long ringTimestampId,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis,
-        String sharedKey) {
+        byte[] sharedKey) {
 
         LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
         new Thread(() -> {
@@ -144,7 +149,7 @@ public class AmzaReplicationRestEndpoints {
                         new RingMember(ringMemberString),
                         new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
                         takeSessionId,
-                        sharedKey,
+                        objectMapper.readValue(sharedKey, String.class),
                         timeoutMillis);
                     return null;
                 } finally {
@@ -156,7 +161,7 @@ public class AmzaReplicationRestEndpoints {
     }
 
     @POST
-    @Consumes(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/rows/taken/{memberName}/{takeSessionId}/{versionedPartitionName}/{txId}/{leadershipToken}")
     public Response rowsTaken(@PathParam("memberName") String ringMemberName,
@@ -164,12 +169,12 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId,
         @PathParam("leadershipToken") long leadershipToken,
-        String sharedKey) {
+        byte[] sharedKey) {
         try {
             amzaStats.rowsTaken.increment();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
                 takeSessionId,
-                sharedKey,
+                new String(sharedKey, StandardCharsets.UTF_8),
                 VersionedPartitionName.fromBase64(versionedPartitionName, amzaInterner),
                 txId,
                 leadershipToken);
@@ -185,14 +190,14 @@ public class AmzaReplicationRestEndpoints {
     }
 
     @POST
-    @Consumes(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/pong/{memberName}/{takeSessionId}")
     public Response rowsTaken(@PathParam("memberName") String ringMemberName,
         @PathParam("takeSessionId") long takeSessionId,
-        String sharedKey) {
+        byte[] sharedKey) {
         try {
-            amzaInstance.pong(new RingMember(ringMemberName), takeSessionId, sharedKey);
+            amzaInstance.pong(new RingMember(ringMemberName), takeSessionId, new String(sharedKey, StandardCharsets.UTF_8));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed pong for member:{} session:{}", new Object[] { ringMemberName, takeSessionId }, x);
@@ -236,17 +241,17 @@ public class AmzaReplicationRestEndpoints {
     }
 
     @POST
-    @Consumes(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/invalidate/{memberName}/{takeSessionId}/{versionedPartitionName}")
     public Response invalidate(@PathParam("memberName") String ringMemberName,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("versionedPartitionName") String versionedPartitionName,
-        String sharedKey) {
+        byte[] sharedKey) {
         try {
             amzaInstance.invalidate(new RingMember(ringMemberName),
                 takeSessionId,
-                sharedKey,
+                new String(sharedKey, StandardCharsets.UTF_8),
                 VersionedPartitionName.fromBase64(versionedPartitionName, amzaInterner));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {

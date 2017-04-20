@@ -44,6 +44,7 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
@@ -337,12 +338,11 @@ public class HttpRowsTaker implements RowsTaker {
         VersionedPartitionName remoteVersionedPartitionName) {
         try {
             String endpoint = "/amza/invalidate/" + localRingMember.getMember() + "/" + takeSessionId + "/" + remoteVersionedPartitionName.toBase64();
-            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
             return ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "invalidate",
                 httpClient -> {
-                    HttpResponse response = httpClient.postJson(endpoint, sharedKeyJson, null);
+                    HttpResponse response = httpClient.postBytes(endpoint, takeSharedKey.getBytes(StandardCharsets.UTF_8), null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }

@@ -31,6 +31,7 @@ import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer.StreamingTakeConsumed;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.mlogger.core.ValueType;
 import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiveStrategy;
 import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
@@ -46,7 +47,6 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -54,12 +54,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.nustaq.serialization.FSTConfiguration;
 import org.xerial.snappy.SnappyInputStream;
 
+import static sun.swing.SwingUtilities2.submit;
+
 public class HttpRowsTaker implements RowsTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();
 
+    private final String name;
     private final AmzaStats amzaStats;
     private final TenantAwareHttpClient<String> ringClient;
     private final ObjectMapper mapper;
@@ -69,11 +72,14 @@ public class HttpRowsTaker implements RowsTaker {
     private final AtomicLong flushVersion = new AtomicLong();
     private final Map<RingHost, Ackable> hostQueue = Maps.newConcurrentMap();
 
-    public HttpRowsTaker(AmzaStats amzaStats,
+    public HttpRowsTaker(String name,
+        AmzaStats amzaStats,
         TenantAwareHttpClient<String> ringClient,
         ObjectMapper mapper,
         AmzaInterner amzaInterner,
+        ExecutorService queueExecutor,
         ExecutorService flushExecutor) {
+        this.name = name;
         this.amzaStats = amzaStats;
         this.ringClient = ringClient;
         this.mapper = mapper;
@@ -81,14 +87,14 @@ public class HttpRowsTaker implements RowsTaker {
         this.flushExecutor = flushExecutor;
 
         //TODO lifecycle
-        Executors.newSingleThreadExecutor().submit(() -> {
+        queueExecutor.submit(() -> {
             while (true) {
                 try {
                     long currentVersion = flushVersion.get();
                     for (Entry<RingHost, Ackable> entry : hostQueue.entrySet()) {
                         Ackable ackable = entry.getValue();
                         if (ackable.running.compareAndSet(false, true)) {
-                            flushQueues(entry.getKey(), ackable);
+                            flushQueues(entry.getKey(), ackable, currentVersion);
                         }
                     }
                     synchronized (flushVersion) {
@@ -240,9 +246,9 @@ public class HttpRowsTaker implements RowsTaker {
         } finally {
             ackable.semaphore.release();
         }
-        flushVersion.incrementAndGet();
+        LOG.set(ValueType.COUNT, "flush>version>enqueue>" + name, flushVersion.incrementAndGet());
         synchronized (flushVersion) {
-            flushVersion.notifyAll();
+            flushVersion.notify();
         }
         return true;
     }
@@ -261,14 +267,14 @@ public class HttpRowsTaker implements RowsTaker {
         } finally {
             ackable.semaphore.release();
         }
-        flushVersion.incrementAndGet();
+        LOG.set(ValueType.COUNT, "flush>version>enqueue>" + name, flushVersion.incrementAndGet());
         synchronized (flushVersion) {
-            flushVersion.notifyAll();
+            flushVersion.notify();
         }
         return true;
     }
 
-    private void flushQueues(RingHost ringHost, Ackable ackable) throws Exception {
+    private void flushQueues(RingHost ringHost, Ackable ackable, long currentVersion) throws Exception {
         Map<VersionedPartitionName, RowsTakenPayload> rowsTaken;
         PongPayload pong;
         ackable.semaphore.acquire(Short.MAX_VALUE);
@@ -302,10 +308,22 @@ public class HttpRowsTaker implements RowsTaker {
                     LOG.warn("Failed to deliver acks for remote:{}", new Object[] { ringHost }, x);
                 } finally {
                     ackable.running.set(false);
+                    LOG.inc("flush>version>consume>" + name, flushVersion.incrementAndGet());
+                    synchronized (flushVersion) {
+                        if (currentVersion != flushVersion.get()) {
+                            flushVersion.notify();
+                        }
+                    }
                 }
             });
         } else {
             ackable.running.set(false);
+            LOG.inc("flush>version>consume>" + name, flushVersion.incrementAndGet());
+            synchronized (flushVersion) {
+                if (currentVersion != flushVersion.get()) {
+                    flushVersion.notify();
+                }
+            }
         }
     }
 

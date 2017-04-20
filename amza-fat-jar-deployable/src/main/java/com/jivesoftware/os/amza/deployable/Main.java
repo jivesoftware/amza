@@ -331,6 +331,7 @@ public class Main {
             .addInjectable(AmzaInstance.class, amzaService)
             .addEndpoint(AmzaClientRestEndpoints.class)
             .addInjectable(AmzaInterner.class, amzaInterner)
+            .addInjectable(ObjectMapper.class, mapper)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
         new AmzaUIInitializer().initialize(clusterName,

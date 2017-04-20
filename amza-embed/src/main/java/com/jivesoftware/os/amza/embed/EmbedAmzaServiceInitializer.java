@@ -359,6 +359,7 @@ public class EmbedAmzaServiceInitializer {
         deployable.addInjectables(AmzaRingReader.class, amzaService.getRingReader());
         deployable.addInjectables(AmzaInstance.class, amzaService);
         deployable.addInjectables(AmzaInterner.class, amzaInterner);
+        deployable.addInjectables(ObjectMapper.class, mapper);
 
         if (bindClientEndpoints) {
             deployable.addEndpoints(AmzaClientRestEndpoints.class);

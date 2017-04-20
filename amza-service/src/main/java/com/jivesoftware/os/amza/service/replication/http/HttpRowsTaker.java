@@ -18,9 +18,8 @@ package com.jivesoftware.os.amza.service.replication.http;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Sets;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -47,10 +46,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.xerial.snappy.SnappyInputStream;
@@ -65,10 +65,8 @@ public class HttpRowsTaker implements RowsTaker {
     private final StreamingTakesConsumer streamingTakesConsumer;
     private final ExecutorService flushExecutor;
 
-    private final Semaphore semaphore = new Semaphore(Short.MAX_VALUE);
-    private final AtomicReference<ListMultimap<RingHost, RowsTakenPayload>> rowsTakenQueue = new AtomicReference<>(ArrayListMultimap.create());
-    private final AtomicReference<ListMultimap<RingHost, PongPayload>> pongQueue = new AtomicReference<>(ArrayListMultimap.create());
     private final AtomicLong flushVersion = new AtomicLong();
+    private final Map<RingHost, Ackable> hostQueue = Maps.newConcurrentMap();
 
     public HttpRowsTaker(AmzaStats amzaStats,
         TenantAwareHttpClient<String> ringClient,
@@ -86,7 +84,12 @@ public class HttpRowsTaker implements RowsTaker {
             while (true) {
                 try {
                     long currentVersion = flushVersion.get();
-                    flushQueues();
+                    for (Entry<RingHost, Ackable> entry : hostQueue.entrySet()) {
+                        Ackable ackable = entry.getValue();
+                        if (ackable.running.compareAndSet(false, true)) {
+                            flushQueues(entry.getKey(), ackable);
+                        }
+                    }
                     synchronized (flushVersion) {
                         if (currentVersion == flushVersion.get()) {
                             flushVersion.wait();
@@ -157,6 +160,12 @@ public class HttpRowsTaker implements RowsTaker {
         }
     }
 
+    private static class Ackable {
+        public final AtomicBoolean running = new AtomicBoolean(false);
+        public final Semaphore semaphore = new Semaphore(Short.MAX_VALUE);
+        public final AtomicReference<List<RowsTakenPayload>> rowsTakenPayloads = new AtomicReference<>(Lists.newArrayList());
+        public final AtomicReference<List<PongPayload>> pongPayloads = new AtomicReference<>(Lists.newArrayList());
+    }
 
     public static class RowsTakenAndPongs implements Serializable {
         public final List<RowsTakenPayload> rowsTakenPayloads;
@@ -221,21 +230,22 @@ public class HttpRowsTaker implements RowsTaker {
         VersionedPartitionName versionedPartitionName,
         long txId,
         long localLeadershipToken) throws Exception {
-        semaphore.acquire();
+
+        Ackable ackable = hostQueue.computeIfAbsent(remoteRingHost, ringHost -> new Ackable());
+        ackable.semaphore.acquire();
         try {
-            rowsTakenQueue.get().put(remoteRingHost,
-                new RowsTakenPayload(localRingMember,
-                    takeSessionId,
-                    takeSharedKey,
-                    versionedPartitionName,
-                    txId,
-                    localLeadershipToken));
-            flushVersion.incrementAndGet();
-            synchronized (flushVersion) {
-                flushVersion.notifyAll();
-            }
+            ackable.rowsTakenPayloads.get().add(new RowsTakenPayload(localRingMember,
+                takeSessionId,
+                takeSharedKey,
+                versionedPartitionName,
+                txId,
+                localLeadershipToken));
         } finally {
-            semaphore.release();
+            ackable.semaphore.release();
+        }
+        flushVersion.incrementAndGet();
+        synchronized (flushVersion) {
+            flushVersion.notifyAll();
         }
         return true;
     }
@@ -246,68 +256,63 @@ public class HttpRowsTaker implements RowsTaker {
         RingHost remoteRingHost,
         long takeSessionId,
         String takeSharedKey) throws Exception {
-        semaphore.acquire();
+
+        Ackable ackable = hostQueue.computeIfAbsent(remoteRingHost, ringHost -> new Ackable());
+        ackable.semaphore.acquire();
         try {
-            pongQueue.get().put(remoteRingHost, new PongPayload(localRingMember, takeSessionId, takeSharedKey));
-            flushVersion.incrementAndGet();
-            synchronized (flushVersion) {
-                flushVersion.notifyAll();
-            }
+            ackable.pongPayloads.get().add(new PongPayload(localRingMember, takeSessionId, takeSharedKey));
         } finally {
-            semaphore.release();
+            ackable.semaphore.release();
+        }
+        flushVersion.incrementAndGet();
+        synchronized (flushVersion) {
+            flushVersion.notifyAll();
         }
         return true;
     }
 
-    private void flushQueues() throws Exception {
-        ListMultimap<RingHost, RowsTakenPayload> rowsTakenPayloads;
-        ListMultimap<RingHost, PongPayload> pongPayloads;
-        semaphore.acquire(Short.MAX_VALUE);
+    private void flushQueues(RingHost ringHost, Ackable ackable) throws Exception {
+        List<RowsTakenPayload> rowsTaken;
+        List<PongPayload> pongs;
+        ackable.semaphore.acquire(Short.MAX_VALUE);
         try {
-            rowsTakenPayloads = rowsTakenQueue.getAndSet(ArrayListMultimap.create());
-            pongPayloads = pongQueue.getAndSet(ArrayListMultimap.create());
+            rowsTaken = ackable.rowsTakenPayloads.getAndSet(Lists.newArrayList());
+            pongs = ackable.pongPayloads.getAndSet(Lists.newArrayList());
         } finally {
-            semaphore.release(Short.MAX_VALUE);
+            ackable.semaphore.release(Short.MAX_VALUE);
+        }
+        if (rowsTaken != null && !rowsTaken.isEmpty()) {
+            LOG.inc("flush>rowsTaken>pow>" + UIO.chunkPower(rowsTaken.size(), 0));
+        }
+        if (pongs != null && !pongs.isEmpty()) {
+            LOG.inc("flush>pongs>pow>" + UIO.chunkPower(pongs.size(), 0));
         }
 
-        if (!rowsTakenPayloads.isEmpty() || !pongPayloads.isEmpty()) {
-            Set<RingHost> hosts = Sets.newHashSet();
-            hosts.addAll(rowsTakenPayloads.keySet());
-            hosts.addAll(pongPayloads.keySet());
-            LOG.inc("flush>hosts>pow", UIO.chunkPower(hosts.size(), 0));
-            for (RingHost host : hosts) {
-                flushExecutor.submit(() -> {
-                    try {
-                        String endpoint = "/amza/ackBatch";
-                        List<RowsTakenPayload> rowsTaken = rowsTakenPayloads.get(host);
-                        if (rowsTaken != null && !rowsTaken.isEmpty()) {
-                            LOG.inc("flush>rowsTaken>pow", UIO.chunkPower(rowsTaken.size(), 0));
-                        }
-                        List<PongPayload> pongs = pongPayloads.get(host);
-                        if (pongs != null && !pongs.isEmpty()) {
-                            LOG.inc("flush>pongs>pow", UIO.chunkPower(pongs.size(), 0));
-                        }
-
-                        String sharedKeyJson = mapper.writeValueAsString(new RowsTakenAndPongs(rowsTaken, pongs));
-                        ringClient.call("",
-                            new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(host.getHost(), host.getPort()) }),
-                            "rowsTaken",
-                            httpClient -> {
-                                HttpResponse response = httpClient.postJson(endpoint, sharedKeyJson, null);
-                                if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
-                                    throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
-                                }
-                                try {
-                                    return new ClientResponse<>(mapper.readValue(response.getResponseBody(), Boolean.class), true);
-                                } catch (IOException e) {
-                                    throw new RuntimeException("Failed to deserialize response");
-                                }
-                            });
-                    } catch (Exception x) {
-                        LOG.warn("Failed to deliver acks for remote:{}", new Object[] { host }, x);
-                    }
-                });
-            }
+        if (rowsTaken != null && !rowsTaken.isEmpty() || pongs != null && !pongs.isEmpty()) {
+            flushExecutor.submit(() -> {
+                try {
+                    String endpoint = "/amza/ackBatch";
+                    String requestJson = mapper.writeValueAsString(new RowsTakenAndPongs(rowsTaken, pongs));
+                    ringClient.call("",
+                        new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(ringHost.getHost(), ringHost.getPort()) }),
+                        "ackBatch",
+                        httpClient -> {
+                            HttpResponse response = httpClient.postJson(endpoint, requestJson, null);
+                            if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
+                                throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
+                            }
+                            try {
+                                return new ClientResponse<>(mapper.readValue(response.getResponseBody(), Boolean.class), true);
+                            } catch (IOException e) {
+                                throw new RuntimeException("Failed to deserialize response");
+                            }
+                        });
+                } catch (Exception x) {
+                    LOG.warn("Failed to deliver acks for remote:{}", new Object[] { ringHost }, x);
+                } finally {
+                    ackable.running.set(false);
+                }
+            });
         }
     }
 

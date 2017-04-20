@@ -313,6 +313,8 @@ public class HttpRowsTaker implements RowsTaker {
                     ackable.running.set(false);
                 }
             });
+        } else {
+            ackable.running.set(false);
         }
     }
 

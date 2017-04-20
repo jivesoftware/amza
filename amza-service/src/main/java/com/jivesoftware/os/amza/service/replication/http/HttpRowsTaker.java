@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.service.replication.http;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -44,7 +43,6 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
@@ -53,11 +51,14 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.nustaq.serialization.FSTConfiguration;
 import org.xerial.snappy.SnappyInputStream;
 
 public class HttpRowsTaker implements RowsTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
+    private static final FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();
 
     private final AmzaStats amzaStats;
     private final TenantAwareHttpClient<String> ringClient;
@@ -163,20 +164,20 @@ public class HttpRowsTaker implements RowsTaker {
     private static class Ackable {
         public final AtomicBoolean running = new AtomicBoolean(false);
         public final Semaphore semaphore = new Semaphore(Short.MAX_VALUE);
-        public final AtomicReference<List<RowsTakenPayload>> rowsTakenPayloads = new AtomicReference<>(Lists.newArrayList());
-        public final AtomicReference<List<PongPayload>> pongPayloads = new AtomicReference<>(Lists.newArrayList());
+        public final AtomicReference<Map<VersionedPartitionName, RowsTakenPayload>> rowsTakenPayloads = new AtomicReference<>(Maps.newConcurrentMap());
+        public final AtomicReference<PongPayload> pongPayloads = new AtomicReference<>();
     }
 
-    public static class RowsTakenAndPongs implements Serializable {
-        public final List<RowsTakenPayload> rowsTakenPayloads;
-        public final List<PongPayload> pongPayloads;
+    public static class RowsTakenAndPong implements Serializable {
+        public final Map<VersionedPartitionName, RowsTakenPayload> rowsTakenPayloads;
+        public final PongPayload pongPayload;
 
         @JsonCreator
-        public RowsTakenAndPongs(
-            @JsonProperty("rowsTakenPayloads") List<RowsTakenPayload> rowsTakenPayloads,
-            @JsonProperty("pongPayloads") List<PongPayload> pongPayloads) {
+        public RowsTakenAndPong(
+            @JsonProperty("rowsTakenPayloads") Map<VersionedPartitionName, RowsTakenPayload> rowsTakenPayloads,
+            @JsonProperty("pongPayload") PongPayload pongPayload) {
             this.rowsTakenPayloads = rowsTakenPayloads;
-            this.pongPayloads = pongPayloads;
+            this.pongPayload = pongPayload;
         }
     }
 
@@ -184,7 +185,6 @@ public class HttpRowsTaker implements RowsTaker {
         public final RingMember ringMember;
         public final long takeSessionId;
         public final String takeSharedKey;
-        public final VersionedPartitionName versionedPartitionName;
         public final long txId;
         public final long leadershipToken;
 
@@ -193,13 +193,11 @@ public class HttpRowsTaker implements RowsTaker {
             @JsonProperty("ringMember") RingMember ringMember,
             @JsonProperty("takeSessionId") long takeSessionId,
             @JsonProperty("takeSharedKey") String takeSharedKey,
-            @JsonProperty("versionedPartitionName") VersionedPartitionName versionedPartitionName,
             @JsonProperty("txId") long txId,
             @JsonProperty("leadershipToken") long leadershipToken) {
             this.ringMember = ringMember;
             this.takeSessionId = takeSessionId;
             this.takeSharedKey = takeSharedKey;
-            this.versionedPartitionName = versionedPartitionName;
             this.txId = txId;
             this.leadershipToken = leadershipToken;
         }
@@ -234,10 +232,9 @@ public class HttpRowsTaker implements RowsTaker {
         Ackable ackable = hostQueue.computeIfAbsent(remoteRingHost, ringHost -> new Ackable());
         ackable.semaphore.acquire();
         try {
-            ackable.rowsTakenPayloads.get().add(new RowsTakenPayload(localRingMember,
+            ackable.rowsTakenPayloads.get().put(versionedPartitionName, new RowsTakenPayload(localRingMember,
                 takeSessionId,
                 takeSharedKey,
-                versionedPartitionName,
                 txId,
                 localLeadershipToken));
         } finally {
@@ -260,7 +257,7 @@ public class HttpRowsTaker implements RowsTaker {
         Ackable ackable = hostQueue.computeIfAbsent(remoteRingHost, ringHost -> new Ackable());
         ackable.semaphore.acquire();
         try {
-            ackable.pongPayloads.get().add(new PongPayload(localRingMember, takeSessionId, takeSharedKey));
+            ackable.pongPayloads.set(new PongPayload(localRingMember, takeSessionId, takeSharedKey));
         } finally {
             ackable.semaphore.release();
         }
@@ -272,40 +269,34 @@ public class HttpRowsTaker implements RowsTaker {
     }
 
     private void flushQueues(RingHost ringHost, Ackable ackable) throws Exception {
-        List<RowsTakenPayload> rowsTaken;
-        List<PongPayload> pongs;
+        Map<VersionedPartitionName, RowsTakenPayload> rowsTaken;
+        PongPayload pong;
         ackable.semaphore.acquire(Short.MAX_VALUE);
         try {
-            rowsTaken = ackable.rowsTakenPayloads.getAndSet(Lists.newArrayList());
-            pongs = ackable.pongPayloads.getAndSet(Lists.newArrayList());
+            rowsTaken = ackable.rowsTakenPayloads.getAndSet(Maps.newConcurrentMap());
+            pong = ackable.pongPayloads.getAndSet(null);
         } finally {
             ackable.semaphore.release(Short.MAX_VALUE);
         }
         if (rowsTaken != null && !rowsTaken.isEmpty()) {
             LOG.inc("flush>rowsTaken>pow>" + UIO.chunkPower(rowsTaken.size(), 0));
         }
-        if (pongs != null && !pongs.isEmpty()) {
-            LOG.inc("flush>pongs>pow>" + UIO.chunkPower(pongs.size(), 0));
-        }
 
-        if (rowsTaken != null && !rowsTaken.isEmpty() || pongs != null && !pongs.isEmpty()) {
+        if (rowsTaken != null && !rowsTaken.isEmpty() || pong != null) {
             flushExecutor.submit(() -> {
                 try {
                     String endpoint = "/amza/ackBatch";
-                    String requestJson = mapper.writeValueAsString(new RowsTakenAndPongs(rowsTaken, pongs));
+                    byte[] requestBytes = conf.asByteArray(new RowsTakenAndPong(rowsTaken, pong));
                     ringClient.call("",
                         new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(ringHost.getHost(), ringHost.getPort()) }),
                         "ackBatch",
                         httpClient -> {
-                            HttpResponse response = httpClient.postJson(endpoint, requestJson, null);
+                            HttpResponse response = httpClient.postBytes(endpoint, requestBytes, null);
                             if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                                 throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                             }
-                            try {
-                                return new ClientResponse<>(mapper.readValue(response.getResponseBody(), Boolean.class), true);
-                            } catch (IOException e) {
-                                throw new RuntimeException("Failed to deserialize response");
-                            }
+                            Boolean result = (Boolean) conf.asObject(response.getResponseBody());
+                            return new ClientResponse<>(result, true);
                         });
                 } catch (Exception x) {
                     LOG.warn("Failed to deliver acks for remote:{}", new Object[] { ringHost }, x);

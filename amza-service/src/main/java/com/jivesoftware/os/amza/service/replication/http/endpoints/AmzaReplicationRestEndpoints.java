@@ -21,8 +21,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.AmzaInstance;
-import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.PongPayload;
-import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenAndPongs;
+import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenAndPong;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenPayload;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -33,6 +32,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Map.Entry;
 import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -46,6 +46,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
 import org.glassfish.jersey.server.ChunkedOutput;
 import org.glassfish.jersey.server.LatchChunkedOutput;
+import org.nustaq.serialization.FSTConfiguration;
 import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
@@ -53,6 +54,9 @@ import org.xerial.snappy.SnappyOutputStream;
 public class AmzaReplicationRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
+    private static final FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();
+
     private final AmzaStats amzaStats;
     private final AmzaInstance amzaInstance;
     private final AmzaInterner amzaInterner;
@@ -199,27 +203,30 @@ public class AmzaReplicationRestEndpoints {
     }
 
     @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/ackBatch")
-    public Response rowsTaken(RowsTakenAndPongs rowsTakenAndPongs) {
+    public Response rowsTaken(byte[] request) {
         try {
-            if (rowsTakenAndPongs.rowsTakenPayloads != null) {
-                for (RowsTakenPayload rowsTaken : rowsTakenAndPongs.rowsTakenPayloads) {
+            RowsTakenAndPong rowsTakenAndPong = (RowsTakenAndPong) conf.asObject(request);
+            if (rowsTakenAndPong.rowsTakenPayloads != null) {
+                for (Entry<VersionedPartitionName, RowsTakenPayload> entry : rowsTakenAndPong.rowsTakenPayloads.entrySet()) {
+                    VersionedPartitionName versionedPartitionName = entry.getKey();
+                    RowsTakenPayload rowsTaken = entry.getValue();
                     amzaInstance.rowsTaken(rowsTaken.ringMember,
                         rowsTaken.takeSessionId,
                         rowsTaken.takeSharedKey,
-                        rowsTaken.versionedPartitionName,
+                        versionedPartitionName,
                         rowsTaken.txId,
                         rowsTaken.leadershipToken);
                 }
             }
-            if (rowsTakenAndPongs.pongPayloads != null) {
-                for (PongPayload pong : rowsTakenAndPongs.pongPayloads) {
-                    amzaInstance.pong(pong.ringMember, pong.takeSessionId, pong.takeSharedKey);
-                }
+            if (rowsTakenAndPong.pongPayload != null) {
+                amzaInstance.pong(rowsTakenAndPong.pongPayload.ringMember,
+                    rowsTakenAndPong.pongPayload.takeSessionId,
+                    rowsTakenAndPong.pongPayload.takeSharedKey);
             }
-            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
+            return Response.ok(conf.asByteArray(Boolean.TRUE)).build();
         } catch (Exception x) {
             LOG.warn("Failed ackBatch", x);
             return ResponseHelper.INSTANCE.errorResponse("Failed ackBatch.", x);

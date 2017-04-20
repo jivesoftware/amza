@@ -21,10 +21,11 @@ import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-public class PartitionName implements Comparable<PartitionName> {
+public class PartitionName implements Comparable<PartitionName>, Serializable {
 
     private final boolean systemPartition;
     private final byte[] ringName;

@@ -62,9 +62,9 @@ public interface RowsTaker {
         String takeSharedKey,
         VersionedPartitionName versionedPartitionName,
         long txId,
-        long localLeadershipToken);
+        long localLeadershipToken) throws Exception;
 
-    boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId, String takeSharedKey);
+    boolean pong(RingMember localRingMember, RingMember remoteRingMember, RingHost remoteRingHost, long takeSessionId, String takeSharedKey) throws Exception;
 
     boolean invalidate(RingMember localRingMember,
         RingMember remoteRingMember,

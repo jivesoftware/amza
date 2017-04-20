@@ -281,8 +281,8 @@ public class Main {
                     persistentRowIOProvider);
             },
             availableRowsTaker,
-            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner),
-            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner),
+            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner, Executors.newCachedThreadPool()),
+            () -> new HttpRowsTaker(amzaStats, httpClient, mapper, amzaInterner, Executors.newCachedThreadPool()),
             Optional.absent(),
             (changes) -> {
             },

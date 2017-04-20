@@ -203,9 +203,6 @@ public class EmbedAmzaServiceInitializer {
 
         deployable.addHealthCheck(new TenantAwareHttpClientHealthCheck("stripeTakes", stripedTakeClient));
 
-        RowsTakerFactory systemRowsTakerFactory = () -> new HttpRowsTaker(amzaSystemStats, systemTakeClient, mapper, amzaInterner);
-        RowsTakerFactory rowsTakerFactory = () -> new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, amzaInterner);
-
         TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = deployable.getTenantRoutingHttpClientInitializer();
         TenantAwareHttpClient<String> ringClient = tenantRoutingHttpClientInitializer.builder(
             deployable.getTenantRoutingProvider().getConnections(serviceName, "main", 10_000), // TODO config
@@ -224,6 +221,13 @@ public class EmbedAmzaServiceInitializer {
         TriggerTimeoutHealthCheck quorumTimeoutHealthCheck = new TriggerTimeoutHealthCheck(() -> amzaStats.getGrandTotal().quorumTimeouts.longValue(),
             deployable.config(QuorumTimeouts.class));
         deployable.addHealthCheck(quorumTimeoutHealthCheck);
+
+        RowsTakerFactory systemRowsTakerFactory = () -> {
+            return new HttpRowsTaker(amzaSystemStats, systemTakeClient, mapper, amzaInterner, deployable.newBoundedExecutor(1024, "system-acks"));
+        };
+        RowsTakerFactory rowsTakerFactory = () -> {
+            return new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, amzaInterner, deployable.newBoundedExecutor(1024, "striped-acks"));
+        };
 
         AtomicInteger systemRingSize = new AtomicInteger(0);
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,

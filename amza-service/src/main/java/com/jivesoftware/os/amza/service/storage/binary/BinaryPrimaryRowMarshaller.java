@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import java.io.IOException;
 import org.xerial.snappy.Snappy;
 
@@ -35,15 +34,26 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
     }
 
     private byte[] toRowBytes(byte[] pk, byte[] value, long timestamp, boolean tombstoned, long version) throws IOException {
-        byte[] lengthBuffer = new byte[4];
-        HeapFiler filer = new HeapFiler(8 + 1 + 8 + 4 + (value != null ? value.length : 0) + 4 + pk.length);
-        UIO.writeLong(filer, timestamp, "timestamp");
-        UIO.writeByte(filer, tombstoned ? (byte) 1 : (byte) 0, "tombstone");
-        UIO.writeLong(filer, version, "version");
+        byte[] bytes = new byte[8 + 1 + 8 + 4 + (value != null ? value.length : 0) + 4 + pk.length];
+        int o = 0;
+        UIO.longBytes(timestamp, bytes, o);
+        o += 8;
+        bytes[o] = tombstoned ? (byte) 1 : (byte) 0; // tombstone
+        o++;
+        UIO.longBytes(version, bytes, o);
+        o += 8;
 
-        UIO.writeByteArray(filer, value, "value", lengthBuffer);
-        UIO.writeByteArray(filer, pk, "key", lengthBuffer);
-        return filer.getBytes();
+        UIO.intBytes(value == null ? -1 : value.length, bytes, o);
+        o += 4;
+        if (value != null) {
+            UIO.writeBytes(value, bytes, o);
+            o += value.length;
+        }
+
+        UIO.intBytes(pk.length, bytes, o);
+        o += 4;
+        UIO.writeBytes(pk, bytes, o);
+        return bytes;
     }
 
     @Override
@@ -51,13 +61,25 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
         if (fromType == toType) {
             return row;
         }
-        byte[] intLongBuffer = new byte[8];
-        HeapFiler filer = HeapFiler.fromBytes(row, row.length);
-        long timestamp = UIO.readLong(filer, "timestamp", intLongBuffer);
-        boolean tombstone = UIO.readBoolean(filer, "tombstone");
-        long version = UIO.readLong(filer, "version", intLongBuffer);
-        byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
-        byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
+        int o = 0;
+        long timestamp = UIO.bytesLong(row, o);
+        o += 8;
+        boolean tombstone = row[o] == 1;
+        o++;
+        long version = UIO.bytesLong(row, o);
+        o += 8;
+        int valueLength = UIO.bytesInt(row, o);
+        o += 4;
+        byte[] value = null;
+        if (valueLength >= 0) {
+            value = new byte[valueLength];
+            UIO.readBytes(row, o, value);
+            o += valueLength;
+        }
+        int pkLength = UIO.bytesInt(row, o);
+        o += 4;
+        byte[] pk = new byte[pkLength];
+        UIO.readBytes(row, o, pk);
         return toRow(toType, uncompress(fromType, pk), uncompress(fromType, value), timestamp, tombstone, version);
     }
 
@@ -75,12 +97,25 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
         byte[] intLongBuffer = new byte[8];
         return WALKey.decompose(
             stream -> fpRows.consume((fp, rowType, row) -> {
-                HeapFiler filer = HeapFiler.fromBytes(row, row.length);
-                long timestamp = UIO.readLong(filer, "timestamp", intLongBuffer);
-                boolean tombstone = UIO.readBoolean(filer, "tombstone");
-                long version = UIO.readLong(filer, "version", intLongBuffer);
-                byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
-                byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
+                int o = 0;
+                long timestamp = UIO.bytesLong(row, o);
+                o += 8;
+                boolean tombstone = row[o] == 1;
+                o++;
+                long version = UIO.bytesLong(row, o);
+                o += 8;
+                int valueLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] value = null;
+                if (valueLength >= 0) {
+                    value = new byte[valueLength];
+                    UIO.readBytes(row, o, value);
+                    o += valueLength;
+                }
+                int pkLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] pk = new byte[pkLength];
+                UIO.readBytes(row, o, pk);
                 return stream.stream(-1, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
             (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
@@ -92,12 +127,25 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
         byte[] intLongBuffer = new byte[8];
         return WALKey.decompose(
             stream -> txFpRows.consume((txId, fp, rowType, row) -> {
-                HeapFiler filer = HeapFiler.fromBytes(row, row.length);
-                long timestamp = UIO.readLong(filer, "timestamp", intLongBuffer);
-                boolean tombstone = UIO.readBoolean(filer, "tombstone");
-                long version = UIO.readLong(filer, "version", intLongBuffer);
-                byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
-                byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
+                int o = 0;
+                long timestamp = UIO.bytesLong(row, o);
+                o += 8;
+                boolean tombstone = row[o] == 1;
+                o++;
+                long version = UIO.bytesLong(row, o);
+                o += 8;
+                int valueLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] value = null;
+                if (valueLength >= 0) {
+                    value = new byte[valueLength];
+                    UIO.readBytes(row, o, value);
+                    o += valueLength;
+                }
+                int pkLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] pk = new byte[pkLength];
+                UIO.readBytes(row, o, pk);
                 return stream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
             (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
@@ -109,12 +157,25 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
         byte[] intLongBuffer = new byte[8];
         return WALKey.decompose(
             stream -> txFpRows.consume((txId, fp, rowType, row) -> {
-                HeapFiler filer = HeapFiler.fromBytes(row, row.length);
-                long timestamp = UIO.readLong(filer, "timestamp", intLongBuffer);
-                boolean tombstone = UIO.readBoolean(filer, "tombstone");
-                long version = UIO.readLong(filer, "version", intLongBuffer);
-                byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
-                byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
+                int o = 0;
+                long timestamp = UIO.bytesLong(row, o);
+                o += 8;
+                boolean tombstone = row[o] == 1;
+                o++;
+                long version = UIO.bytesLong(row, o);
+                o += 8;
+                int valueLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] value = null;
+                if (valueLength >= 0) {
+                    value = new byte[valueLength];
+                    UIO.readBytes(row, o, value);
+                    o += valueLength;
+                }
+                int pkLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] pk = new byte[pkLength];
+                UIO.readBytes(row, o, pk);
                 return stream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value), timestamp, tombstone, version, row);
             }),
             (txId, fp, rowType, prefix, key, hasValue, value, valueTimestamp, valueTombstoned, valueVersion, row)
@@ -126,12 +187,25 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
         byte[] intLongBuffer = new byte[8];
         return WALKey.decompose(
             txFpRawKeyValueEntryStream -> txFpRows.consume((txId, fp, rowType, row) -> {
-                HeapFiler filer = HeapFiler.fromBytes(row, row.length);
-                long timestamp = UIO.readLong(filer, "timestamp", intLongBuffer);
-                boolean tombstone = UIO.readBoolean(filer, "tombstone");
-                long version = UIO.readLong(filer, "version", intLongBuffer);
-                byte[] value = UIO.readByteArray(filer, "value", intLongBuffer);
-                byte[] pk = UIO.readByteArray(filer, "key", intLongBuffer);
+                int o = 0;
+                long timestamp = UIO.bytesLong(row, o);
+                o += 8;
+                boolean tombstone = row[o] == 1;
+                o++;
+                long version = UIO.bytesLong(row, o);
+                o += 8;
+                int valueLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] value = null;
+                if (valueLength >= 0) {
+                    value = new byte[valueLength];
+                    UIO.readBytes(row, o, value);
+                    o += valueLength;
+                }
+                int pkLength = UIO.bytesInt(row, o);
+                o += 4;
+                byte[] pk = new byte[pkLength];
+                UIO.readBytes(row, o, pk);
                 return txFpRawKeyValueEntryStream.stream(txId, fp, rowType, uncompress(rowType, pk), true, uncompress(rowType, value),
                     timestamp, tombstone, version, row);
             }),
@@ -140,9 +214,15 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
 
     @Override
     public byte[] valueFromRow(RowType rowType, byte[] row, int offset) throws Exception {
-        HeapFiler filer = HeapFiler.fromBytes(row, row.length);
-        filer.seek(offset + 8 + 1 + 8);
-        return uncompress(rowType, UIO.readByteArray(filer, "value", new byte[4]));
+        int o = offset + 8 + 1 + 8;
+        int valueLength = UIO.bytesInt(row, o);
+        o += 4;
+        byte[] value = null;
+        if (valueLength >= 0) {
+            value = new byte[valueLength];
+            UIO.readBytes(row, o, value);
+        }
+        return uncompress(rowType, value);
     }
 
     @Override

@@ -42,6 +42,15 @@ public class PartitionName implements Comparable<PartitionName> {
         return asBytes;
     }
 
+    public void toBytes(byte[] asBytes, int offset) {
+        asBytes[offset + 0] = 0; // version
+        asBytes[offset + 1] = (byte) (systemPartition ? 1 : 0);
+        UIO.intBytes(ringName.length, asBytes, offset + 1 + 1);
+        System.arraycopy(ringName, 0, asBytes, offset + 1 + 1 + 4, ringName.length);
+        UIO.intBytes(name.length, asBytes, offset + 1 + 1 + 4 + ringName.length);
+        System.arraycopy(name, 0, asBytes, offset + 1 + 1 + 4 + ringName.length + 4, name.length);
+    }
+
     public int sizeInBytes() {
         return 1 + 1 + 4 + ringName.length + 4 + name.length;
     }

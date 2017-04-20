@@ -28,7 +28,6 @@ import com.jivesoftware.os.amza.service.AwaitNotify;
 import com.jivesoftware.os.amza.service.PartitionIsDisposedException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -620,32 +619,57 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         Member rootRingMember,
         Long partitionVersion,
         Member ackRingMember) throws Exception {
-        byte[] lengthBuffer = new byte[4];
-        int partitionSizeInBytes = 4 + partitionName.sizeInBytes();
         if (rootRingMember != null && ackRingMember != null) {
-            int rootSizeInBytes = 4 + rootRingMember.getMember().length;
-            int ackSizeInBytes = 4 + ackRingMember.getMember().length;
-            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8 + 1 + ackSizeInBytes);
-            UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
-            UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            UIO.writeLong(filer, partitionVersion, "partitionVersion");
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
-            UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
-            return filer.getBytes();
+            int partitionSizeInBytes = partitionName.sizeInBytes();
+            int rootSizeInBytes = rootRingMember.getMember().length;
+            int ackSizeInBytes = ackRingMember.getMember().length;
+            byte[] bytes = new byte[4 + partitionSizeInBytes + 1 + 4 + rootSizeInBytes + 8 + 1 + 4 + ackSizeInBytes];
+            int o = 0;
+            UIO.intBytes(partitionSizeInBytes, bytes, o);
+            o += 4;
+            partitionName.toBytes(bytes, o);
+            o += partitionSizeInBytes;
+            bytes[o] = context;
+            o++;
+            UIO.writeInt(rootSizeInBytes, bytes, o);
+            o += 4;
+            UIO.writeBytes(rootRingMember.getMember(), bytes, o);
+            o += rootSizeInBytes;
+            UIO.longBytes(partitionVersion, bytes, o);
+            o += 8;
+            bytes[o] = !rootRingMember.equals(ackRingMember) ? (byte) 1 : (byte) 0;
+            o++;
+            UIO.intBytes(ackSizeInBytes, bytes, o);
+            o += 4;
+            UIO.writeBytes(ackRingMember.getMember(), bytes, o);
+            return bytes;
         } else if (rootRingMember != null) {
-            int rootSizeInBytes = 4 + rootRingMember.getMember().length;
-            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8);
-            UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
-            UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            UIO.writeLong(filer, partitionVersion, "partitionVersion");
-            return filer.getBytes();
+            int partitionSizeInBytes = partitionName.sizeInBytes();
+            int rootSizeInBytes = rootRingMember.getMember().length;
+            byte[] bytes = new byte[4 + partitionSizeInBytes + 1 + 4 + rootSizeInBytes + 8];
+            int o = 0;
+            UIO.intBytes(partitionSizeInBytes, bytes, o);
+            o += 4;
+            partitionName.toBytes(bytes, o);
+            o += partitionSizeInBytes;
+            bytes[o] = context;
+            o++;
+            UIO.writeInt(rootSizeInBytes, bytes, o);
+            o += 4;
+            UIO.writeBytes(rootRingMember.getMember(), bytes, o);
+            o += rootSizeInBytes;
+            UIO.longBytes(partitionVersion, bytes, o);
+            return bytes;
         } else {
-            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1);
-            UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
-            return filer.getBytes();
+            int partitionSizeInBytes = partitionName.sizeInBytes();
+            byte[] bytes = new byte[4 + partitionSizeInBytes + 1];
+            int o = 0;
+            UIO.intBytes(partitionSizeInBytes, bytes, o);
+            o += 4;
+            partitionName.toBytes(bytes, o);
+            o += partitionSizeInBytes;
+            bytes[o] = context;
+            return bytes;
         }
     }
 
@@ -697,28 +721,45 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
     private static byte[] livelinessKey(Member rootRingMember, Member ackRingMember) throws Exception {
         Preconditions.checkNotNull(rootRingMember, "Requires root ring member");
-        byte[] lengthBuffer = new byte[4];
         if (ackRingMember != null) {
-            int rootSizeInBytes = 4 + rootRingMember.getMember().length;
-            int ackSizeInBytes = 4 + ackRingMember.getMember().length;
-            HeapFiler filer = new HeapFiler(rootSizeInBytes + 1 + ackSizeInBytes);
-            UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
-            UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
-            return filer.getBytes();
+            int rootSizeInBytes = rootRingMember.getMember().length;
+            int ackSizeInBytes = ackRingMember.getMember().length;
+            byte[] bytes = new byte[4 + rootSizeInBytes + 1 + 4 + ackSizeInBytes];
+            int o = 0;
+            UIO.intBytes(rootSizeInBytes, bytes, o);
+            o += 4;
+            UIO.writeBytes(rootRingMember.getMember(), bytes, o);
+            o += rootSizeInBytes;
+            bytes[o] = !rootRingMember.equals(ackRingMember) ? (byte) 1 : (byte) 0;
+            o++;
+            UIO.intBytes(ackSizeInBytes, bytes, o);
+            o += 4;
+            UIO.writeBytes(ackRingMember.getMember(), bytes, o);
+            return bytes;
         } else {
-            int rootSizeInBytes = 4 + rootRingMember.getMember().length;
-            HeapFiler filer = new HeapFiler(rootSizeInBytes);
-            UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            return filer.getBytes();
+            int rootSizeInBytes = rootRingMember.getMember().length;
+            byte[] bytes = new byte[4 + rootSizeInBytes];
+            int o = 0;
+            UIO.intBytes(rootSizeInBytes, bytes, o);
+            o += 4;
+            UIO.writeBytes(rootRingMember.getMember(), bytes, o);
+            return bytes;
         }
     }
 
-    private static boolean streamLivelinessKey(byte[] keyBytes, LivelinessKeyStream stream, byte[] intLongBuffer) throws Exception {
-        HeapFiler filer = HeapFiler.fromBytes(keyBytes, keyBytes.length);
-        byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember", intLongBuffer);
-        boolean isSelf = !UIO.readBoolean(filer, "isOther");
-        byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember", intLongBuffer);
+    private static boolean streamLivelinessKey(byte[] keyBytes, LivelinessKeyStream stream) throws Exception {
+        int o = 0;
+        int rootSizeInBytes = UIO.bytesInt(keyBytes, o);
+        o += 4;
+        byte[] rootRingMemberBytes = new byte[rootSizeInBytes];
+        UIO.readBytes(keyBytes, o, rootRingMemberBytes);
+        o += rootSizeInBytes;
+        boolean isSelf = keyBytes[o] == 0; // 1 is other
+        o++;
+        int ackSizeInBytes = UIO.bytesInt(keyBytes, o);
+        o += 4;
+        byte[] ackRingMemberBytes = new byte[ackSizeInBytes];
+        UIO.readBytes(keyBytes, o, ackRingMemberBytes);
         return stream.stream(new Member(rootRingMemberBytes),
             isSelf,
             new Member(ackRingMemberBytes));
@@ -751,8 +792,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
         @Override
         public boolean scan(Member rootMember, Member otherMember, LivelinessStream stream) throws Exception {
-            byte[] intLongBuffer = new byte[8];
-
             KeyValueStream keyValueStream = (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
                     return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
@@ -761,7 +800,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                         } else {
                             return true;
                         }
-                    }, intLongBuffer);
+                    });
                 }
                 return true;
             };

@@ -13,7 +13,6 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.CacheId;
 import com.jivesoftware.os.amza.service.ring.RingSet;
@@ -75,8 +74,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     }
 
     byte[] keyToRingName(WALKey walKey) throws IOException {
-        HeapFiler filer = HeapFiler.fromBytes(walKey.key, walKey.key.length);
-        return UIO.readByteArray(filer, "ringName", new byte[4]);
+        return UIO.readByteArray(walKey.key, 0, "ringName");
     }
 
     byte[] key(byte[] ringName, RingMember ringMember) throws Exception {

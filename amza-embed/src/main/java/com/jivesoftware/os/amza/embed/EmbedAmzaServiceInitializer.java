@@ -223,10 +223,22 @@ public class EmbedAmzaServiceInitializer {
         deployable.addHealthCheck(quorumTimeoutHealthCheck);
 
         RowsTakerFactory systemRowsTakerFactory = () -> {
-            return new HttpRowsTaker(amzaSystemStats, systemTakeClient, mapper, amzaInterner, deployable.newBoundedExecutor(1024, "system-acks"));
+            return new HttpRowsTaker("system",
+                amzaSystemStats,
+                systemTakeClient,
+                mapper,
+                amzaInterner,
+                deployable.newBoundedExecutor(1, "system-ack-queue"),
+                deployable.newBoundedExecutor(1024, "system-acks"));
         };
         RowsTakerFactory rowsTakerFactory = () -> {
-            return new HttpRowsTaker(amzaStats, stripedTakeClient, mapper, amzaInterner, deployable.newBoundedExecutor(1024, "striped-acks"));
+            return new HttpRowsTaker("striped",
+                amzaStats,
+                stripedTakeClient,
+                mapper,
+                amzaInterner,
+                deployable.newBoundedExecutor(1, "striped-ack-queue"),
+                deployable.newBoundedExecutor(1024, "striped-acks"));
         };
 
         AtomicInteger systemRingSize = new AtomicInteger(0);

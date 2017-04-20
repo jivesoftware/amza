@@ -400,7 +400,7 @@ public class TakeCoordinator {
 
             int systemRingHash = BAHasher.SINGLETON.hashCode(AmzaRingReader.SYSTEM_RING, 0, AmzaRingReader.SYSTEM_RING.length);
             BAHash<TakeRingCoordinator> stackCache = system ? null : new BAHash<>(
-                new BAHMapState<>(takeRingCoordinators.size() * 2, true, BAHMapState.NIL),
+                new BAHMapState<>(Math.max(10, takeRingCoordinators.size() * 2), true, BAHMapState.NIL),
                 BAHasher.SINGLETON,
                 BAHEqualer.SINGLETON);
 

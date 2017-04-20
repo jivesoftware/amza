@@ -21,6 +21,9 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.AmzaInstance;
+import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.PongPayload;
+import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenAndPongs;
+import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenPayload;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -190,6 +193,36 @@ public class AmzaReplicationRestEndpoints {
         } catch (Exception x) {
             LOG.warn("Failed pong for member:{} session:{}", new Object[] { ringMemberName, takeSessionId }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed pong.", x);
+        } finally {
+            amzaStats.pongsReceived.increment();
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/ackBatch")
+    public Response rowsTaken(RowsTakenAndPongs rowsTakenAndPongs) {
+        try {
+            if (rowsTakenAndPongs.rowsTakenPayloads != null) {
+                for (RowsTakenPayload rowsTaken : rowsTakenAndPongs.rowsTakenPayloads) {
+                    amzaInstance.rowsTaken(rowsTaken.ringMember,
+                        rowsTaken.takeSessionId,
+                        rowsTaken.takeSharedKey,
+                        rowsTaken.versionedPartitionName,
+                        rowsTaken.txId,
+                        rowsTaken.leadershipToken);
+                }
+            }
+            if (rowsTakenAndPongs.pongPayloads != null) {
+                for (PongPayload pong : rowsTakenAndPongs.pongPayloads) {
+                    amzaInstance.pong(pong.ringMember, pong.takeSessionId, pong.takeSharedKey);
+                }
+            }
+            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
+        } catch (Exception x) {
+            LOG.warn("Failed ackBatch", x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed ackBatch.", x);
         } finally {
             amzaStats.pongsReceived.increment();
         }

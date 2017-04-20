@@ -247,6 +247,7 @@ public class HttpRowsTaker implements RowsTaker {
         } finally {
             ackable.semaphore.release();
         }
+        LOG.inc("rowsTaken");
         LOG.set(ValueType.COUNT, "flush>version>enqueue>" + name, flushVersion.incrementAndGet());
         synchronized (flushVersion) {
             flushVersion.notify();
@@ -268,6 +269,7 @@ public class HttpRowsTaker implements RowsTaker {
         } finally {
             ackable.semaphore.release();
         }
+        LOG.inc("pong");
         LOG.set(ValueType.COUNT, "flush>version>enqueue>" + name, flushVersion.incrementAndGet());
         synchronized (flushVersion) {
             flushVersion.notify();
@@ -309,7 +311,7 @@ public class HttpRowsTaker implements RowsTaker {
                     LOG.warn("Failed to deliver acks for remote:{}", new Object[] { ringHost }, x);
                 } finally {
                     ackable.running.set(false);
-                    LOG.inc("flush>version>consume>" + name, flushVersion.incrementAndGet());
+                    LOG.inc("flush>version>consume>" + name);
                     synchronized (flushVersion) {
                         if (currentVersion != flushVersion.get()) {
                             flushVersion.notify();
@@ -319,7 +321,7 @@ public class HttpRowsTaker implements RowsTaker {
             });
         } else {
             ackable.running.set(false);
-            LOG.inc("flush>version>consume>" + name, flushVersion.incrementAndGet());
+            LOG.inc("flush>version>consume>" + name);
             synchronized (flushVersion) {
                 if (currentVersion != flushVersion.get()) {
                     flushVersion.notify();

@@ -22,10 +22,11 @@ import com.google.common.primitives.SignedBytes;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.aquarium.Member;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-public class RingMember implements Comparable<RingMember> {
+public class RingMember implements Comparable<RingMember>, Serializable {
 
     public byte[] toBytes() { // TODO convert to lex byte ordering?
         byte[] bytes = new byte[1 + memberAsBytes.length];

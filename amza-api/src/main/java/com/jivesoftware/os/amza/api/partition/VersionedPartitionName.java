@@ -6,13 +6,14 @@ import com.google.common.io.BaseEncoding;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Objects;
 
 
 /**
  * @author jonathan.colt
  */
-public class VersionedPartitionName implements Comparable<VersionedPartitionName> {
+public class VersionedPartitionName implements Comparable<VersionedPartitionName>, Serializable {
 
     public static final long STATIC_VERSION = 0;
 

@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,16 +37,21 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
         if (highwater == null) {
             return null;
         }
-        // TODO fix me
-        byte[] lengthBuffer = new byte[4];
-        HeapFiler filer = new HeapFiler(sizeInBytes(highwater));
+        byte[] bytes = new byte[sizeInBytes(highwater)];
+        int o = 0;
         for (RingMemberHighwater rmh : highwater.ringMemberHighwater) {
-            UIO.writeByte(filer, (byte) 1, "hasMore");
-            UIO.writeByteArray(filer, rmh.ringMember.toBytes(), "ringMember", lengthBuffer);
-            UIO.writeLong(filer, rmh.transactionId, "txId");
+            int ringMemberSizeInBytes = rmh.ringMember.sizeInBytes();
+            bytes[o] = (byte) 1; // hasMore
+            o++;
+            UIO.intBytes(ringMemberSizeInBytes, bytes, o);
+            o += 4;
+            rmh.ringMember.toBytes(bytes, o);
+            o += ringMemberSizeInBytes;
+            UIO.longBytes(rmh.transactionId, bytes, o);
+            o += 8;
         }
-        UIO.writeByte(filer, (byte) 0, "hasMore");
-        return filer.getBytes();
+        bytes[o] = (byte) 0; // hasMore
+        return bytes;
     }
 
     @Override

@@ -216,13 +216,15 @@ public class StorageVersionProvider implements CurrentVersionProvider, RowChange
             if (currentStorageVersion == null) {
                 throw new PartitionIsDisposedException("Partition " + partitionName + " is disposed");
             }
-            if (requireStorageVersion != null) {
-                Preconditions.checkArgument(currentStorageVersion.partitionVersion == requireStorageVersion.partitionVersion,
-                    "Partition version has changed: %s != %s", currentStorageVersion.partitionVersion, requireStorageVersion.partitionVersion);
+            if (requireStorageVersion != null && currentStorageVersion.partitionVersion != requireStorageVersion.partitionVersion) {
+                throw new IllegalArgumentException("Partition version has changed" +
+                    " got:" + currentStorageVersion.partitionVersion +
+                    " required:" + requireStorageVersion.partitionVersion);
             }
             int stripeIndex = getCurrentStripe(currentStorageVersion);
-            Preconditions.checkArgument(stripeIndex != -1,
-                "Missing stripe index for %s with stripe version %s", partitionName, currentStorageVersion.stripeVersion);
+            if (stripeIndex == -1) {
+                throw new IllegalArgumentException("Missing stripe index for:" + partitionName + " with stripe version:" + currentStorageVersion.stripeVersion);
+            }
 
             StickyStripe stickyStripe;
             synchronized (stickyStorage.stripeCache) {

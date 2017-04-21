@@ -187,7 +187,7 @@ public class AmzaTestCluster {
                 RingHost remoteRingHost,
                 VersionedPartitionName remoteVersionedPartitionName,
                 long takeSessionId,
-                String takeSharedKey,
+                long takeSharedKey,
                 long remoteTxId,
                 long localLeadershipToken,
                 long limit,
@@ -215,7 +215,7 @@ public class AmzaTestCluster {
                 RingMember remoteRingMember,
                 RingHost remoteRingHost,
                 long takeSessionId,
-                String takeSharedKey,
+                long takeSharedKey,
                 VersionedPartitionName remoteVersionedPartitionName,
                 long remoteTxId,
                 long localLeadershipToken) {
@@ -242,7 +242,7 @@ public class AmzaTestCluster {
                 RingMember remoteRingMember,
                 RingHost remoteRingHost,
                 long takeSessionId,
-                String takeSharedKey) {
+                long takeSharedKey) {
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + localRingMember);
@@ -261,7 +261,7 @@ public class AmzaTestCluster {
                 RingMember remoteRingMember,
                 RingHost remoteRingHost,
                 long takeSessionId,
-                String takeSharedKey,
+                long takeSharedKey,
                 VersionedPartitionName remoteVersionedPartitionName) {
                 return true;
             }
@@ -505,21 +505,21 @@ public class AmzaTestCluster {
 
         void remoteMemberTookToTxId(RingMember remoteRingMember,
             long takeSessionId,
-            String takeSharedKey,
+            long takeSharedKey,
             VersionedPartitionName remoteVersionedPartitionName,
             long localTxId,
             long leadershipToken) throws Exception {
             amzaService.rowsTaken(remoteRingMember, takeSessionId, takeSharedKey, remoteVersionedPartitionName, localTxId, leadershipToken);
         }
 
-        void remoteMemberPong(RingMember remoteRingMember, long takeSessionId, String takeSharedKey) throws Exception {
+        void remoteMemberPong(RingMember remoteRingMember, long takeSessionId, long takeSharedKey) throws Exception {
             amzaService.pong(remoteRingMember, takeSessionId, takeSharedKey);
         }
 
         StreamingTakeConsumed rowsStream(RingMember remoteRingMember,
             VersionedPartitionName localVersionedPartitionName,
             long takeSessionId,
-            String takeSharedKey,
+            long takeSharedKey,
             long localTxId,
             long leadershipToken,
             long limit,
@@ -656,7 +656,7 @@ public class AmzaTestCluster {
             TimestampedRingHost timestampedRingHost,
             boolean system,
             long sessionId,
-            String sharedKey,
+            long sharedKey,
             long timeoutMillis,
             AvailableRowsTaker.AvailableStream updatedPartitionsStream,
             Callable<Void> deliverCallback,

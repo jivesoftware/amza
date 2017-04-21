@@ -375,7 +375,7 @@ public class TakeCoordinator {
         PartitionStripeProvider partitionStripeProvider,
         RingMember remoteRingMember,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         long heartbeatIntervalMillis,
         AvailableStream availableStream,
         Callable<Void> deliverCallback,
@@ -559,20 +559,20 @@ public class TakeCoordinator {
 
     }
 
-    public boolean isValidSession(RingMember remoteRingMember, long takeSessionId, String sharedKey) {
+    public boolean isValidSession(RingMember remoteRingMember, long takeSessionId, long sharedKey) {
         Session session = takeSessions.get(new SessionKey(remoteRingMember, takeSessionId));
-        return (session != null && session.sharedKey.equals(sharedKey));
+        return (session != null && session.sharedKey == sharedKey);
     }
 
     public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         TxPartitionStripe txPartitionStripe,
         VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
 
         Session session = takeSessions.get(new SessionKey(remoteRingMember, takeSessionId));
-        if (session != null && session.sharedKey.equals(sharedKey)) {
+        if (session != null && session.sharedKey == sharedKey) {
             TakeRingCoordinator ring = getCoordinator(versionedAquarium.getVersionedPartitionName());
             if (ring != null) {
                 ring.rowsTaken(remoteRingMember, takeSessionId, txPartitionStripe, versionedAquarium, localTxId);
@@ -586,11 +586,11 @@ public class TakeCoordinator {
         }
     }
 
-    public void pong(RingMember remoteRingMember, long takeSessionId, String sharedKey) {
+    public void pong(RingMember remoteRingMember, long takeSessionId, long sharedKey) {
         SessionKey sessionKey = new SessionKey(remoteRingMember, takeSessionId);
         long pongTime = System.currentTimeMillis();
         Session session = takeSessions.get(sessionKey);
-        if (session != null && session.sharedKey.equals(sharedKey)) {
+        if (session != null && session.sharedKey == sharedKey) {
             pongInternal(pongTime, session);
         } else {
             LOG.warn("Ignored stale pong from:{} session:{}", remoteRingMember, takeSessionId);
@@ -610,11 +610,11 @@ public class TakeCoordinator {
     public void invalidate(AmzaRingReader ringReader,
         RingMember remoteRingMember,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         VersionedPartitionName versionedPartitionName) throws Exception {
         LOG.info("Received request to invalidate ring from member:{} session:{} partition:{}", remoteRingMember, takeSessionId, versionedPartitionName);
         Session session = takeSessions.get(new SessionKey(remoteRingMember, takeSessionId));
-        if (session != null && session.sharedKey.equals(sharedKey)) {
+        if (session != null && session.sharedKey == sharedKey) {
             byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
             TakeRingCoordinator ringCoordinator = getCoordinator(versionedPartitionName);
             if (ringCoordinator != null) {
@@ -666,14 +666,14 @@ public class TakeCoordinator {
 
         private final long startTime;
         private final boolean system;
-        private final String sharedKey;
+        private final long sharedKey;
 
         private final AtomicLong lastPingTime = new AtomicLong(-1);
         private final AtomicLong lastPongTime = new AtomicLong(-1);
         private final AtomicReference<Thread> sessionThread = new AtomicReference<>();
         private final AtomicReference<Set<VersionedPartitionName>> dirtySet = new AtomicReference<>();
 
-        public Session(long startTime, boolean system, String sharedKey) {
+        public Session(long startTime, boolean system, long sharedKey) {
             this.startTime = startTime;
             this.system = system;
             this.sharedKey = sharedKey;

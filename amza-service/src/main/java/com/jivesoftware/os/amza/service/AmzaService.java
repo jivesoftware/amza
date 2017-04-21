@@ -526,7 +526,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         long heartbeatIntervalMillis) throws Exception {
 
         ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId, false);
@@ -574,7 +574,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         long timeoutMillis,
         AvailableStream availableStream,
         Callable<Void> deliverCallback,
@@ -597,7 +597,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         long localTxId,
         long remoteLeadershipToken,
         long limit) throws Exception {
@@ -754,7 +754,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void rowsTaken(RingMember remoteRingMember,
         long takeSessionId,
-        String sharedKey,
+        long sharedKey,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
         long leadershipToken) throws Exception {
@@ -770,14 +770,14 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public void pong(RingMember remoteRingMember, long takeSessionId, String sharedKey) throws Exception {
+    public void pong(RingMember remoteRingMember, long takeSessionId, long sharedKey) throws Exception {
         takeCoordinator.pong(remoteRingMember, takeSessionId, sharedKey);
     }
 
     @Override
     public void invalidate(RingMember remoteRingMember,
         long takeSessionId,
-        String takeSharedKey,
+        long takeSharedKey,
         VersionedPartitionName versionedPartitionName) throws Exception {
         takeCoordinator.invalidate(ringStoreReader, remoteRingMember, takeSessionId, takeSharedKey, versionedPartitionName);
     }

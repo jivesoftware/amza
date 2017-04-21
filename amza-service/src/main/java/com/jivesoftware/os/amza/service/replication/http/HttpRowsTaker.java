@@ -45,7 +45,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
@@ -125,7 +124,7 @@ public class HttpRowsTaker implements RowsTaker {
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
         long takeSessionId,
-        String takeSharedKey,
+        long takeSharedKey,
         long remoteTxId,
         long localLeadershipToken,
         long limit,
@@ -139,7 +138,7 @@ public class HttpRowsTaker implements RowsTaker {
                 + "/" + remoteTxId
                 + "/" + localLeadershipToken
                 + "/" + limit;
-            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
+            String sharedKeyJson = mapper.writeValueAsString(takeSharedKey); // lame
             httpStreamResponse = ringClient.call("",
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "rowsStream",
@@ -190,7 +189,7 @@ public class HttpRowsTaker implements RowsTaker {
     public static class RowsTakenPayload implements Serializable {
         public final RingMember ringMember;
         public final long takeSessionId;
-        public final String takeSharedKey;
+        public final long takeSharedKey;
         public final long txId;
         public final long leadershipToken;
 
@@ -198,7 +197,7 @@ public class HttpRowsTaker implements RowsTaker {
         public RowsTakenPayload(
             @JsonProperty("ringMember") RingMember ringMember,
             @JsonProperty("takeSessionId") long takeSessionId,
-            @JsonProperty("takeSharedKey") String takeSharedKey,
+            @JsonProperty("takeSharedKey") long takeSharedKey,
             @JsonProperty("txId") long txId,
             @JsonProperty("leadershipToken") long leadershipToken) {
             this.ringMember = ringMember;
@@ -212,13 +211,13 @@ public class HttpRowsTaker implements RowsTaker {
     public static class PongPayload implements Serializable {
         public final RingMember ringMember;
         public final long takeSessionId;
-        public final String takeSharedKey;
+        public final long takeSharedKey;
 
         @JsonCreator
         public PongPayload(
             @JsonProperty("ringMember") RingMember ringMember,
             @JsonProperty("takeSessionId") long takeSessionId,
-            @JsonProperty("takeSharedKey") String takeSharedKey) {
+            @JsonProperty("takeSharedKey") long takeSharedKey) {
             this.ringMember = ringMember;
             this.takeSessionId = takeSessionId;
             this.takeSharedKey = takeSharedKey;
@@ -230,7 +229,7 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
-        String takeSharedKey,
+        long takeSharedKey,
         VersionedPartitionName versionedPartitionName,
         long txId,
         long localLeadershipToken) throws Exception {
@@ -259,7 +258,7 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
-        String takeSharedKey) throws Exception {
+        long takeSharedKey) throws Exception {
 
         Ackable ackable = hostQueue.computeIfAbsent(remoteRingHost, ringHost -> new Ackable());
         ackable.semaphore.acquire();
@@ -319,11 +318,7 @@ public class HttpRowsTaker implements RowsTaker {
                                             dos.write(bytes);
 
                                             dos.writeLong(rowsTakenPayload.takeSessionId);
-
-                                            bytes = rowsTakenPayload.takeSharedKey.getBytes(StandardCharsets.UTF_8);
-                                            dos.writeShort(bytes.length);
-                                            dos.write(bytes);
-
+                                            dos.writeLong(rowsTakenPayload.takeSharedKey);
                                             dos.writeLong(rowsTakenPayload.txId);
                                             dos.writeLong(rowsTakenPayload.leadershipToken);
                                         }
@@ -339,10 +334,7 @@ public class HttpRowsTaker implements RowsTaker {
                                         dos.write(bytes);
 
                                         dos.writeLong(pong.takeSessionId);
-
-                                        bytes = pong.takeSharedKey.getBytes(StandardCharsets.UTF_8);
-                                        dos.writeShort(bytes.length);
-                                        dos.write(bytes);
+                                        dos.writeLong(pong.takeSharedKey);
 
                                     }
                                 } catch (Exception x) {
@@ -390,7 +382,7 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
-        String takeSharedKey,
+        long takeSharedKey,
         VersionedPartitionName remoteVersionedPartitionName) {
         try {
             String endpoint = "/amza/invalidate/" + localRingMember.getMember() + "/" + takeSessionId + "/" + remoteVersionedPartitionName.toBase64();
@@ -398,7 +390,7 @@ public class HttpRowsTaker implements RowsTaker {
                 new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
                 "invalidate",
                 httpClient -> {
-                    HttpResponse response = httpClient.postBytes(endpoint, takeSharedKey.getBytes(StandardCharsets.UTF_8), null);
+                    HttpResponse response = httpClient.postBytes(endpoint, UIO.longBytes(takeSharedKey), null);
                     if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                         throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                     }

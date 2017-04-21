@@ -42,6 +42,7 @@ import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -54,8 +55,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.nustaq.serialization.FSTConfiguration;
 import org.xerial.snappy.SnappyInputStream;
-
-import static sun.swing.SwingUtilities2.submit;
 
 public class HttpRowsTaker implements RowsTaker {
 
@@ -295,18 +294,73 @@ public class HttpRowsTaker implements RowsTaker {
             flushExecutor.submit(() -> {
                 try {
                     String endpoint = "/amza/ackBatch";
-                    byte[] requestBytes = conf.asByteArray(new RowsTakenAndPong(rowsTaken, pong));
                     ringClient.call("",
                         new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(ringHost.getHost(), ringHost.getPort()) }),
                         "ackBatch",
                         httpClient -> {
-                            HttpResponse response = httpClient.postBytes(endpoint, requestBytes, null);
+
+                            HttpResponse response = httpClient.postStreamableRequest(endpoint, out -> {
+
+                                try {
+                                    DataOutputStream dos = new DataOutputStream(out);
+                                    if (rowsTaken.isEmpty()) {
+                                        dos.write((byte) 1); // EOS for rowsTaken stream
+                                    } else {
+                                        for (Entry<VersionedPartitionName, RowsTakenPayload> e : rowsTaken.entrySet()) {
+                                            dos.write((byte) 0); // EOS for rowsTaken stream
+                                            VersionedPartitionName versionedPartitionName = e.getKey();
+
+                                            byte[] bytes = versionedPartitionName.toBytes();
+                                            dos.writeShort(bytes.length);
+                                            dos.write(bytes);
+
+                                            RowsTakenPayload rowsTakenPayload = e.getValue();
+                                            bytes = rowsTakenPayload.ringMember.toBytes();
+                                            dos.writeShort(bytes.length);
+                                            dos.write(bytes);
+
+                                            dos.writeLong(rowsTakenPayload.takeSessionId);
+
+                                            bytes = rowsTakenPayload.takeSharedKey.getBytes(StandardCharsets.UTF_8);
+                                            dos.writeShort(bytes.length);
+                                            dos.write(bytes);
+
+                                            dos.writeLong(rowsTakenPayload.txId);
+                                            dos.writeLong(rowsTakenPayload.leadershipToken);
+                                        }
+                                        dos.write((byte) 1); // EOS for rowsTaken stream
+                                    }
+
+                                    if (pong == null) {
+                                        dos.write((byte) 0); // has pong
+                                    } else {
+                                        dos.write((byte) 1); // has pong
+                                        byte[] bytes = pong.ringMember.toBytes();
+                                        dos.writeShort(bytes.length);
+                                        dos.write(bytes);
+
+                                        dos.writeLong(pong.takeSessionId);
+
+                                        bytes = pong.takeSharedKey.getBytes(StandardCharsets.UTF_8);
+                                        dos.writeShort(bytes.length);
+                                        dos.write(bytes);
+
+                                    }
+                                } catch (Exception x) {
+                                    throw new RuntimeException("Failed while streaming ackBatch.", x);
+                                } finally {
+                                    out.close();
+                                }
+
+                            }, null);
+
                             if (response.getStatusCode() < 200 || response.getStatusCode() >= 300) {
                                 throw new NonSuccessStatusCodeException(response.getStatusCode(), response.getStatusReasonPhrase());
                             }
                             Boolean result = (Boolean) conf.asObject(response.getResponseBody());
                             return new ClientResponse<>(result, true);
                         });
+
                 } catch (Exception x) {
                     LOG.warn("Failed to deliver acks for remote:{}", new Object[] { ringHost }, x);
                 } finally {

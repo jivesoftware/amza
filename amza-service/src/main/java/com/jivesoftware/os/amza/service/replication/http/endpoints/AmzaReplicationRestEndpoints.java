@@ -22,19 +22,18 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.AmzaInstance;
-import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenAndPong;
-import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker.RowsTakenPayload;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
 import java.io.BufferedOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Map.Entry;
 import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -193,7 +192,7 @@ public class AmzaReplicationRestEndpoints {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/pong/{memberName}/{takeSessionId}")
-    public Response rowsTaken(@PathParam("memberName") String ringMemberName,
+    public Response pong(@PathParam("memberName") String ringMemberName,
         @PathParam("takeSessionId") long takeSessionId,
         byte[] sharedKey) {
         try {
@@ -211,27 +210,72 @@ public class AmzaReplicationRestEndpoints {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/ackBatch")
-    public Response rowsTaken(byte[] request) {
+    public Response ackBatch(InputStream is) {
         try {
-            RowsTakenAndPong rowsTakenAndPong = (RowsTakenAndPong) conf.asObject(request);
-            if (rowsTakenAndPong.rowsTakenPayloads != null) {
-                for (Entry<VersionedPartitionName, RowsTakenPayload> entry : rowsTakenAndPong.rowsTakenPayloads.entrySet()) {
-                    VersionedPartitionName versionedPartitionName = entry.getKey();
-                    RowsTakenPayload rowsTaken = entry.getValue();
-                    amzaInstance.rowsTaken(rowsTaken.ringMember,
-                        rowsTaken.takeSessionId,
-                        rowsTaken.takeSharedKey,
+
+            DataInputStream in = new DataInputStream(is);
+            try {
+
+                while (in.readByte() == 1) {
+
+                    int length = in.readShort();
+                    byte[] bytes = new byte[length];
+                    in.readFully(bytes);
+                    VersionedPartitionName versionedPartitionName = amzaInterner.internVersionedPartitionName(bytes, 0, length);
+
+                    length = in.readShort();
+                    bytes = new byte[length];
+                    in.readFully(bytes);
+                    RingMember ringMember = amzaInterner.internRingMember(bytes, 0, length);
+
+
+                    long takeSessionId = in.readLong();
+
+                    length = in.readShort();
+                    bytes = new byte[length];
+                    in.readFully(bytes);
+                    String takeSharedKey = new String(bytes, StandardCharsets.UTF_8);
+
+                    long txId = in.readLong();
+                    long leadershipToken = in.readLong();
+
+                    amzaInstance.rowsTaken(ringMember,
+                        takeSessionId,
+                        takeSharedKey,
                         versionedPartitionName,
-                        rowsTaken.txId,
-                        rowsTaken.leadershipToken);
+                        txId,
+                        leadershipToken);
+
+                }
+
+                if (in.readByte() == 1) {
+                    int length = in.readShort();
+                    byte[] bytes = new byte[length];
+                    in.readFully(bytes);
+                    RingMember ringMember = amzaInterner.internRingMember(bytes, 0, length);
+
+                    long takeSessionId = in.readLong();
+
+                    length = in.readShort();
+                    bytes = new byte[length];
+                    in.readFully(bytes);
+                    String takeSharedKey = new String(bytes, StandardCharsets.UTF_8);
+
+                    amzaInstance.pong(ringMember,
+                        takeSessionId,
+                        takeSharedKey);
+                }
+
+                return Response.ok(conf.asByteArray(Boolean.TRUE)).build();
+
+            } finally {
+                try {
+                    in.close();
+                } catch (Exception x) {
+                    LOG.error("Failed to close input stream", x);
                 }
             }
-            if (rowsTakenAndPong.pongPayload != null) {
-                amzaInstance.pong(rowsTakenAndPong.pongPayload.ringMember,
-                    rowsTakenAndPong.pongPayload.takeSessionId,
-                    rowsTakenAndPong.pongPayload.takeSharedKey);
-            }
-            return Response.ok(conf.asByteArray(Boolean.TRUE)).build();
+
         } catch (Exception x) {
             LOG.warn("Failed ackBatch", x);
             return ResponseHelper.INSTANCE.errorResponse("Failed ackBatch.", x);

@@ -15,6 +15,10 @@ public class FilerOutputStream implements IWriteable {
         this.outputStream = outputStream;
     }
 
+    public void write(byte b) throws IOException {
+        outputStream.write(b);
+    }
+
     @Override
     public void write(byte[] b, int _offset, int _len) throws IOException {
         outputStream.write(b, _offset, _len);

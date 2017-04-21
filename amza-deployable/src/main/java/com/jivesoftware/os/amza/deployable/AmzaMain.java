@@ -135,6 +135,7 @@ public class AmzaMain {
             amzaServiceConfig.hangupAvailableRowsAfterUnresponsiveMillis = amzaConfig.getHangupAvailableRowsAfterUnresponsiveMillis();
             amzaServiceConfig.pongIntervalMillis = amzaConfig.getPongIntervalMillis();
             amzaServiceConfig.rowsTakerLimit = amzaConfig.getRowsTakerLimit();
+            amzaServiceConfig.flushHighwatersAfterNUpdates = amzaConfig.getFlushHighwatersAfterNUpdates();
 
             AmzaStats amzaSystemStats = new AmzaStats();
             AmzaStats amzaStats = new AmzaStats();

@@ -67,4 +67,7 @@ public interface AmzaConfig extends Config {
 
     @BooleanDefault(true)
     boolean getAckWatersVerboseLogTimeouts();
+
+    @LongDefault(100_000)
+    long getFlushHighwatersAfterNUpdates();
 }

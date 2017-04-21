@@ -28,7 +28,7 @@ public interface AvailableRowsTaker {
         RingHost remoteRingHost,
         boolean system,
         long takeSessionId,
-        String takeSharedKey,
+        long takeSharedKey,
         long timeoutMillis,
         AvailableStream availableStream,
         PingStream pingStream) throws Exception;

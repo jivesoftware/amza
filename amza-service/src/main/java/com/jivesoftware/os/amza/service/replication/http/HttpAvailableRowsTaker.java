@@ -57,7 +57,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         RingHost remoteRingHost,
         boolean system,
         long takeSessionId,
-        String takeSharedKey,
+        long takeSharedKey,
         long timeoutMillis,
         AvailableStream availableStream,
         PingStream pingStream) throws Exception {
@@ -69,7 +69,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
             + "/" + localTimestampedRingHost.timestampId
             + "/" + takeSessionId
             + "/" + timeoutMillis;
-        String sharedKeyJson = mapper.writeValueAsString(takeSharedKey);
+        String sharedKeyJson = mapper.writeValueAsString(takeSharedKey); // lame
         HttpStreamResponse httpStreamResponse = ringClient.call("",
             new ConnectionDescriptorSelectiveStrategy(new HostPort[] { new HostPort(remoteRingHost.getHost(), remoteRingHost.getPort()) }),
             "availableRowsStream",

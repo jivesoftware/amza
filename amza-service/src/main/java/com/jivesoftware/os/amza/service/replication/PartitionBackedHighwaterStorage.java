@@ -4,6 +4,7 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Durability;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -73,6 +74,12 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         for (int i = 0; i < deltaStripeCount; i++) {
             stripeUpdatesSinceLastFlush[i] = new AtomicLong();
         }
+    }
+
+    public static void main(String[] args) throws Exception {
+        AmzaInterner amzaInterner = new AmzaInterner();
+        PartitionName a = amzaInterner.internPartitionNameBase64("AAAAAAABYQAAAARhNzIw");
+        System.out.println(a);
     }
 
     @Override

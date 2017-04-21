@@ -300,14 +300,13 @@ public class HttpRowsTaker implements RowsTaker {
                         httpClient -> {
 
                             HttpResponse response = httpClient.postStreamableRequest(endpoint, out -> {
-
                                 try {
                                     DataOutputStream dos = new DataOutputStream(out);
                                     if (rowsTaken.isEmpty()) {
-                                        dos.write((byte) 1); // EOS for rowsTaken stream
+                                        dos.write((byte) 0); // hasMore for rowsTaken stream
                                     } else {
                                         for (Entry<VersionedPartitionName, RowsTakenPayload> e : rowsTaken.entrySet()) {
-                                            dos.write((byte) 0); // EOS for rowsTaken stream
+                                            dos.write((byte) 1); // hasMore for rowsTaken stream
                                             VersionedPartitionName versionedPartitionName = e.getKey();
 
                                             byte[] bytes = versionedPartitionName.toBytes();
@@ -328,7 +327,7 @@ public class HttpRowsTaker implements RowsTaker {
                                             dos.writeLong(rowsTakenPayload.txId);
                                             dos.writeLong(rowsTakenPayload.leadershipToken);
                                         }
-                                        dos.write((byte) 1); // EOS for rowsTaken stream
+                                        dos.write((byte) 0); // EOS for rowsTaken stream
                                     }
 
                                     if (pong == null) {
@@ -349,6 +348,7 @@ public class HttpRowsTaker implements RowsTaker {
                                 } catch (Exception x) {
                                     throw new RuntimeException("Failed while streaming ackBatch.", x);
                                 } finally {
+                                    out.flush();
                                     out.close();
                                 }
 

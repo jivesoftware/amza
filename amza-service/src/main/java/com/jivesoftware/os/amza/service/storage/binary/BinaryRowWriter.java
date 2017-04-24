@@ -19,7 +19,7 @@ import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALWriter;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.api.filer.HeapFiler;
 import com.jivesoftware.os.amza.api.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import gnu.trove.iterator.TLongIterator;
@@ -46,7 +46,7 @@ public class BinaryRowWriter implements WALWriter {
         boolean addToLeapCount,
         boolean hardFsyncBeforeLeapBoundary) throws Exception {
 
-        byte[] lengthBuffer = new byte[4];
+        byte[] lengthBuffer = new byte[8];
         HeapFiler memoryFiler = new HeapFiler((estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes);
         TLongArrayList offsets = new TLongArrayList();
         rows.consume(row -> {
@@ -54,7 +54,7 @@ public class BinaryRowWriter implements WALWriter {
             int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length", lengthBuffer);
             UIO.writeByte(memoryFiler, rowType.toByte(), "rowType");
-            UIO.writeLong(memoryFiler, txId, "txId");
+            UIO.writeLong(memoryFiler, txId, "txId", lengthBuffer);
             memoryFiler.write(row, 0, row.length);
             UIO.writeInt(memoryFiler, length, "length", lengthBuffer);
             return true;

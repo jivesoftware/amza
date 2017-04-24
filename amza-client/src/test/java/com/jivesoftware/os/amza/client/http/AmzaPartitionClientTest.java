@@ -174,8 +174,8 @@ public class AmzaPartitionClientTest {
                 if (hydrateValues) {
                     UIO.writeByteArray(out, UIO.intBytes(-i), "value", intLongBuffer);
                 }
-                UIO.writeLong(out, 1_000 + i, "timestampId");
-                UIO.writeLong(out, 2_000 + i, "version");
+                UIO.writeLong(out, 1_000 + i, "timestampId", intLongBuffer);
+                UIO.writeLong(out, 2_000 + i, "version", intLongBuffer);
             }
             UIO.writeByte(out, (byte) 1, "eos");
             out.flush(false);

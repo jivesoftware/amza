@@ -23,7 +23,7 @@ public class MultiAutoGrowingByteBufferBackedFilerTest {
 
                 System.out.println("i:" + i);
                 MultiAutoGrowingByteBufferBackedFiler filer = new MultiAutoGrowingByteBufferBackedFiler(i, i, bf);
-                UIO.writeLong(filer, Long.MAX_VALUE, "a long");
+                UIO.writeLong(filer, Long.MAX_VALUE, "a long", intLongBuffer);
                 filer.seek(0);
                 Assert.assertEquals(UIO.readLong(filer, "a long", intLongBuffer), Long.MAX_VALUE, "Booya");
             }

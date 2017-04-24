@@ -13,10 +13,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.service.filer;
+package com.jivesoftware.os.amza.api.filer;
 
 import com.google.common.math.IntMath;
-import com.jivesoftware.os.amza.api.filer.IFiler;
 import java.io.IOException;
 
 /**

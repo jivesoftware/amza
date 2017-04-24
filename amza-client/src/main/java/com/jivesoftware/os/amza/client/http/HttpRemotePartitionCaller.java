@@ -60,7 +60,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         ClientUpdates updates,
         long abandonSolutionAfterNMillis) throws HttpClientException {
 
-        byte[] lengthBuffer = new byte[4];
+        byte[] lengthBuffer = new byte[8];
         boolean checkLeader = ringMember.equals(leader);
         HttpResponse got = client.postStreamableRequest("/amza/v1/commit/" + base64PartitionName + "/" + consistency.name() + "/" + checkLeader,
             (out) -> {
@@ -68,13 +68,13 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
 
                     FilerOutputStream fos = new FilerOutputStream(out);
                     UIO.writeByteArray(fos, prefix, "prefix", lengthBuffer);
-                    UIO.writeLong(fos, abandonSolutionAfterNMillis, "timeoutInMillis");
+                    UIO.writeLong(fos, abandonSolutionAfterNMillis, "timeoutInMillis", lengthBuffer);
 
                     updates.updates((key, value, valueTimestamp, valueTombstoned) -> {
                         UIO.write(fos, new byte[]{0}, "eos");
                         UIO.writeByteArray(fos, key, "key", lengthBuffer);
                         UIO.writeByteArray(fos, value, "value", lengthBuffer);
-                        UIO.writeLong(fos, valueTimestamp, "valueTimestamp");
+                        UIO.writeLong(fos, valueTimestamp, "valueTimestamp", lengthBuffer);
                         UIO.write(fos, new byte[]{valueTombstoned ? (byte) 1 : (byte) 0}, "valueTombstoned");
                         return true;
                     });
@@ -247,7 +247,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
             (out) -> {
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);
-                    UIO.writeLong(fos, transactionId, "transactionId");
+                    UIO.writeLong(fos, transactionId, "transactionId", new byte[8]);
                 } finally {
                     out.close();
                 }
@@ -273,7 +273,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);
                     UIO.writeByteArray(fos, prefix, "prefix", intLongBuffer);
-                    UIO.writeLong(fos, transactionId, "transactionId");
+                    UIO.writeLong(fos, transactionId, "transactionId", intLongBuffer);
                 } finally {
                     out.close();
                 }

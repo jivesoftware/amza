@@ -16,10 +16,11 @@
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
+import com.jivesoftware.os.amza.api.PartitionClient.KeyValueFilter;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
@@ -40,11 +41,12 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
 import java.io.BufferedOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -58,7 +60,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.StreamingOutput;
-import org.glassfish.jersey.server.LatchChunkedOutput;
 import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
@@ -68,7 +69,8 @@ public class AmzaClientRestEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRestClient client;
     private final AmzaInterner amzaInterner;
-    private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("stream-chunks-%d").build());
+
+    private final Map<String, FilterClass> classLoaderCache = Maps.newConcurrentMap();
 
     public AmzaClientRestEndpoints(@Context AmzaRestClient client,
         @Context AmzaInterner amzaInterner) {
@@ -98,17 +100,24 @@ public class AmzaClientRestEndpoints {
         @PathParam("ringSize") int ringSize,
         PartitionProperties partitionProperties) {
 
-        PartitionName partitionName = null;
         try {
-            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
             RingTopology ringTopology = client.configPartition(partitionName, partitionProperties, ringSize);
-            LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
-            chunkedOutput.submit(chunkExecutors, partitionName, "configPartition", null, 4096, (partitionName1, in, out) -> {
-                client.configPartition(ringTopology, out);
-            });
-            return chunkedOutput;
+
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.configPartition(ringTopology, fos);
+                } catch (Exception x) {
+                    LOG.warn("Failed during configPartition", x);
+                } finally {
+                    closeStreams(partitionName, "configPartition", null, fos);
+                }
+            };
+            return Response.ok(stream).build();
         } catch (Exception e) {
-            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[] { partitionName, partitionProperties, ringSize }, e);
+            LOG.error("Failed while attempting to configPartition:{} {}", new Object[] { partitionProperties, ringSize }, e);
             return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
         }
     }
@@ -240,27 +249,32 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
-        PartitionName partitionName = null;
         try {
-            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
-        } catch (Exception x) {
-            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            StateMessageCause stateMessageCause = client.status(partitionName,
+                Consistency.valueOf(consistencyName),
+                checkLeader,
+                10_000);
+            if (stateMessageCause != null) {
+                return stateMessageCauseToResponse(stateMessageCause);
+            }
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerInputStream fin = new FilerInputStream(inputStream);
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.get(partitionName, Consistency.none, fin, fos);
+                } catch (Exception x) {
+                    LOG.warn("Failed during filtered stream scan", x);
+                } finally {
+                    closeStreams(partitionName, "getOffset", fin, fos);
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to get", e);
             return Response.serverError().build();
         }
-
-        StateMessageCause stateMessageCause = client.status(partitionName,
-            Consistency.valueOf(consistencyName),
-            checkLeader,
-            10_000);
-        if (stateMessageCause != null) {
-            return stateMessageCauseToResponse(stateMessageCause);
-        }
-
-        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
-        chunkedOutput.submit(chunkExecutors, partitionName, "get", new FilerInputStream(inputStream), 4096, (partitionName1, in, out) -> {
-            client.get(partitionName1, Consistency.none, in, out);
-        });
-        return chunkedOutput;
     }
 
     @POST
@@ -272,27 +286,32 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
-        PartitionName partitionName = null;
         try {
-            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
-        } catch (Exception x) {
-            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            StateMessageCause stateMessageCause = client.status(partitionName,
+                Consistency.valueOf(consistencyName),
+                checkLeader,
+                10_000);
+            if (stateMessageCause != null) {
+                return stateMessageCauseToResponse(stateMessageCause);
+            }
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerInputStream fin = new FilerInputStream(inputStream);
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.getOffset(partitionName, Consistency.none, fin, fos);
+                } catch (Exception x) {
+                    LOG.warn("Failed during get offset", x);
+                } finally {
+                    closeStreams(partitionName, "getOffset", fin, fos);
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to get offset", e);
             return Response.serverError().build();
         }
-
-        StateMessageCause stateMessageCause = client.status(partitionName,
-            Consistency.valueOf(consistencyName),
-            checkLeader,
-            10_000);
-        if (stateMessageCause != null) {
-            return stateMessageCauseToResponse(stateMessageCause);
-        }
-
-        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
-        chunkedOutput.submit(chunkExecutors, partitionName, "getOffset", new FilerInputStream(inputStream), 4096, (partitionName1, in, out) -> {
-            client.getOffset(partitionName1, Consistency.none, in, out);
-        });
-        return chunkedOutput;
     }
 
     @POST
@@ -312,7 +331,6 @@ public class AmzaClientRestEndpoints {
             LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
             return Response.serverError().build();
         }
-
 
         StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
@@ -346,11 +364,24 @@ public class AmzaClientRestEndpoints {
             closeStreams(partitionName, "scan", in, null);
         }
 
-        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
-        chunkedOutput.submit(chunkExecutors, partitionName, "scan", null, 4096, (partitionName1, in1, out) -> {
-            client.scan(partitionName1, ranges, out, hydrateValues);
-        });
-        return chunkedOutput;
+        try {
+            PartitionName effectivelyFinalPartitionName = partitionName;
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.scan(effectivelyFinalPartitionName, ranges, null, fos, hydrateValues);
+                } catch (Exception x) {
+                    LOG.warn("Failed during stream scan", x);
+                } finally {
+                    fos.close();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to stream scan", e);
+            return Response.serverError().build();
+        }
     }
 
     @POST
@@ -410,7 +441,7 @@ public class AmzaClientRestEndpoints {
                 SnappyOutputStream sos = new SnappyOutputStream(os);
                 FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(sos, 8192));
                 try {
-                    client.scan(effectivelyFinalPartitionName, ranges, fos, hydrateValues);
+                    client.scan(effectivelyFinalPartitionName, ranges, null, fos, hydrateValues);
                 } catch (Exception x) {
                     LOG.warn("Failed during compressed stream scan", x);
                 } finally {
@@ -427,9 +458,11 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/takeFromTransactionId/{base64PartitionName}/{limit}")
-    public Object takeFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
-        @PathParam("limit") int limit,
+    @Path("/scanFiltered/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
+    public Object scanFiltered(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
         InputStream inputStream) {
 
         PartitionName partitionName = null;
@@ -440,11 +473,203 @@ public class AmzaClientRestEndpoints {
             return Response.serverError().build();
         }
 
-        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
-        chunkedOutput.submit(chunkExecutors, partitionName, "takeFromTransactionId", new FilerInputStream(inputStream), 4096, (partitionName1, in, out) -> {
-            client.takeFromTransactionId(partitionName1, limit, in, out);
-        });
-        return chunkedOutput;
+        StateMessageCause stateMessageCause = client.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
+        }
+
+        List<ScanRange> ranges = Lists.newArrayList();
+        KeyValueFilter filter;
+
+        FilerInputStream in = new FilerInputStream(inputStream);
+        try {
+            byte[] intLongBuffer = new byte[8];
+
+            byte[] classNameBytes = UIO.readByteArray(in, "className", intLongBuffer);
+            byte[] classMD5 = UIO.readByteArray(in, "classMD5", intLongBuffer);
+            byte[] classBytes = UIO.readByteArray(in, "classBytes", intLongBuffer);
+
+            String className = new String(classNameBytes, StandardCharsets.UTF_8);
+            FilterClass filterClass = classLoaderCache.compute(className, (key, got) -> {
+                if (got != null && Arrays.equals(got.md5, classMD5)) {
+                    return got;
+                }
+                FilterClassLoader classLoader = new FilterClassLoader();
+                try {
+                    classLoader.defineClass(className, classBytes);
+                    return new FilterClass(classMD5, classLoader);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            filter = (KeyValueFilter) new ObjectInputStreamWithLoader(inputStream, filterClass.classLoader).readObject();
+
+            while (UIO.readByte(in, "eos") == (byte) 1) {
+                byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
+                byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
+                byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
+                byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
+
+                byte[] from = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+                byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
+                if (from != null && to != null && KeyUtil.compare(from, to) > 0) {
+                    return Response.status(Status.BAD_REQUEST).entity("Invalid range").build();
+                }
+                ranges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to get ranges for filtered stream scan", e);
+            return Response.serverError().build();
+        } finally {
+            closeStreams(partitionName, "scanFiltered", in, null);
+        }
+
+        try {
+            PartitionName effectivelyFinalPartitionName = partitionName;
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.scan(effectivelyFinalPartitionName, ranges, filter, fos, hydrateValues);
+                } catch (Exception x) {
+                    LOG.warn("Failed during filtered stream scan", x);
+                } finally {
+                    fos.close();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to filtered stream scan", e);
+            return Response.serverError().build();
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/scanFilteredCompressed/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
+    public Object scanFilteredCompressed(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+
+        PartitionName partitionName = null;
+        try {
+            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+        } catch (Exception x) {
+            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
+            return Response.serverError().build();
+        }
+
+        StateMessageCause stateMessageCause = client.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
+        }
+
+        List<ScanRange> ranges = Lists.newArrayList();
+        KeyValueFilter filter;
+
+        FilerInputStream in = new FilerInputStream(inputStream);
+        try {
+            byte[] intLongBuffer = new byte[8];
+
+            byte[] classNameBytes = UIO.readByteArray(in, "className", intLongBuffer);
+            byte[] classMD5 = UIO.readByteArray(in, "classMD5", intLongBuffer);
+            byte[] classBytes = UIO.readByteArray(in, "classBytes", intLongBuffer);
+
+            String className = new String(classNameBytes, StandardCharsets.UTF_8);
+            FilterClass filterClass = classLoaderCache.compute(className, (key, got) -> {
+                if (got != null && Arrays.equals(got.md5, classMD5)) {
+                    return got;
+                }
+                FilterClassLoader classLoader = new FilterClassLoader();
+                try {
+                    classLoader.defineClass(className, classBytes);
+                    return new FilterClass(classMD5, classLoader);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            filter = (KeyValueFilter) new ObjectInputStreamWithLoader(inputStream, filterClass.classLoader).readObject();
+
+            while (UIO.readByte(in, "eos") == (byte) 1) {
+                byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
+                byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
+                byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
+                byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
+
+                byte[] from = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+                byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
+                if (from != null && to != null && KeyUtil.compare(from, to) > 0) {
+                    return Response.status(Status.BAD_REQUEST).entity("Invalid range").build();
+                }
+                ranges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to get ranges for filtered compressed stream scan", e);
+            return Response.serverError().build();
+        } finally {
+            closeStreams(partitionName, "scanFilteredCompressed", in, null);
+        }
+
+        try {
+            PartitionName effectivelyFinalPartitionName = partitionName;
+            StreamingOutput stream = os -> {
+                os.flush();
+                SnappyOutputStream sos = new SnappyOutputStream(os);
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(sos, 8192));
+                try {
+                    client.scan(effectivelyFinalPartitionName, ranges, filter, fos, hydrateValues);
+                } catch (Exception x) {
+                    LOG.warn("Failed during filtered compressed stream scan", x);
+                } finally {
+                    fos.close();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to filtered compressed stream scan", e);
+            return Response.serverError().build();
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/takeFromTransactionId/{base64PartitionName}/{limit}")
+    public Object takeFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("limit") int limit,
+        InputStream inputStream) {
+
+        try {
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerInputStream fin = new FilerInputStream(inputStream);
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.takeFromTransactionId(partitionName, limit, fin, fos);
+                } catch (Exception x) {
+                    LOG.warn("Failed during takeFromTransactionId", x);
+                } finally {
+                    closeStreams(partitionName, "takeFromTransactionId", fin, fos);
+                    fos.close();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to takeFromTransactionId", e);
+            return Response.serverError().build();
+        }
     }
 
     @POST
@@ -455,20 +680,26 @@ public class AmzaClientRestEndpoints {
         @PathParam("limit") int limit,
         InputStream inputStream) {
 
-        PartitionName partitionName = null;
         try {
-            partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
-        } catch (Exception x) {
-            LOG.error("Failure while getting partitionName {}", new Object[] { partitionName }, x);
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            StreamingOutput stream = os -> {
+                os.flush();
+                FilerInputStream fin = new FilerInputStream(inputStream);
+                FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
+                try {
+                    client.takePrefixFromTransactionId(partitionName, limit, fin, fos);
+                } catch (Exception x) {
+                    LOG.warn("Failed during takeFromTransactionId", x);
+                } finally {
+                    closeStreams(partitionName, "takePrefixFromTransactionId", fin, fos);
+                    fos.close();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception e) {
+            LOG.error("Failed to takePrefixFromTransactionId", e);
             return Response.serverError().build();
         }
-
-        LatchChunkedOutput chunkedOutput = new LatchChunkedOutput(10_000);
-        chunkedOutput.submit(chunkExecutors, partitionName, "takePrefixFromTransactionId", new FilerInputStream(inputStream), 4096,
-            (partitionName1, in, out) -> {
-                client.takePrefixFromTransactionId(partitionName1, limit, in, out);
-            });
-        return chunkedOutput;
     }
 
     private void closeStreams(PartitionName partitionName, String context, ICloseable in, ICloseable out) {

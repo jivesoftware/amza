@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.jivesoftware.os.amza.api.PartitionClient.KeyValueFilter;
 import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -129,6 +130,7 @@ public class AmzaPartitionClientTest {
             Consistency consistency,
             boolean compressed,
             PrefixedKeyRanges ranges,
+            KeyValueFilter filter,
             boolean hydrateValues) throws Exception {
 
             ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();

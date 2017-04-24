@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.jivesoftware.os.amza.api.PartitionClient.KeyValueFilter;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
@@ -41,6 +42,7 @@ public interface RemotePartitionCaller<C, E extends Throwable> {
         Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
+        KeyValueFilter filter,
         boolean hydrateValues) throws E;
 
     PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader,

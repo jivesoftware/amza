@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -77,6 +78,20 @@ public interface PartitionClient {
     boolean scan(Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
+        KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception;
+
+    interface KeyValueFilter extends Serializable {
+        boolean filter(byte[] prefix, byte[] key, byte[] value, long timestamp, boolean tombstoned, long version, KeyValueStream stream) throws Exception;
+    }
+
+    boolean scanFiltered(Consistency consistency,
+        boolean compressed,
+        PrefixedKeyRanges ranges,
+        KeyValueFilter filter,
         KeyValueTimestampStream scan,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,

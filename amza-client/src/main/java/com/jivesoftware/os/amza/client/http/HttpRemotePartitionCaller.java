@@ -1,6 +1,9 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.google.common.collect.Maps;
+import com.google.common.io.ByteStreams;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
+import com.jivesoftware.os.amza.api.PartitionClient.KeyValueFilter;
 import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -15,11 +18,16 @@ import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderExceptio
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.shared.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
+import com.jivesoftware.os.routing.bird.shared.HttpClientException;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.ObjectOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import javax.ws.rs.core.Response;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.http.HttpStatus;
 
 /**
@@ -33,6 +41,8 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
     private final RouteInvalidator routeInvalidator;
     private final PartitionName partitionName;
     private final String base64PartitionName;
+
+    private final Map<String, ClassMD5Bytes> filterClassCache = Maps.newConcurrentMap();
 
     public HttpRemotePartitionCaller(RouteInvalidator routeInvalidator,
         PartitionName partitionName) {
@@ -168,16 +178,43 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
+        KeyValueFilter filter,
         boolean hydrateValues) throws HttpClientException {
 
         byte[] intLongBuffer = new byte[8];
 
-        String pathPrefix = compressed ? "/amza/v1/scanCompressed/" : "/amza/v1/scan/";
+        String pathPrefix =  (filter != null && compressed) ? "/amza/v1/scanFilteredCompressed/"
+            : compressed ? "/amza/v1/scanCompressed/"
+            : filter != null ? "/amza/v1/scanFiltered/"
+            : "/amza/v1/scan/";
         HttpStreamResponse got = client.streamingPostStreamableRequest(
             pathPrefix + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader) + "/" + hydrateValues,
             (out) -> {
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);
+                    if (filter != null) {
+                        Class<? extends KeyValueFilter> c = filter.getClass();
+                        String className = c.getName();
+
+                        ClassMD5Bytes classMD5Bytes = filterClassCache.computeIfAbsent(className, aClass -> {
+                            String classAsPath = className.replace('.', '/') + ".class";
+                            try (InputStream stream = c.getClassLoader().getResourceAsStream(classAsPath)) {
+                                try (ByteArrayOutputStream classOut = new ByteArrayOutputStream()) {
+                                    ByteStreams.copy(stream, classOut);
+                                    byte[] bytes = classOut.toByteArray();
+                                    byte[] md5 = DigestUtils.md5(bytes);
+                                    return new ClassMD5Bytes(md5, bytes);
+                                }
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        });
+
+                        UIO.writeByteArray(fos, className.getBytes(StandardCharsets.UTF_8), "className", intLongBuffer);
+                        UIO.writeByteArray(fos, classMD5Bytes.md5, "classMD5", intLongBuffer);
+                        UIO.writeByteArray(fos, classMD5Bytes.bytes, "classBytes", intLongBuffer);
+                        new ObjectOutputStream(out).writeObject(filter);
+                    }
                     ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
                         UIO.writeByte(fos, (byte) 1, "eos");
                         UIO.writeByteArray(fos, fromPrefix, "fromPrefix", intLongBuffer);

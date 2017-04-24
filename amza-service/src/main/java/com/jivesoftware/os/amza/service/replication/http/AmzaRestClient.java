@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
+import com.jivesoftware.os.amza.api.PartitionClient.KeyValueFilter;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
@@ -39,7 +40,7 @@ public interface AmzaRestClient {
 
     void ring(RingLeader ringLeader, IWriteable writeable) throws IOException;
 
-    void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out, boolean hydrateValues) throws Exception;
+    void scan(PartitionName partitionName, List<ScanRange> ranges, KeyValueFilter filter, IWriteable out, boolean hydrateValues) throws Exception;
 
     StateMessageCause status(PartitionName partitionName, Consistency consistency, boolean checkLeader, long partitionAwaitOnlineTimeoutMillis);
 

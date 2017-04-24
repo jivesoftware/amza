@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
+import com.jivesoftware.os.amza.api.PartitionClient.KeyValueFilter;
 import com.jivesoftware.os.amza.api.RingPartitionProperties;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
@@ -9,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
@@ -223,25 +225,30 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public void scan(PartitionName partitionName, List<ScanRange> ranges, IWriteable out, boolean hydrateValues) throws Exception {
+    public void scan(PartitionName partitionName, List<ScanRange> ranges, KeyValueFilter filter, IWriteable out, boolean hydrateValues) throws Exception {
 
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
 
-        partition.scan(ranges, true, hydrateValues,
-            (prefix, key, value, timestamp, tombstoned, version) -> {
-                UIO.writeByte(out, (byte) 0, "eos");
-                UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);
-                UIO.writeByteArray(out, key, "key", intLongBuffer);
-                if (hydrateValues) {
-                    UIO.writeByteArray(out, value, "value", intLongBuffer);
-                }
-                UIO.writeLong(out, timestamp, "timestamp");
-                UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
-                UIO.writeLong(out, version, "version");
-                return true;
+        KeyValueStream keyValueStream = (prefix, key, value, timestamp, tombstoned, version) -> {
+            UIO.writeByte(out, (byte) 0, "eos");
+            UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);
+            UIO.writeByteArray(out, key, "key", intLongBuffer);
+            if (hydrateValues) {
+                UIO.writeByteArray(out, value, "value", intLongBuffer);
+            }
+            UIO.writeLong(out, timestamp, "timestamp");
+            UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
+            UIO.writeLong(out, version, "version");
+            return true;
+        };
+        if (filter != null) {
+            partition.scan(ranges, true, hydrateValues, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                return filter.filter(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, keyValueStream);
             });
-
+        } else {
+            partition.scan(ranges, true, hydrateValues, keyValueStream);
+        }
         UIO.writeByte(out, (byte) 1, "eos");
     }
 

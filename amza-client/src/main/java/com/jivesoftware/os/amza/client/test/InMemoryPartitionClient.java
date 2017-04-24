@@ -153,7 +153,36 @@ public class InMemoryPartitionClient implements PartitionClient {
     @Override
     public boolean scan(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan, long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
-        return scanInternal(consistency, compressed, ranges, scan, true, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis,
+        return scanInternal(consistency,
+            compressed,
+            ranges,
+            null,
+            scan,
+            true,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis,
+            solutionLog);
+    }
+
+    @Override
+    public boolean scanFiltered(Consistency consistency,
+        boolean compressed,
+        PrefixedKeyRanges ranges,
+        KeyValueFilter filter,
+        KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+        return scanInternal(consistency,
+            compressed,
+            ranges,
+            filter,
+            scan,
+            true,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             solutionLog);
     }
@@ -162,7 +191,13 @@ public class InMemoryPartitionClient implements PartitionClient {
     public boolean scanKeys(Consistency consistency, boolean compressed, PrefixedKeyRanges ranges, KeyValueTimestampStream scan,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis, long abandonSolutionAfterNMillis, Optional<List<String>> solutionLog) throws Exception {
-        return scanInternal(consistency, compressed, ranges, scan, false, additionalSolverAfterNMillis, abandonLeaderSolutionAfterNMillis,
+        return scanInternal(consistency, compressed,
+            ranges,
+            null,
+            scan,
+            false,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
             abandonSolutionAfterNMillis,
             solutionLog);
     }
@@ -170,6 +205,7 @@ public class InMemoryPartitionClient implements PartitionClient {
     private boolean scanInternal(Consistency consistency,
         boolean compressed,
         PrefixedKeyRanges ranges,
+        KeyValueFilter filter,
         KeyValueTimestampStream scan,
         boolean hydrateValues,
         long additionalSolverAfterNMillis,
@@ -177,6 +213,10 @@ public class InMemoryPartitionClient implements PartitionClient {
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
 
+        KeyValueStream filterStream = filter == null ? null : (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            // valueTombstoned will be false
+            return scan.stream(prefix, key, value, valueTimestamp, valueVersion);
+        };
         return ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
             Set<Map.Entry<byte[], WALValue>> entries;
             if (fromKey == null && toKey == null) {
@@ -194,7 +234,12 @@ public class InMemoryPartitionClient implements PartitionClient {
                 byte[] key = WALKey.rawKeyKey(rawKey);
                 WALValue value = entry.getValue();
                 if (value.getTimestampId() != -1 && !value.getTombstoned()) {
-                    if (!scan.stream(prefix, key, hydrateValues ? value.getValue() : null, value.getTimestampId(), value.getVersion())) {
+                    byte[] v = hydrateValues ? value.getValue() : null;
+                    if (filter != null) {
+                        if (!filter.filter(prefix, key, v, value.getTimestampId(), false, value.getVersion(), filterStream)) {
+                            return false;
+                        }
+                    } else if (!scan.stream(prefix, key, v, value.getTimestampId(), value.getVersion())) {
                         return false;
                     }
                 }

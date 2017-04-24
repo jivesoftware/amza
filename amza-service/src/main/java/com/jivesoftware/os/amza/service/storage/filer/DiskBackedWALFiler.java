@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.service.storage.filer;
 import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.service.filer.FileBackedMemMappedByteBufferFactory;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.api.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.filer.SingleAutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;

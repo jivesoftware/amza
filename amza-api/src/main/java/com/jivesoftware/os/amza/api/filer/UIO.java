@@ -94,17 +94,17 @@ public class UIO {
      * @throws IOException
      */
     public static void writeLong(IAppendOnly _filer, long v,
-        String fieldName) throws IOException {
-        _filer.write(new byte[]{
-            (byte) (v >>> 56),
-            (byte) (v >>> 48),
-            (byte) (v >>> 40),
-            (byte) (v >>> 32),
-            (byte) (v >>> 24),
-            (byte) (v >>> 16),
-            (byte) (v >>> 8),
-            (byte) v
-        }, 0, 8);
+        String fieldName, byte[] longBuffer) throws IOException {
+        longBuffer[0] = (byte) (v >>> 56);
+        longBuffer[1] = (byte) (v >>> 48);
+        longBuffer[2] = (byte) (v >>> 40);
+        longBuffer[3] = (byte) (v >>> 32);
+        longBuffer[4] = (byte) (v >>> 24);
+        longBuffer[5] = (byte) (v >>> 16);
+        longBuffer[6] = (byte) (v >>> 8);
+        longBuffer[7] = (byte) (v);
+
+        _filer.write(longBuffer, 0, 8);
     }
 
     /**

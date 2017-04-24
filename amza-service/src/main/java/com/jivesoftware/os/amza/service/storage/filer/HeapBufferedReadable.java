@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.api.filer.HeapFiler;
 import java.io.IOException;
 
 /**

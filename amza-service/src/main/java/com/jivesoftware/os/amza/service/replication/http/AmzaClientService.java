@@ -166,9 +166,9 @@ public class AmzaClientService implements AmzaRestClient {
                 UIO.writeByteArray(out, prefix1, "prefix", intLongBuffer);
                 UIO.writeByteArray(out, key, "key", intLongBuffer);
                 UIO.writeByteArray(out, value, "value", intLongBuffer);
-                UIO.writeLong(out, timestamp, "timestamp");
+                UIO.writeLong(out, timestamp, "timestamp", intLongBuffer);
                 UIO.writeByte(out, (byte) (tombstoned ? 1 : 0), "tombstoned");
-                UIO.writeLong(out, version, "version");
+                UIO.writeLong(out, version, "version", intLongBuffer);
                 return true;
             });
 
@@ -215,9 +215,9 @@ public class AmzaClientService implements AmzaRestClient {
                     UIO.writeByteArray(out, value, offset, available, "value", intLongBuffer);
                 }
 
-                UIO.writeLong(out, timestamp, "timestamp");
+                UIO.writeLong(out, timestamp, "timestamp", intLongBuffer);
                 UIO.writeByte(out, (byte) (tombstoned ? 1 : 0), "tombstoned");
-                UIO.writeLong(out, version, "version");
+                UIO.writeLong(out, version, "version", intLongBuffer);
                 return true;
             });
 
@@ -237,9 +237,9 @@ public class AmzaClientService implements AmzaRestClient {
             if (hydrateValues) {
                 UIO.writeByteArray(out, value, "value", intLongBuffer);
             }
-            UIO.writeLong(out, timestamp, "timestamp");
+            UIO.writeLong(out, timestamp, "timestamp", intLongBuffer);
             UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
-            UIO.writeLong(out, version, "version");
+            UIO.writeLong(out, version, "version", intLongBuffer);
             return true;
         };
         if (filter != null) {
@@ -294,13 +294,13 @@ public class AmzaClientService implements AmzaRestClient {
         TxKeyValueStream stream = (rowTxId, prefix1, key, value, timestamp, tombstoned, version) -> {
             UIO.writeByte(out, (byte) 0, "eos");
             UIO.writeByte(out, RowType.primary.toByte(), "type");
-            UIO.writeLong(out, rowTxId, "rowTxId");
+            UIO.writeLong(out, rowTxId, "rowTxId", lengthBuffer);
             UIO.writeByteArray(out, prefix1, "prefix", lengthBuffer);
             UIO.writeByteArray(out, key, "key", lengthBuffer);
             UIO.writeByteArray(out, value, "value", lengthBuffer);
-            UIO.writeLong(out, timestamp, "timestamp");
+            UIO.writeLong(out, timestamp, "timestamp", lengthBuffer);
             UIO.writeByte(out, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
-            UIO.writeLong(out, version, "version");
+            UIO.writeLong(out, version, "version", lengthBuffer);
 
             count[0]++;
             return (limit > 0 && count[0] >= limit) ? TxResult.ACCEPT_AND_STOP : TxResult.MORE;
@@ -314,7 +314,7 @@ public class AmzaClientService implements AmzaRestClient {
         UIO.writeByte(out, (byte) 1, "eos");
 
         UIO.writeByteArray(out, takeResult.tookFrom.toBytes(), "ringMember", lengthBuffer);
-        UIO.writeLong(out, takeResult.lastTxId, "lastTxId");
+        UIO.writeLong(out, takeResult.lastTxId, "lastTxId", lengthBuffer);
         writeHighwaters(out, takeResult.tookToEnd, lengthBuffer);
         UIO.writeByte(out, (byte) 1, "eos");
     }
@@ -326,7 +326,7 @@ public class AmzaClientService implements AmzaRestClient {
             UIO.writeInt(out, highwater.ringMemberHighwater.size(), "length", lengthBuffer);
             for (WALHighwater.RingMemberHighwater ringMemberHighwater : highwater.ringMemberHighwater) {
                 UIO.writeByteArray(out, ringMemberHighwater.ringMember.toBytes(), "ringMember", lengthBuffer);
-                UIO.writeLong(out, ringMemberHighwater.transactionId, "txId");
+                UIO.writeLong(out, ringMemberHighwater.transactionId, "txId", lengthBuffer);
             }
         }
     }

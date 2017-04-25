@@ -8,6 +8,8 @@ import java.io.IOException;
  */
 public interface IAppendOnly extends ICloseable, IFilePointer {
 
+    void write(byte b) throws IOException;
+
     /**
      *
      * @param b
@@ -15,11 +17,11 @@ public interface IAppendOnly extends ICloseable, IFilePointer {
      * @param _len
      * @throws IOException
      */
-    public void write(byte b[], int _offset, int _len) throws IOException;
+     void write(byte b[], int _offset, int _len) throws IOException;
 
     /**
      *
      * @throws IOException
      */
-    public void flush(boolean fsync) throws IOException;
+     void flush(boolean fsync) throws IOException;
 }

@@ -112,6 +112,18 @@ public class DiskBackedWALFiler implements WALFiler {
         return new IAppendOnly() {
 
             @Override
+            public void write(byte b) throws IOException {
+                if (filer != null) {
+                    filer.write(b);
+                    if (filer.length() > bufferSize) {
+                        flush(false);
+                    }
+                } else {
+                    DiskBackedWALFiler.this.write(b);
+                }
+            }
+
+            @Override
             public void write(byte[] b, int _offset, int _len) throws IOException {
                 if (filer != null) {
                     filer.write(b, _offset, _len);
@@ -188,6 +200,18 @@ public class DiskBackedWALFiler implements WALFiler {
     @Override
     public long length() throws IOException {
         return size.get();
+    }
+
+    private void write(byte b) throws IOException {
+        while (!closed.get()) {
+            try {
+                randomAccessFile.write(b);
+                size.addAndGet(1);
+                break;
+            } catch (ClosedChannelException e) {
+                ensureOpen();
+            }
+        }
     }
 
     private void write(byte[] b, int _offset, int _len) throws IOException {

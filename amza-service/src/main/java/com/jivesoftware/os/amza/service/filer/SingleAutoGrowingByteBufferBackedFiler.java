@@ -204,6 +204,22 @@ public class SingleAutoGrowingByteBufferBackedFiler implements IFiler {
         return offset;
     }
 
+
+    @Override
+    public void write(byte b) throws IOException {
+        int len = 1;
+        ensure(len);
+        long canWrite = Math.min(len, filers[fpFilerIndex].length() - filers[fpFilerIndex].getFilePointer());
+        if (canWrite > 0) {
+            filers[fpFilerIndex].write(b);
+        } else {
+            fpFilerIndex++;
+            filers[fpFilerIndex].seek(0);
+            filers[fpFilerIndex].write(b);
+        }
+        length += 1;
+    }
+
     @Override
     public void write(byte[] b, int offset, int len) throws IOException {
         long count = ensure(len);

@@ -250,6 +250,7 @@ public class AmzaClientService implements AmzaRestClient {
                 scannedValuesCostInBytes[1] += value != null ? value.length : 0;
                 return filter.filter(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, keyValueStream);
             });
+
             LOG.inc("scan>filtered>calls");
             LOG.inc("scan>filtered>bytes>saved", scannedValuesCostInBytes[1] - scannedValuesCostInBytes[0]);
             LOG.inc("scan>filtered>bytes>total", scannedValuesCostInBytes[0]);

@@ -117,6 +117,16 @@ public class HeapFiler implements IFiler {
     }
 
     @Override
+    public void write(byte b) throws IOException {
+        if (fp + 1 > bytes.length) {
+            bytes = grow(bytes, Math.max((int) ((fp + 1) - bytes.length), bytes.length));
+        }
+        bytes[(int)fp] = b;
+        fp += 1;
+        maxLength = Math.max(maxLength, fp);
+    }
+
+    @Override
     public void write(byte _b[], int _offset, int _len) throws IOException {
         if (_b == null) {
             return;

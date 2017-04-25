@@ -18,6 +18,13 @@ public class MemoryBackedWALFiler implements WALFiler {
     public MemoryBackedWALFiler(MultiAutoGrowingByteBufferBackedFiler filer) {
         this.filer = filer;
         this.appendOnly = new IAppendOnly() {
+
+            @Override
+            public void write(byte b) throws IOException {
+                filer.write(b);
+                size.addAndGet(1);
+            }
+
             @Override
             public void write(byte[] b, int _offset, int _len) throws IOException {
                 filer.write(b, _offset, _len);

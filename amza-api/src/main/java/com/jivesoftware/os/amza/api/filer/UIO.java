@@ -67,7 +67,7 @@ public class UIO {
      */
     public static void writeByte(IAppendOnly _filer, byte v,
         String fieldName) throws IOException {
-        _filer.write(new byte[]{v}, 0, 1);
+        _filer.write(v);
     }
 
     /**

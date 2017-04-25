@@ -230,7 +230,9 @@ public class AmzaClientService implements AmzaRestClient {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
 
+        long[] scannedValuesCostInBytes = new long[2];
         KeyValueStream keyValueStream = (prefix, key, value, timestamp, tombstoned, version) -> {
+            scannedValuesCostInBytes[0] += value != null ? value.length : 0;
             UIO.writeByte(out, (byte) 0, "eos");
             UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);
             UIO.writeByteArray(out, key, "key", intLongBuffer);
@@ -243,11 +245,19 @@ public class AmzaClientService implements AmzaRestClient {
             return true;
         };
         if (filter != null) {
+
             partition.scan(ranges, true, hydrateValues, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                scannedValuesCostInBytes[1] += value != null ? value.length : 0;
                 return filter.filter(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, keyValueStream);
             });
+            LOG.inc("scan>filtered>calls");
+            LOG.inc("scan>filtered>bytes>saved", scannedValuesCostInBytes[1] - scannedValuesCostInBytes[0]);
+            LOG.inc("scan>filtered>bytes>total", scannedValuesCostInBytes[0]);
+            LOG.inc("scan>filtered>bytes>original", scannedValuesCostInBytes[1]);
+            LOG.inc("scan>filtered>bytes>pow>" + UIO.chunkPower(scannedValuesCostInBytes[0], 0));
         } else {
             partition.scan(ranges, true, hydrateValues, keyValueStream);
+            LOG.inc("scan>unfiltered>bytes>pow>" + UIO.chunkPower(scannedValuesCostInBytes[0], 0));
         }
         UIO.writeByte(out, (byte) 1, "eos");
     }

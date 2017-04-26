@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
-import com.jivesoftware.os.amza.api.stream.OffsetUnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
@@ -22,7 +22,7 @@ public interface Partition {
 
     boolean get(Consistency consistency, byte[] prefix, boolean requiresOnline, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
 
-    boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception;
+    boolean scan(PrefixedKeyRanges ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception;
 
     TakeResult takeFromTransactionId(long txId,
         boolean requiresOnline,

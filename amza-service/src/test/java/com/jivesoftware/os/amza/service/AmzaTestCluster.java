@@ -41,7 +41,6 @@ import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedClientProvider.CheckOnline;
-import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -586,12 +585,15 @@ public class AmzaTestCluster {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
                     int[] count = { 0 };
-                    partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), true, true, (prefix, key, value, timestamp, tombstoned, version) -> {
-                        if (!tombstoned) {
-                            count[0]++;
-                        }
-                        return true;
-                    });
+                    partition.scan(stream -> stream.stream(null, null, null, null),
+                        true,
+                        true,
+                        (prefix, key, value, timestamp, tombstoned, version) -> {
+                            if (!tombstoned) {
+                                count[0]++;
+                            }
+                            return true;
+                        });
                     if (count[0] > 0) {
                         return false;
                     }
@@ -685,7 +687,7 @@ public class AmzaTestCluster {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
             try {
-                a.scan(Collections.singletonList(ScanRange.ROW_SCAN),
+                a.scan(stream -> stream.stream(null, null, null, null),
                     true,
                     true,
                     (prefix, key, aValue, aTimestamp, aTombstoned, aVersion) -> {

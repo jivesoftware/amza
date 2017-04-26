@@ -183,10 +183,10 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
 
         byte[] intLongBuffer = new byte[8];
 
-        String pathPrefix =  (filter != null && compressed) ? "/amza/v1/scanFilteredCompressed/"
-            : compressed ? "/amza/v1/scanCompressed/"
-            : filter != null ? "/amza/v1/scanFiltered/"
-            : "/amza/v1/scan/";
+        String pathPrefix =  (filter != null && compressed) ? "/amza/v1/multiScanFilteredCompressed/"
+            : compressed ? "/amza/v1/multiScanCompressed/"
+            : filter != null ? "/amza/v1/multiScanFiltered/"
+            : "/amza/v1/multiScan/";
         HttpStreamResponse got = client.streamingPostStreamableRequest(
             pathPrefix + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader) + "/" + hydrateValues,
             (out) -> {

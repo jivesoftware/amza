@@ -314,11 +314,16 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
     private static final HealthTimer scanKeysResponseLatency = HealthFactory.getHealthTimer(ScanKeysResponseLatency.class, TimerHealthChecker.FACTORY);
 
     @Override
-    public void scan(PartitionName partitionName, List<ScanRange> ranges, KeyValueFilter filter, IWriteable out, boolean hydrateValues) throws Exception {
+    public void scan(PartitionName partitionName,
+        List<ScanRange> ranges,
+        boolean rangeBoundaries,
+        KeyValueFilter filter,
+        IWriteable out,
+        boolean hydrateValues) throws Exception {
         HealthTimer timer = hydrateValues ? scanResponseLatency : scanKeysResponseLatency;
         try {
             timer.startTimer();
-            client.scan(partitionName, ranges, filter, out, hydrateValues);
+            client.scan(partitionName, ranges, rangeBoundaries, filter, out, hydrateValues);
         } finally {
             timer.stopTimer("Ensure", "Check cluster health.");
         }

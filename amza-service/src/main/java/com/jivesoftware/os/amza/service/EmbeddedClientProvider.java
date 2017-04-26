@@ -100,7 +100,17 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
 
         public void scan(Iterable<ScanRange> ranges,
             KeyValueTimestampStream stream, boolean hydrateValues) throws Exception {
-            partitionProvider.getPartition(partitionName).scan(ranges, hydrateValues, requiresOnline.get(),
+            partitionProvider.getPartition(partitionName).scan(
+                keyRangeStream -> {
+                    for (ScanRange range : ranges) {
+                        if (!keyRangeStream.stream(range.fromPrefix, range.fromKey, range.toPrefix, range.toKey)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                },
+                hydrateValues,
+                requiresOnline.get(),
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
                 });

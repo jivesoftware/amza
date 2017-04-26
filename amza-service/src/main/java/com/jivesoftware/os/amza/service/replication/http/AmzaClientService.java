@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
@@ -225,12 +226,40 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public void scan(PartitionName partitionName, List<ScanRange> ranges, KeyValueFilter filter, IWriteable out, boolean hydrateValues) throws Exception {
+    public void scan(PartitionName partitionName,
+        List<ScanRange> ranges,
+        boolean rangeBoundaries,
+        KeyValueFilter filter,
+        IWriteable out,
+        boolean hydrateValues) throws Exception {
 
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
 
         long[] scannedValuesCostInBytes = new long[2];
+        PrefixedKeyRanges prefixedKeyRanges = stream -> {
+            if (rangeBoundaries) {
+                for (ScanRange range : ranges) {
+                    UIO.writeByte(out, (byte) 0, "eosRange");
+                    boolean result = stream.stream(range.fromPrefix, range.fromKey, range.toPrefix, range.toKey);
+                    UIO.writeByte(out, (byte) 1, "eos");
+                    if (!result) {
+                        UIO.writeByte(out, (byte) 1, "eosRange");
+                        return false;
+                    }
+                }
+                UIO.writeByte(out, (byte) 1, "eosRange");
+            } else {
+                for (ScanRange range : ranges) {
+                    if (!stream.stream(range.fromPrefix, range.fromKey, range.toPrefix, range.toKey)) {
+                        UIO.writeByte(out, (byte) 1, "eos");
+                        return false;
+                    }
+                }
+                UIO.writeByte(out, (byte) 1, "eos");
+            }
+            return true;
+        };
         KeyValueStream keyValueStream = (prefix, key, value, timestamp, tombstoned, version) -> {
             scannedValuesCostInBytes[0] += value != null ? value.length : 0;
             UIO.writeByte(out, (byte) 0, "eos");
@@ -245,11 +274,14 @@ public class AmzaClientService implements AmzaRestClient {
             return true;
         };
         if (filter != null) {
-
-            partition.scan(ranges, true, hydrateValues, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                scannedValuesCostInBytes[1] += value != null ? value.length : 0;
-                return filter.filter(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, keyValueStream);
-            });
+            partition.scan(
+                prefixedKeyRanges,
+                true,
+                hydrateValues,
+                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    scannedValuesCostInBytes[1] += value != null ? value.length : 0;
+                    return filter.filter(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, keyValueStream);
+                });
 
             LOG.inc("scan>filtered>calls");
             LOG.inc("scan>filtered>bytes>saved", scannedValuesCostInBytes[1] - scannedValuesCostInBytes[0]);
@@ -257,10 +289,9 @@ public class AmzaClientService implements AmzaRestClient {
             LOG.inc("scan>filtered>bytes>original", scannedValuesCostInBytes[1]);
             LOG.inc("scan>filtered>bytes>pow>" + UIO.chunkPower(scannedValuesCostInBytes[0], 0));
         } else {
-            partition.scan(ranges, true, hydrateValues, keyValueStream);
+            partition.scan(prefixedKeyRanges, true, hydrateValues, keyValueStream);
             LOG.inc("scan>unfiltered>bytes>pow>" + UIO.chunkPower(scannedValuesCostInBytes[0], 0));
         }
-        UIO.writeByte(out, (byte) 1, "eos");
     }
 
     @Override

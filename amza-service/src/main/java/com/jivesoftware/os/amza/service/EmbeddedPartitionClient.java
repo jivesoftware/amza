@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service;
 
-import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -14,7 +13,6 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
-import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayDeque;
@@ -189,22 +187,17 @@ public class EmbeddedPartitionClient implements PartitionClient {
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
 
-        List<ScanRange> scanRanges = Lists.newArrayList();
-        ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
-            scanRanges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
-            return true;
-        });
         if (filter != null) {
             KeyValueStream filterStream = (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 // valueTombstoned will be false
                 return stream.stream(prefix, key, value, valueTimestamp, valueVersion);
             };
-            return partition.scan(scanRanges, hydrateValues, true,
+            return partition.scan(ranges, hydrateValues, true,
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     return valueTombstoned || filter.filter(prefix, key, value, valueTimestamp, false, valueVersion, filterStream);
                 });
         } else {
-            return partition.scan(scanRanges, hydrateValues, true,
+            return partition.scan(ranges, hydrateValues, true,
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     return valueTombstoned || stream.stream(prefix, key, value, valueTimestamp, valueVersion);
                 });

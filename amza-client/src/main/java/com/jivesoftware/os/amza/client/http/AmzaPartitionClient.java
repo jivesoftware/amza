@@ -381,35 +381,50 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                 }));
                 int size = streams.size();
                 if (merge && size > 1) {
-                    boolean[] eos = new boolean[size];
-                    QuorumScan quorumScan = new QuorumScan(size);
-                    int eosed = 0;
-                    while (eosed < size) {
+                    while (true) {
+                        int eosRange = 0;
                         for (int i = 0; i < size; i++) {
-                            if (quorumScan.used(i) && !eos[i]) {
-                                FilerInputStream fis = streams.get(i);
-                                eos[i] = UIO.readBoolean(fis, "eos");
-                                if (!eos[i]) {
-                                    quorumScan.fill(i, UIO.readByteArray(fis, "prefix", intLongBuffer),
-                                        UIO.readByteArray(fis, "key", intLongBuffer),
-                                        hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null,
-                                        UIO.readLong(fis, "timestamp", intLongBuffer),
-                                        UIO.readBoolean(fis, "tombstone"),
-                                        UIO.readLong(fis, "version", intLongBuffer));
-                                } else {
-                                    eosed++;
-                                }
+                            FilerInputStream fis = streams.get(i);
+                            if (UIO.readBoolean(fis, "eosRange")) {
+                                eosRange++;
                             }
                         }
-                        int wi = quorumScan.findWinningIndex();
-                        if (wi == -1 || !quorumScan.stream(wi, keyValueStream)) {
-                            return false;
+                        if (eosRange == size) {
+                            break;
+                        } else if (eosRange > 0) {
+                            throw new IllegalStateException("Answers returned mismatched ranges");
                         }
-                    }
-                    int wi;
-                    while ((wi = quorumScan.findWinningIndex()) > -1) {
-                        if (!quorumScan.stream(wi, keyValueStream)) {
-                            return false;
+
+                        boolean[] eos = new boolean[size];
+                        QuorumScan quorumScan = new QuorumScan(size);
+                        int eosed = 0;
+                        while (eosed < size) {
+                            for (int i = 0; i < size; i++) {
+                                if (quorumScan.used(i) && !eos[i]) {
+                                    FilerInputStream fis = streams.get(i);
+                                    eos[i] = UIO.readBoolean(fis, "eos");
+                                    if (!eos[i]) {
+                                        quorumScan.fill(i, UIO.readByteArray(fis, "prefix", intLongBuffer),
+                                            UIO.readByteArray(fis, "key", intLongBuffer),
+                                            hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null,
+                                            UIO.readLong(fis, "timestamp", intLongBuffer),
+                                            UIO.readBoolean(fis, "tombstone"),
+                                            UIO.readLong(fis, "version", intLongBuffer));
+                                    } else {
+                                        eosed++;
+                                    }
+                                }
+                            }
+                            int wi = quorumScan.findWinningIndex();
+                            if (wi == -1 || !quorumScan.stream(wi, keyValueStream)) {
+                                return false;
+                            }
+                        }
+                        int wi;
+                        while ((wi = quorumScan.findWinningIndex()) > -1) {
+                            if (!quorumScan.stream(wi, keyValueStream)) {
+                                return false;
+                            }
                         }
                     }
                     LOG.debug("Merged {}", answers.size());
@@ -417,19 +432,21 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
 
                 } else if (size == 1) {
                     FilerInputStream fis = streams.get(0);
-                    while (!UIO.readBoolean(fis, "eos")) {
-                        byte[] prefix = UIO.readByteArray(fis, "prefix", intLongBuffer);
-                        byte[] key = UIO.readByteArray(fis, "key", intLongBuffer);
-                        byte[] value = hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null;
-                        long timestamp = UIO.readLong(fis, "timestamp", intLongBuffer);
-                        boolean tombstoned = UIO.readBoolean(fis, "tombstone");
-                        long version = UIO.readLong(fis, "version", intLongBuffer);
-                        if (!tombstoned && !stream.stream(prefix,
-                            key,
-                            value,
-                            timestamp,
-                            version)) {
-                            return false;
+                    while (!UIO.readBoolean(fis, "eosRange")) {
+                        while (!UIO.readBoolean(fis, "eos")) {
+                            byte[] prefix = UIO.readByteArray(fis, "prefix", intLongBuffer);
+                            byte[] key = UIO.readByteArray(fis, "key", intLongBuffer);
+                            byte[] value = hydrateValues ? UIO.readByteArray(fis, "value", intLongBuffer) : null;
+                            long timestamp = UIO.readLong(fis, "timestamp", intLongBuffer);
+                            boolean tombstoned = UIO.readBoolean(fis, "tombstone");
+                            long version = UIO.readLong(fis, "version", intLongBuffer);
+                            if (!tombstoned && !stream.stream(prefix,
+                                key,
+                                value,
+                                timestamp,
+                                version)) {
+                                return false;
+                            }
                         }
                     }
                     return true;

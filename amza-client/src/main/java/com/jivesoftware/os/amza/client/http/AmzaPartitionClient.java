@@ -416,7 +416,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
                                 }
                             }
                             int wi = quorumScan.findWinningIndex();
-                            if (wi == -1 || !quorumScan.stream(wi, keyValueStream)) {
+                            if (wi > -1 && !quorumScan.stream(wi, keyValueStream)) {
                                 return false;
                             }
                         }

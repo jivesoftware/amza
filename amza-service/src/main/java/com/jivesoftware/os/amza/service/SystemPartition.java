@@ -24,6 +24,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -125,27 +126,27 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
-        for (ScanRange range : ranges) {
-            if (range.fromKey == null && range.toKey == null) {
+    public boolean scan(PrefixedKeyRanges ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
+        return ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
+            if (fromKey == null && toKey == null) {
                 boolean result = systemWALStorage.rowScan(versionedPartitionName, stream, true);
                 if (!result) {
                     return false;
                 }
             } else {
                 boolean result = systemWALStorage.rangeScan(versionedPartitionName,
-                    range.fromPrefix,
-                    range.fromKey,
-                    range.toPrefix,
-                    range.toKey,
+                    fromPrefix,
+                    fromKey,
+                    toPrefix,
+                    toKey,
                     stream,
                     true);
                 if (!result) {
                     return false;
                 }
             }
-        }
-        return true;
+            return true;
+        });
     }
 
     @Override

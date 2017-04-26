@@ -323,6 +323,27 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         @PathParam("hydrateValues") boolean hydrateValues,
         InputStream inputStream) {
+        return multiScanInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, false, inputStream);
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/multiScan/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
+    public Object multiScan(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return multiScanInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, true, inputStream);
+    }
+
+    private Object multiScanInternal(String base64PartitionName,
+        String consistencyName,
+        boolean checkLeader,
+        boolean hydrateValues,
+        boolean rangeBoundaries,
+        InputStream inputStream) {
 
         PartitionName partitionName = null;
         try {
@@ -370,7 +391,7 @@ public class AmzaClientRestEndpoints {
                 os.flush();
                 FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
                 try {
-                    client.scan(effectivelyFinalPartitionName, ranges, null, fos, hydrateValues);
+                    client.scan(effectivelyFinalPartitionName, ranges, rangeBoundaries, null, fos, hydrateValues);
                 } catch (Exception x) {
                     LOG.warn("Failed during stream scan", x);
                 } finally {
@@ -392,6 +413,27 @@ public class AmzaClientRestEndpoints {
         @PathParam("consistency") String consistencyName,
         @PathParam("checkLeader") boolean checkLeader,
         @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return scanCompressedInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, false, inputStream);
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/multiScanCompressed/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
+    public Object multiScanCompressed(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return scanCompressedInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, true, inputStream);
+    }
+
+    private Object scanCompressedInternal(String base64PartitionName,
+        String consistencyName,
+        boolean checkLeader,
+        boolean hydrateValues,
+        boolean rangeBoundaries,
         InputStream inputStream) {
 
         PartitionName partitionName = null;
@@ -441,7 +483,7 @@ public class AmzaClientRestEndpoints {
                 SnappyOutputStream sos = new SnappyOutputStream(os);
                 FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(sos, 8192));
                 try {
-                    client.scan(effectivelyFinalPartitionName, ranges, null, fos, hydrateValues);
+                    client.scan(effectivelyFinalPartitionName, ranges, rangeBoundaries, null, fos, hydrateValues);
                 } catch (Exception x) {
                     LOG.warn("Failed during compressed stream scan", x);
                 } finally {
@@ -463,6 +505,27 @@ public class AmzaClientRestEndpoints {
         @PathParam("consistency") String consistencyName,
         @PathParam("checkLeader") boolean checkLeader,
         @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return scanFilteredInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, false, inputStream);
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/multiScanFiltered/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
+    public Object multiScanFiltered(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return scanFilteredInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, true, inputStream);
+    }
+
+    private Object scanFilteredInternal(String base64PartitionName,
+        String consistencyName,
+        boolean checkLeader,
+        boolean hydrateValues,
+        boolean rangeBoundaries,
         InputStream inputStream) {
 
         PartitionName partitionName = null;
@@ -534,7 +597,7 @@ public class AmzaClientRestEndpoints {
                 os.flush();
                 FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(os, 8192));
                 try {
-                    client.scan(effectivelyFinalPartitionName, ranges, filter, fos, hydrateValues);
+                    client.scan(effectivelyFinalPartitionName, ranges, rangeBoundaries, filter, fos, hydrateValues);
                 } catch (Exception x) {
                     LOG.warn("Failed during filtered stream scan", x);
                 } finally {
@@ -556,6 +619,27 @@ public class AmzaClientRestEndpoints {
         @PathParam("consistency") String consistencyName,
         @PathParam("checkLeader") boolean checkLeader,
         @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return scanFilteredCompressedInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, false, inputStream);
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/multiScanFilteredCompressed/{base64PartitionName}/{consistency}/{checkLeader}/{hydrateValues}")
+    public Object multiScanFilteredCompressed(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
+        @PathParam("hydrateValues") boolean hydrateValues,
+        InputStream inputStream) {
+        return scanFilteredCompressedInternal(base64PartitionName, consistencyName, checkLeader, hydrateValues, true, inputStream);
+    }
+
+    private Object scanFilteredCompressedInternal(String base64PartitionName,
+        String consistencyName,
+        boolean checkLeader,
+        boolean hydrateValues,
+        boolean rangeBoundaries,
         InputStream inputStream) {
 
         PartitionName partitionName = null;
@@ -628,7 +712,7 @@ public class AmzaClientRestEndpoints {
                 SnappyOutputStream sos = new SnappyOutputStream(os);
                 FilerOutputStream fos = new FilerOutputStream(new BufferedOutputStream(sos, 8192));
                 try {
-                    client.scan(effectivelyFinalPartitionName, ranges, filter, fos, hydrateValues);
+                    client.scan(effectivelyFinalPartitionName, ranges, rangeBoundaries, filter, fos, hydrateValues);
                 } catch (Exception x) {
                     LOG.warn("Failed during filtered compressed stream scan", x);
                 } finally {

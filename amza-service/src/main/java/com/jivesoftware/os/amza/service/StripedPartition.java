@@ -26,6 +26,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream.TxResult;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -203,27 +204,26 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public boolean scan(Iterable<ScanRange> ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
+    public boolean scan(PrefixedKeyRanges ranges, boolean hydrateValues, boolean requiresOnline, KeyValueStream stream) throws Exception {
 
         systemReady.await(0);
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                for (ScanRange range : ranges) {
-                    if (range.fromKey == null && range.toKey == null) {
+                return ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
+                    if (fromKey == null && toKey == null) {
                         partitionStripe.rowScan(versionedAquarium, stream, hydrateValues, requiresOnline);
                     } else {
                         partitionStripe.rangeScan(versionedAquarium,
-                            range.fromPrefix,
-                            range.fromKey,
-                            range.toPrefix,
-                            range.toKey,
+                            fromPrefix,
+                            fromKey,
+                            toPrefix,
+                            toKey,
                             hydrateValues,
                             requiresOnline,
                             stream);
                     }
-                }
-
-                return true;
+                    return true;
+                });
             });
         });
     }

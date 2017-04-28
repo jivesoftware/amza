@@ -70,7 +70,13 @@ public class SystemWALStorage {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         Preconditions.checkArgument(partitionName.isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(amzaStats.updateIoStats, true, partitionStore.getProperties().rowType, -1, false, prefix, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(amzaStats.updateIoStats,
+            true,
+            partitionStore.getProperties().rowType,
+            -1,
+            false,
+            prefix,
+            updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }
@@ -83,6 +89,11 @@ public class SystemWALStorage {
 
         amzaStats.direct(partitionName, changed.getApply().size(), changed.getSmallestCommittedTxId());
         return changed;
+    }
+
+    public void flush(VersionedPartitionName versionedPartitionName) throws Exception {
+        PartitionStore partitionStore = partitionIndex.getSystemPartition(versionedPartitionName);
+        partitionStore.flush(true);
     }
 
     public TimestampedValue getTimestampedValue(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {

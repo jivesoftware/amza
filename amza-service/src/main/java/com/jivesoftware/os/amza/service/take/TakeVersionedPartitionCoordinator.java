@@ -118,7 +118,7 @@ public class TakeVersionedPartitionCoordinator {
             return systemWALStorage.highestPartitionTxId(versionedPartitionName);
         } else {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                return partitionStripe.highestAquariumTxId(versionedAquarium);
+                return partitionStripe.highestTxId(versionedAquarium.getVersionedPartitionName());
             });
         }
     }

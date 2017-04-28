@@ -40,4 +40,9 @@ public interface HighwaterStorage {
 
     void delete(VersionedPartitionName versionedPartitionName) throws Exception;
 
+    void setLocal(VersionedPartitionName versionedPartitionName, long txId) throws Exception;
+
+    long getLocal(VersionedPartitionName versionedPartitionName) throws Exception;
+
+    void flushLocal() throws Exception;
 }

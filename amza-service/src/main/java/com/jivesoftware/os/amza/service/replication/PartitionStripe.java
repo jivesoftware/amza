@@ -74,13 +74,12 @@ public class PartitionStripe {
         storage.delete(versionedPartitionName);
     }
 
-    boolean exists(VersionedPartitionName localVersionedPartitionName) throws Exception {
-        return partitionCreator.hasStore("stripe>exists", localVersionedPartitionName, stripeIndex);
+    boolean exists(VersionedPartitionName versionedPartitionName) throws Exception {
+        return partitionCreator.hasStore("stripe>exists", versionedPartitionName, stripeIndex);
     }
 
-    public long highestAquariumTxId(VersionedAquarium versionedAquarium) throws Exception {
-        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        PartitionStore partitionStore = partitionCreator.get("stripe>highestAquariumTxId", versionedPartitionName, stripeIndex);
+    public long highestTxId(VersionedPartitionName versionedPartitionName) throws Exception {
+        PartitionStore partitionStore = partitionCreator.get("stripe>highestTxId", versionedPartitionName, stripeIndex);
         if (partitionStore != null) {
             return storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
         } else {

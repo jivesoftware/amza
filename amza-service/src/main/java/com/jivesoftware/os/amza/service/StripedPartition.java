@@ -335,7 +335,7 @@ public class StripedPartition implements Partition {
     public long highestTxId() throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                return partitionStripe.highestAquariumTxId(versionedAquarium);
+                return partitionStripe.highestTxId(versionedAquarium.getVersionedPartitionName());
             });
         });
     }

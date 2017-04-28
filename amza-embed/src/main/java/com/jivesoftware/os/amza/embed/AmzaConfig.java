@@ -70,4 +70,7 @@ public interface AmzaConfig extends Config {
 
     @LongDefault(100_000)
     long getFlushHighwatersAfterNUpdates();
+
+    @BooleanDefault(false)
+    boolean getDeltaUseHighwaterTxId();
 }

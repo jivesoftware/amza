@@ -92,6 +92,7 @@ public class DeltaStripeWALStorage {
     private final HighwaterStorage highwaterStorage;
     private final DeltaWALFactory deltaWALFactory;
     private final int maxValueSizeInIndex;
+    private final boolean useHighwaterTxId;
     private final WALIndexProviderRegistry walIndexProviderRegistry;
     private final long mergeAfterNUpdates;
     private final ExecutorService mergeDeltaThreads;
@@ -127,6 +128,7 @@ public class DeltaStripeWALStorage {
         HighwaterStorage highwaterStorage,
         DeltaWALFactory deltaWALFactory,
         int maxValueSizeInIndex,
+        boolean useHighwaterTxId,
         WALIndexProviderRegistry walIndexProviderRegistry,
         long mergeAfterNUpdates,
         ExecutorService mergeDeltaThreads) {
@@ -140,6 +142,7 @@ public class DeltaStripeWALStorage {
         this.highwaterStorage = highwaterStorage;
         this.deltaWALFactory = deltaWALFactory;
         this.maxValueSizeInIndex = maxValueSizeInIndex;
+        this.useHighwaterTxId = useHighwaterTxId;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
         this.mergeDeltaThreads = mergeDeltaThreads;
@@ -317,15 +320,27 @@ public class DeltaStripeWALStorage {
                 return highestTxId;
             }
         }
-        long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
-        long storageTxId = storage.highestTxId();
-        if (highwaterTxId == -1 && storageTxId != -1) {
-            LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, storageTxId);
-            highwaterStorage.setLocal(versionedPartitionName, storageTxId);
-        } else if (highwaterTxId != -1 && storageTxId != highwaterTxId) {
-            LOG.error("Mismatched txId for:{} storage:{} highwater:{}", versionedPartitionName, storageTxId, highwaterTxId);
+        if (useHighwaterTxId) {
+            long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
+            if (highwaterTxId == -1) {
+                highwaterTxId = storage.highestTxId();
+                if (highwaterTxId != -1) {
+                    LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, highwaterTxId);
+                    highwaterStorage.setLocal(versionedPartitionName, highwaterTxId);
+                }
+            }
+            return highwaterTxId;
+        } else {
+            long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
+            long storageTxId = storage.highestTxId();
+            if (highwaterTxId == -1 && storageTxId != -1) {
+                LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, storageTxId);
+                highwaterStorage.setLocal(versionedPartitionName, storageTxId);
+            } else if (highwaterTxId != -1 && storageTxId != highwaterTxId) {
+                LOG.error("Mismatched txId for:{} storage:{} highwater:{}", versionedPartitionName, storageTxId, highwaterTxId);
+            }
+            return storageTxId;
         }
-        return storageTxId;
     }
 
     private boolean txPartitionDelta(VersionedPartitionName versionedPartitionName, PartitionDeltaTx tx) throws Exception {

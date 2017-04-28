@@ -113,6 +113,7 @@ public class AmzaServiceInitializer {
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
         public int deltaMaxValueSizeInIndex = 8;
+        public boolean deltaUseHighwaterTxId = false;
         public int deltaMergeThreads = -1;
 
         public int ackWatersStripingLevel = 1024;
@@ -350,10 +351,10 @@ public class AmzaServiceInitializer {
                 highwaterStorage,
                 deltaWALFactory,
                 config.deltaMaxValueSizeInIndex,
+                config.deltaUseHighwaterTxId,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction,
-                amzaThreadPoolProvider.allocateThreadPool(deltaMergeThreads, "merge-deltas-" + i)
-            );
+                amzaThreadPoolProvider.allocateThreadPool(deltaMergeThreads, "merge-deltas-" + i));
         }
 
         long stripeMaxFreeWithinNBytes = config.rebalanceIfImbalanceGreaterThanNBytes / 2; //TODO config separately
@@ -505,6 +506,7 @@ public class AmzaServiceInitializer {
                         }
                     }
                 }
+                highwaterStorage.flushLocal(); // in case we repaired any highwater txIds
                 LOG.info("Finished loading {} highest txIds for index:{} after system ready!", count, index);
                 return null;
             });

@@ -136,6 +136,7 @@ public class AmzaMain {
             amzaServiceConfig.pongIntervalMillis = amzaConfig.getPongIntervalMillis();
             amzaServiceConfig.rowsTakerLimit = amzaConfig.getRowsTakerLimit();
             amzaServiceConfig.flushHighwatersAfterNUpdates = amzaConfig.getFlushHighwatersAfterNUpdates();
+            amzaServiceConfig.deltaUseHighwaterTxId = amzaConfig.getDeltaUseHighwaterTxId();
 
             AmzaStats amzaSystemStats = new AmzaStats();
             AmzaStats amzaStats = new AmzaStats();

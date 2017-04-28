@@ -259,6 +259,7 @@ public class DeltaStripeWALStorageNGTest {
             ringStoreReader,
             highwaterStorage, deltaWALFactory,
             8,
+            true,
             walIndexProviderRegistry,
             20_000,
             Executors.newCachedThreadPool());

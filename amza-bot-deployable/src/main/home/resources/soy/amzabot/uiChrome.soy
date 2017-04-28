@@ -26,7 +26,6 @@
 </html>
 {/template}
 
-
 /**
  * @param cacheToken
  */
@@ -47,15 +46,8 @@
     <link rel="stylesheet" href="/amzabot/static/vendor/bootstrap-slider/css/bootstrap-slider.css?t={$cacheToken}">
 
     // HEY ENGINEERS, add CSS here for now:
-    <link rel="stylesheet" href="/amzabot/static/css/content.css?t={$cacheToken}">
-
-    // contenting CC is for IE8 and lower. No harm in leaving it here.
-    // It's no overhead to other browsers and would automatically give unsupported IE8 a fighting chance to view content
-    <!--[if lt IE 9]>
-    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js?t={$cacheToken}"></script>
-    <![endif]-->
+    <link rel="stylesheet" href="/amzabot/static/css/amzabot.css?t={$cacheToken}">
 {/template}
-
 
 /**
  * @param title
@@ -94,20 +86,5 @@
     <link rel="stylesheet" href="/resources/embeddedexperiences/tiles/css/jquery-ui.css?t={$cacheToken}">
   
     // HEY ENGINEERS, add CSS here for now:
-    <link rel="stylesheet" href="/amzabot/static/css/content/content.css?t={$cacheToken}">
-
-    // contenting CC is for IE8 and lower. No harm in leaving it here.
-    // It's no overhead to other browsers and would automatically give unsupported IE8 a fighting chance to view content
-    <!--[if lt IE 9]>
-    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js?t={$cacheToken}"></script>
-    <![endif]-->
+    <link rel="stylesheet" href="/amzabot/static/css/amzabot.css?t={$cacheToken}">
 {/template}
-
-/**
- *
- */
-{template .favicon}
-    <!-- favicon -->
-    //<link rel="icon" type="image/png" href="/static/img/favicon.png">
-{/template}
-

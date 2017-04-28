@@ -66,27 +66,41 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
 
         try {
             if (input.action.equals("rebalanceStripes")) {
-                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("rebalanceStripes-%d").build()).submit(() -> {
-                    amzaService.rebalanceStripes();
-                });
+                new Thread(
+                    () -> {
+                        amzaService.rebalanceStripes();
+                    }, "rebalanceStripes"
+                ).start();
             }
 
             if (input.action.equals("forceCompactionDeltas")) {
-                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceCompactionDeltas-%d").build()).submit(() -> {
-                    amzaService.mergeAllDeltas(true);
-                });
+                new Thread(
+                    () -> {
+                        amzaService.mergeAllDeltas(true);
+                    }, "forceCompactionDeltas"
+                ).start();
             }
             if (input.action.equals("forceCompactionTombstones")) {
-                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceCompactionTombstones-%d").build()).submit(() -> {
-                    amzaService.compactAllTombstones();
-                    return null;
-                });
+                new Thread(
+                    () -> {
+                        try {
+                            amzaService.compactAllTombstones();
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    }, "forceCompactionTombstones"
+                ).start();
             }
             if (input.action.equals("forceExpunge")) {
-                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceExpunge-%d").build()).submit(() -> {
-                    amzaService.expunge();
-                    return null;
-                });
+                new Thread(
+                    () -> {
+                        try {
+                            amzaService.expunge();
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    }, "forceExpunge"
+                ).start();
             }
 
             if (input.action.equals("migrateIndexClass")) {

@@ -1,0 +1,6 @@
+
+body {
+    background-image: url('/amzabot/static/img/bg.jpg');
+    background-repeat: repeat;
+    background-attachment: fixed;
+}

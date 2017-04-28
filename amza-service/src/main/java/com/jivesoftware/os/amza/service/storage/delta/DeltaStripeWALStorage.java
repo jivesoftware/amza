@@ -312,7 +312,11 @@ public class DeltaStripeWALStorage {
         return partitionDeltas.containsKey(versionedPartitionName);
     }
 
-    public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
+    public interface StorageTxIdProvider {
+        long get() throws Exception;
+    }
+
+    public long getHighestTxId(VersionedPartitionName versionedPartitionName, StorageTxIdProvider txIdProvider) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
             long highestTxId = partitionDelta.highestTxId();
@@ -323,7 +327,7 @@ public class DeltaStripeWALStorage {
         if (useHighwaterTxId) {
             long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
             if (highwaterTxId == -1) {
-                highwaterTxId = storage.highestTxId();
+                highwaterTxId = txIdProvider.get();
                 if (highwaterTxId != -1) {
                     LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, highwaterTxId);
                     highwaterStorage.setLocal(versionedPartitionName, highwaterTxId);
@@ -332,7 +336,7 @@ public class DeltaStripeWALStorage {
             return highwaterTxId;
         } else {
             long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
-            long storageTxId = storage.highestTxId();
+            long storageTxId = txIdProvider.get();
             if (highwaterTxId == -1 && storageTxId != -1) {
                 LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, storageTxId);
                 highwaterStorage.setLocal(versionedPartitionName, storageTxId);

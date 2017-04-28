@@ -522,8 +522,12 @@ public class DeltaStripeWALStorage {
 
         try {
             highwaterStorage.flushLocal();
+            highwaterStorage.flush(index, () -> {
+                flush(true);
+                return null;
+            });
         } catch (Exception x) {
-            parkSick("This is catastrophic. Failure destroying WAL.", x);
+            parkSick("This is catastrophic. Failure flushing highwaters.", x);
         }
 
         try {

@@ -162,7 +162,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         for (Map.Entry<VersionedPartitionName, PartitionProperties> entry : SYSTEM_PARTITIONS.entrySet()) {
             VersionedPartitionName versionedPartitionName = entry.getKey();
             int systemStripe = systemStriper.getSystemStripe(versionedPartitionName.getPartitionName());
-            partitionIndex.get(versionedPartitionName, entry.getValue(), systemStripe);
+            partitionIndex.get("init", versionedPartitionName, entry.getValue(), systemStripe);
         }
     }
 
@@ -183,12 +183,12 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         return false;
     }
 
-    public boolean hasStore(VersionedPartitionName versionedPartitionName, int stripeIndex) throws Exception {
+    public boolean hasStore(String context, VersionedPartitionName versionedPartitionName, int stripeIndex) throws Exception {
         PartitionProperties properties = getProperties(versionedPartitionName.getPartitionName());
-        return properties != null && partitionIndex.exists(versionedPartitionName, properties, stripeIndex);
+        return properties != null && partitionIndex.exists(context, versionedPartitionName, properties, stripeIndex);
     }
 
-    public PartitionStore createStoreIfAbsent(VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
+    public PartitionStore createStoreIfAbsent(String context, VersionedPartitionName versionedPartitionName, int stripe) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot create a system partition");
 
@@ -196,7 +196,7 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         if (properties == null) {
             return null;
         } else {
-            return partitionIndex.get(versionedPartitionName, properties, stripe);
+            return partitionIndex.get(context, versionedPartitionName, properties, stripe);
         }
     }
 
@@ -301,9 +301,9 @@ public class PartitionCreator implements RowChanges, VersionedPartitionProvider 
         return new VersionedPartitionProperties(version, getProperties(partitionName));
     }
 
-    public PartitionStore get(VersionedPartitionName versionedPartitionName, int stripeIndex) throws Exception {
+    public PartitionStore get(String context, VersionedPartitionName versionedPartitionName, int stripeIndex) throws Exception {
         PartitionProperties properties = getProperties(versionedPartitionName.getPartitionName());
-        return partitionIndex.get(versionedPartitionName, properties, stripeIndex);
+        return partitionIndex.get(context, versionedPartitionName, properties, stripeIndex);
     }
 
     @Override

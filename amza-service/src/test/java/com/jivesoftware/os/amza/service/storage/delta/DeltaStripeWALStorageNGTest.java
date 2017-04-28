@@ -223,8 +223,8 @@ public class DeltaStripeWALStorageNGTest {
             -1);
         partitionCreator.createPartitionIfAbsent(versionedPartitionName2.getPartitionName(), properties2);
 
-        partitionStore1 = partitionIndex.get(versionedPartitionName1, properties1, 0);
-        partitionStore2 = partitionIndex.get(versionedPartitionName2, properties2, 0);
+        partitionStore1 = partitionIndex.get("test", versionedPartitionName1, properties1, 0);
+        partitionStore2 = partitionIndex.get("test", versionedPartitionName2, properties2, 0);
         Assert.assertNotNull(partitionStore1);
         Assert.assertNotNull(partitionStore2);
 
@@ -574,7 +574,7 @@ public class DeltaStripeWALStorageNGTest {
         partitionCreator.init((partitionName) -> 0);
         deltaStripeWALStorage = loadDeltaStripe(ioStats);
 
-        PartitionStore partitionStore = partitionCreator.get(versionedPartitionName1, 0);
+        PartitionStore partitionStore = partitionCreator.get("test", versionedPartitionName1, 0);
         //TODO assert leaps and merge markers
     }
 

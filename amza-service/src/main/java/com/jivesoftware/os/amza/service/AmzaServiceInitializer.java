@@ -486,7 +486,7 @@ public class AmzaServiceInitializer {
                             partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
                                 return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                                    PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+                                    PartitionStore partitionStore = partitionCreator.get("systemReady", versionedPartitionName, stripeIndex);
                                     if (partitionStore != null) {
                                         takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
                                     } else {

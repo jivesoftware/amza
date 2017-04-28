@@ -289,7 +289,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
 
                     txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                        partitionCreator.createStoreIfAbsent(versionedPartitionName, stripeIndex);
+                        partitionCreator.createStoreIfAbsent("awaitOnline", versionedPartitionName, stripeIndex);
                         return null;
                     });
 
@@ -329,7 +329,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
                         return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                             versionedAquarium.wipeTheGlass();
-                            partitionCreator.createStoreIfAbsent(versionedAquarium.getVersionedPartitionName(), stripeIndex);
+                            partitionCreator.createStoreIfAbsent("getPartitionRoute", versionedAquarium.getVersionedPartitionName(), stripeIndex);
                             return getPartition(partitionName);
                         });
                     });
@@ -690,7 +690,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             return true;
         } else {
             // BOOTSTRAP'S BOOTSTRAPS!
-            partitionCreator.get(versionedPartitionName, stripe);
+            partitionCreator.get("bootstrap", versionedPartitionName, stripe);
             return false;
         }
     }

@@ -65,11 +65,12 @@ public class PartitionIndex {
         return null;
     }
 
-    public PartitionStore get(VersionedPartitionName versionedPartitionName, PartitionProperties properties, int stripe) throws Exception {
-        return getAndValidate(-1, -1, versionedPartitionName, properties, stripe);
+    public PartitionStore get(String context, VersionedPartitionName versionedPartitionName, PartitionProperties properties, int stripe) throws Exception {
+        return getAndValidate(context, -1, -1, versionedPartitionName, properties, stripe);
     }
 
-    public PartitionStore getAndValidate(long deltaWALId,
+    public PartitionStore getAndValidate(String context,
+        long deltaWALId,
         long prevDeltaWALId,
         VersionedPartitionName versionedPartitionName,
         PartitionProperties properties,
@@ -81,7 +82,7 @@ public class PartitionIndex {
 
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         if (deltaWALId > -1 && partitionName.isSystemPartition()) {
-            throw new IllegalStateException("Hooray you have a bug! Should never call get with something other than -1 for system parititions." + deltaWALId);
+            throw new IllegalStateException("Hooray you have a bug! Should never call get with something other than -1 for system partitions: " + deltaWALId);
         }
         ConcurrentLHash<PartitionStore> versionedStores = partitionStores.get(partitionName);
         if (versionedStores != null) {
@@ -98,7 +99,7 @@ public class PartitionIndex {
             return null;
         }
 
-        return init(deltaWALId, prevDeltaWALId, versionedPartitionName, stripe, properties);
+        return init(context, deltaWALId, prevDeltaWALId, versionedPartitionName, stripe, properties);
 
     }
 
@@ -124,7 +125,8 @@ public class PartitionIndex {
         }
     }
 
-    private PartitionStore init(long deltaWALId,
+    private PartitionStore init(String context,
+        long deltaWALId,
         long prevDeltaWALId,
         VersionedPartitionName versionedPartitionName,
         int stripe,
@@ -146,13 +148,14 @@ public class PartitionIndex {
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);
+            LOG.inc("open>context>" + context);
 
             return partitionStore;
         }
     }
 
-    public boolean exists(VersionedPartitionName versionedPartitionName, PartitionProperties properties, int stripe) throws Exception {
-        return get(versionedPartitionName, properties, stripe) != null;
+    public boolean exists(String context, VersionedPartitionName versionedPartitionName, PartitionProperties properties, int stripe) throws Exception {
+        return get(context, versionedPartitionName, properties, stripe) != null;
     }
 
     public void updateStoreProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {

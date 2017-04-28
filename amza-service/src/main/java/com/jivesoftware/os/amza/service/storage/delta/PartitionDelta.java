@@ -470,13 +470,14 @@ class PartitionDelta {
                     lastTxId = merge.highestTxId();
 
                     if (validate) {
-                        partitionStore = partitionIndex.getAndValidate(merge.getDeltaWALId(),
+                        partitionStore = partitionIndex.getAndValidate("merge",
+                            merge.getDeltaWALId(),
                             merge.getPrevDeltaWALId(),
                             merge.versionedPartitionName,
                             properties,
                             stripe);
                     } else {
-                        partitionStore = partitionIndex.get(merge.versionedPartitionName, properties, stripe);
+                        partitionStore = partitionIndex.get("merge", merge.versionedPartitionName, properties, stripe);
                     }
                     long highestTxId = partitionStore.highestTxId();
                     LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);

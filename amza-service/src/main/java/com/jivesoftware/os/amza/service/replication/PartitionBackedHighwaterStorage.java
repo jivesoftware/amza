@@ -254,7 +254,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public boolean flush(int deltaIndex, Callable<Void> preFlush) throws Exception {
+    public boolean flush(int deltaIndex, boolean force, Callable<Void> preFlush) throws Exception {
         AtomicLong updatesSinceLastFlush;
         AmzaStats stats;
         if (deltaIndex == -1) {
@@ -264,13 +264,13 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             updatesSinceLastFlush = stripeUpdatesSinceLastFlush[deltaIndex];
             stats = amzaStats;
         }
-        if (updatesSinceLastFlush.get() < flushHighwatersAfterNUpdates) {
+        if (!force && updatesSinceLastFlush.get() < flushHighwatersAfterNUpdates) {
             return false;
         }
         bigBird.acquire(numPermits);
         try {
             long flushedUpdates = updatesSinceLastFlush.get();
-            if (flushedUpdates < flushHighwatersAfterNUpdates) {
+            if (!force && flushedUpdates < flushHighwatersAfterNUpdates) {
                 return false;
             } else {
                 systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,

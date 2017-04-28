@@ -512,7 +512,7 @@ public class RowChangeTaker implements RowChanges {
                         } else {
                             return localVersionedPartitionName;
                         }
-                    } else if (highwater[0] >= sessionedTxId.txId && livelyEndState.isOnline()) {
+                    } else if (highwater[0] >= sessionedTxId.txId) {
                         // nothing to take
                         return null;
                     } else {
@@ -522,11 +522,16 @@ public class RowChangeTaker implements RowChanges {
 
             if (currentLocalVersionedPartitionName == null) {
                 if (validPartition[0]) {
+                    long[] leadershipToken = { -1 };
                     partitionStripeProvider.txPartition(partitionName,
                         (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
-                            Waterline leader = versionedAquarium.getLeader();
-                            long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
-                            tookFully(versionedAquarium, remoteRingMember, leadershipToken);
+                            LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                            Waterline leader = livelyEndState.getLeaderWaterline();
+                            leadershipToken[0] = (leader != null) ? leader.getTimestamp() : -1;
+                            tookFully(versionedAquarium, remoteRingMember, leadershipToken[0]);
+                            if (!livelyEndState.isOnline()) {
+                                versionedAquarium.wipeTheGlass();
+                            }
                             return null;
                         });
 
@@ -537,7 +542,7 @@ public class RowChangeTaker implements RowChanges {
                         sessionedTxId.sharedKey,
                         remoteVersionedPartitionName,
                         highwater[0],
-                        -1);
+                        leadershipToken[0]);
                 }
                 return false;
             }

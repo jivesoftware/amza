@@ -98,7 +98,7 @@ public class PartitionTombstoneCompactor {
                             && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()
                             && (compactStripe == -1 || stripeIndex == compactStripe)) {
 
-                            PartitionStore partitionStore = partitionCreator.get(versionedPartitionName, stripeIndex);
+                            PartitionStore partitionStore = partitionCreator.get("compact", versionedPartitionName, stripeIndex);
                             if (partitionStore == null) {
                                 return null;
                             }

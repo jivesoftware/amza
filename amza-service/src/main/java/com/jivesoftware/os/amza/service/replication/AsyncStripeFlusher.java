@@ -132,7 +132,7 @@ public final class AsyncStripeFlusher implements Runnable {
     }
 
     private void flush() throws Exception {
-        if (!highwaterStorage.get().flush(id, flushDelta)) {
+        if (!highwaterStorage.get().flush(id, false, flushDelta)) {
             if (flushDelta != null) {
                 flushDelta.call();
             }

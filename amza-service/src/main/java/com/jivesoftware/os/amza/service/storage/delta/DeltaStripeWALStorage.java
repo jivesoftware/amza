@@ -522,7 +522,7 @@ public class DeltaStripeWALStorage {
 
         try {
             highwaterStorage.flushLocal();
-            highwaterStorage.flush(index, () -> {
+            highwaterStorage.flush(index, true, () -> {
                 flush(true);
                 return null;
             });

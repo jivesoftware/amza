@@ -75,7 +75,8 @@ public class PartitionStripe {
     }
 
     boolean exists(VersionedPartitionName versionedPartitionName) throws Exception {
-        return partitionCreator.hasStore("stripe>exists", versionedPartitionName, stripeIndex);
+        long highestTxId = storage.getHighestTxId(versionedPartitionName, () -> -1);
+        return highestTxId != -1 || partitionCreator.hasStore("stripe>exists", versionedPartitionName, stripeIndex);
     }
 
     public long highestTxId(VersionedPartitionName versionedPartitionName) throws Exception {

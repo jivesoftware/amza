@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -12,7 +13,6 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
-import com.jivesoftware.os.amza.api.AmzaInterner;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -46,6 +46,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     private final int numPermits = 1024;
     private final Semaphore bigBird = new Semaphore(numPermits, true); // TODO expose to config
     private final Map<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> hostToPartitionToHighwaterUpdates = Maps.newConcurrentMap();
+    private final Map<VersionedPartitionName, LocalHighwater> localHighwaterUpdates = Maps.newConcurrentMap();
     private final AtomicLong[] stripeUpdatesSinceLastFlush;
     private final AtomicLong systemUpdatesSinceLastFlush = new AtomicLong();
 
@@ -279,8 +280,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         }
 
                         long timestampAndVersion = orderIdProvider.nextId();
-                        for (Entry<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> ringEntry
-                            : hostToPartitionToHighwaterUpdates.entrySet()) {
+                        for (Entry<RingMember, Map<VersionedPartitionName, HighwaterUpdates>> ringEntry : hostToPartitionToHighwaterUpdates.entrySet()) {
                             RingMember ringMember = ringEntry.getKey();
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {
                                 VersionedPartitionName versionedPartitionName = partitionEntry.getKey();
@@ -290,18 +290,14 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                                     if (highwaterUpdates != null) {
                                         AtomicLong updates = highwaterUpdates.updates.get(deltaIndex);
                                         if (updates != null && updates.get() > 0) {
-                                            try {
-                                                long txId = highwaterUpdates.getTxId();
-                                                long total = updates.get();
-                                                if (!scan.row(-1, walKey(versionedPartitionName, ringMember),
-                                                    UIO.longBytes(txId), timestampAndVersion, false, timestampAndVersion)) {
-                                                    return false;
-                                                }
-                                                highwaterUpdates.updateTxId(txId);
-                                                highwaterUpdates.addDeltaUpdates(deltaIndex, -total);
-                                            } catch (Exception x) {
-                                                throw new RuntimeException();
+                                            long txId = highwaterUpdates.getTxId();
+                                            long total = updates.get();
+                                            if (!scan.row(-1, walKey(versionedPartitionName, ringMember),
+                                                UIO.longBytes(txId), timestampAndVersion, false, timestampAndVersion)) {
+                                                return false;
                                             }
+                                            highwaterUpdates.updateTxId(txId);
+                                            highwaterUpdates.addDeltaUpdates(deltaIndex, -total);
                                         }
                                     }
                                 }
@@ -320,7 +316,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         }
     }
 
-    static class HighwaterUpdates {
+    private static class HighwaterUpdates {
 
         private final AtomicLong txId;
         private final Map<Integer, AtomicLong> updates = Maps.newConcurrentMap();
@@ -347,5 +343,71 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         public long getTxId() {
             return txId.get();
         }
+    }
+
+    @Override
+    public void setLocal(VersionedPartitionName versionedPartitionName, long highwaterTxId) {
+        LocalHighwater highwater = localHighwaterUpdates.computeIfAbsent(versionedPartitionName, versionedPartitionName1 -> new LocalHighwater());
+        highwater.highwaterTxId.accumulateAndGet(highwaterTxId, Math::max);
+    }
+
+    @Override
+    public long getLocal(VersionedPartitionName versionedPartitionName) throws Exception {
+        LocalHighwater highwater = localHighwaterUpdates.computeIfAbsent(versionedPartitionName, versionedPartitionName1 -> new LocalHighwater());
+        long txId = highwater.highwaterTxId.get();
+        if (txId == -1) {
+            // can't call systemWALStorage inside of highwater lock due to flushLocal lock order
+            TimestampedValue got = systemWALStorage.getTimestampedValue(PartitionCreator.HIGHWATER_MARK_INDEX, null,
+                walKey(versionedPartitionName, rootRingMember));
+            synchronized (highwater) {
+                long latestTxId = highwater.highwaterTxId.get();
+                if (latestTxId == -1) {
+                    if (got != null) {
+                        txId = UIO.bytesLong(got.getValue());
+                    }
+                    highwater.highwaterTxId.set(txId);
+                    highwater.flushedTxId.set(txId);
+                } else {
+                    // somebody else won the race
+                    txId = latestTxId;
+                }
+            }
+        }
+        return txId;
+    }
+
+    @Override
+    public void flushLocal() throws Exception {
+        systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
+            (highwaters, scan) -> {
+                long timestampAndVersion = orderIdProvider.nextId();
+                for (Entry<VersionedPartitionName, LocalHighwater> partitionEntry : localHighwaterUpdates.entrySet()) {
+                    VersionedPartitionName versionedPartitionName = partitionEntry.getKey();
+                    PartitionProperties properties = partitionCreator.getProperties(versionedPartitionName.getPartitionName());
+                    if (properties.durability != Durability.ephemeral) {
+                        LocalHighwater highwater = partitionEntry.getValue();
+                        synchronized (highwater) {
+                            long flushedTxId = highwater.flushedTxId.get();
+                            long highwaterTxId = highwater.highwaterTxId.get();
+                            if (flushedTxId < highwaterTxId) {
+                                boolean result = scan.row(-1, walKey(versionedPartitionName, rootRingMember),
+                                    UIO.longBytes(highwaterTxId), timestampAndVersion, false, timestampAndVersion);
+                                highwater.flushedTxId.set(highwaterTxId);
+                                if (!result) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+                return true;
+
+            }, walUpdated);
+        systemWALStorage.flush(PartitionCreator.HIGHWATER_MARK_INDEX);
+    }
+
+    private static class LocalHighwater {
+        private final AtomicLong highwaterTxId = new AtomicLong(-1);
+        private final AtomicLong flushedTxId = new AtomicLong(-1);
     }
 }

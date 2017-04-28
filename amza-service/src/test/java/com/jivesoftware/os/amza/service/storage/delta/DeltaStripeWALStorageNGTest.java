@@ -257,7 +257,7 @@ public class DeltaStripeWALStorageNGTest {
             new AckWaters(amzaSystemStats, amzaStats, quorumLatency, 2, false),
             new SickThreads(),
             ringStoreReader,
-            deltaWALFactory,
+            highwaterStorage, deltaWALFactory,
             8,
             walIndexProviderRegistry,
             20_000,

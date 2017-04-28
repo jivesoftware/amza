@@ -355,7 +355,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                         }
                         stripeVersion[0] = stripeIndex; // yawn
 
-                        map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestAquariumTxId(versionedAquarium)));
+                        map.put("highestTxId", partitionStripe == null ? "-1" : String.valueOf(partitionStripe.highestTxId(versionedPartitionName)));
                         return null;
                     });
 

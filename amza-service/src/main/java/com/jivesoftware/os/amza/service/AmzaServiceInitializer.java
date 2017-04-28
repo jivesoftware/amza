@@ -47,7 +47,6 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
@@ -315,6 +314,17 @@ public class AmzaServiceInitializer {
 
         AckWaters ackWaters = new AckWaters(amzaSystemStats, amzaStats, quorumLatency, config.ackWatersStripingLevel, config.ackWatersVerboseLogTimeouts);
 
+        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(amzaSystemStats,
+            amzaStats,
+            amzaInterner,
+            orderIdProvider,
+            ringMember,
+            partitionCreator,
+            systemWALStorage,
+            walUpdated,
+            config.flushHighwatersAfterNUpdates,
+            numberOfStripes);
+
         DeltaStripeWALStorage[] deltaStripeWALStorages = new DeltaStripeWALStorage[numberOfStripes];
 
         BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
@@ -337,6 +347,7 @@ public class AmzaServiceInitializer {
                 ackWaters,
                 sickThreads,
                 ringStoreReader,
+                highwaterStorage,
                 deltaWALFactory,
                 config.deltaMaxValueSizeInIndex,
                 indexProviderRegistry,
@@ -412,17 +423,6 @@ public class AmzaServiceInitializer {
 
         AmzaPartitionWatcher amzaStripedPartitionWatcher = new AmzaPartitionWatcher(false, allRowChanges);
 
-        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(amzaSystemStats,
-            amzaStats,
-            amzaInterner,
-            orderIdProvider,
-            ringMember,
-            partitionCreator,
-            systemWALStorage,
-            walUpdated,
-            config.flushHighwatersAfterNUpdates,
-            numberOfStripes);
-
         AsyncStripeFlusher[] stripeFlusher = new AsyncStripeFlusher[numberOfStripes];
         for (int i = 0; i < numberOfStripes; i++) {
             int index = i;
@@ -486,9 +486,9 @@ public class AmzaServiceInitializer {
                             partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage1, versionedAquarium) -> {
                                 return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                                    PartitionStore partitionStore = partitionCreator.get("systemReady", versionedPartitionName, stripeIndex);
-                                    if (partitionStore != null) {
-                                        takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
+                                    long highestTxId = partitionStripe.highestTxId(versionedPartitionName);
+                                    if (highestTxId != -1) {
+                                        takeCoordinator.update(ringStoreReader, versionedPartitionName, highestTxId);
                                     } else {
                                         LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}",
                                             versionedPartitionName);

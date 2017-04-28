@@ -89,6 +89,7 @@ public class DeltaStripeWALStorage {
     private final AckWaters ackWaters;
     private final SickThreads sickThreads;
     private final AmzaRingReader ringReader;
+    private final HighwaterStorage highwaterStorage;
     private final DeltaWALFactory deltaWALFactory;
     private final int maxValueSizeInIndex;
     private final WALIndexProviderRegistry walIndexProviderRegistry;
@@ -123,6 +124,7 @@ public class DeltaStripeWALStorage {
         AckWaters ackWaters,
         SickThreads sickThreads,
         AmzaRingReader ringReader,
+        HighwaterStorage highwaterStorage,
         DeltaWALFactory deltaWALFactory,
         int maxValueSizeInIndex,
         WALIndexProviderRegistry walIndexProviderRegistry,
@@ -135,6 +137,7 @@ public class DeltaStripeWALStorage {
         this.ackWaters = ackWaters;
         this.sickThreads = sickThreads;
         this.ringReader = ringReader;
+        this.highwaterStorage = highwaterStorage;
         this.deltaWALFactory = deltaWALFactory;
         this.maxValueSizeInIndex = maxValueSizeInIndex;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
@@ -314,7 +317,15 @@ public class DeltaStripeWALStorage {
                 return highestTxId;
             }
         }
-        return storage.highestTxId();
+        long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
+        long storageTxId = storage.highestTxId();
+        if (highwaterTxId == -1 && storageTxId != -1) {
+            LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, storageTxId);
+            highwaterStorage.setLocal(versionedPartitionName, storageTxId);
+        } else if (highwaterTxId != -1 && storageTxId != highwaterTxId) {
+            LOG.error("Mismatched txId for:{} storage:{} highwater:{}", versionedPartitionName, storageTxId, highwaterTxId);
+        }
+        return storageTxId;
     }
 
     private boolean txPartitionDelta(VersionedPartitionName versionedPartitionName, PartitionDeltaTx tx) throws Exception {
@@ -447,14 +458,10 @@ public class DeltaStripeWALStorage {
                 amzaStats.deltaStripeMerge(index, 0, 0);
             }
         } catch (Exception x) {
-            sickThreads.sick(x);
-            LOG.error(
-                "This is catastrophic."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
-            LockSupport.park();
+            parkSick("This is catastrophic."
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance", x);
         } finally {
             writeReleaseAll();
         }
@@ -475,6 +482,7 @@ public class DeltaStripeWALStorage {
                 if (result.walIndex != null) {
                     providerIndexes.put(result.walIndex.getProviderName(), result.walIndex);
                 }
+                highwaterStorage.setLocal(result.versionedPartitionName, result.lastTxId);
             }
             for (Entry<String, Collection<WALIndex>> entry : providerIndexes.asMap().entrySet()) {
                 WALIndexProvider<?> walIndexProvider = walIndexProviderRegistry.getWALIndexProvider(entry.getKey());
@@ -483,42 +491,27 @@ public class DeltaStripeWALStorage {
                 }
             }
         } catch (Exception x) {
-            sickThreads.sick(x);
-            LOG.error(
-                "This is catastrophic. Failure finalizing merge."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
-            LockSupport.park();
+            parkSick("This is catastrophic. Failure finalizing merge.", x);
         }
 
         try {
             wal.awaitDerefenced();
             LOG.info("Awaited clear references for delta partitions.");
         } catch (Exception x) {
-            sickThreads.sick(x);
-            LOG.error(
-                "This is catastrophic. Failure awaiting clear references."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
-            LockSupport.park();
+            parkSick("This is catastrophic. Failure awaiting clear references.", x);
+        }
+
+        try {
+            highwaterStorage.flushLocal();
+        } catch (Exception x) {
+            parkSick("This is catastrophic. Failure destroying WAL.", x);
         }
 
         try {
             deltaWALFactory.destroy(wal);
             LOG.info("Compacted delta partitions.");
         } catch (Exception x) {
-            sickThreads.sick(x);
-            LOG.error(
-                "This is catastrophic. Failure destroying WAL."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
-            LockSupport.park();
+            parkSick("This is catastrophic. Failure destroying WAL.", x);
         }
 
         try {
@@ -526,16 +519,19 @@ public class DeltaStripeWALStorage {
                 currentVersionProvider.invalidateDeltaIndexCache(result.versionedPartitionName);
             }
         } catch (Exception x) {
-            sickThreads.sick(x);
-            LOG.error(
-                "This is catastrophic. Failure invalidating delta index cache."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
-            LockSupport.park();
+            parkSick("This is catastrophic. Failure invalidating delta index cache.", x);
         }
         return true;
+    }
+
+    private void parkSick(String message, Exception x) {
+        sickThreads.sick(x);
+        LOG.error(message
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance",
+            new Object[] { index }, x);
+        LockSupport.park();
     }
 
     private MergeResult getMergeResult(IoStats ioStats,
@@ -861,13 +857,14 @@ public class DeltaStripeWALStorage {
         try {
             return txPartitionDelta(versionedPartitionName, partitionDelta -> {
                 return storage.streamValues(prefix,
-                    storageStream -> partitionDelta.get(ioStats, prefix, keys, (fp, rowType, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                        if (valueTimestamp != -1) {
-                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
-                        } else {
-                            return storageStream.stream(key);
-                        }
-                    }),
+                    storageStream -> partitionDelta.get(ioStats, prefix, keys,
+                        (fp, rowType, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                            if (valueTimestamp != -1) {
+                                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                            } else {
+                                return storageStream.stream(key);
+                            }
+                        }),
                     (_prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                         return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                     });

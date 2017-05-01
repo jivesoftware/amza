@@ -326,24 +326,24 @@ public class DeltaStripeWALStorage {
         }
         if (useHighwaterTxId) {
             long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
-            if (highwaterTxId == -1) {
+            if (highwaterTxId == HighwaterStorage.LOCAL_NONE) {
                 highwaterTxId = txIdProvider.get();
-                if (highwaterTxId != -1) {
+                if (highwaterTxId != HighwaterStorage.LOCAL_NONE) {
                     LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, highwaterTxId);
                     highwaterStorage.setLocal(versionedPartitionName, highwaterTxId);
                 }
             }
-            return highwaterTxId;
+            return highwaterTxId == HighwaterStorage.LOCAL_NONE ? -1 : highwaterTxId;
         } else {
             long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
             long storageTxId = txIdProvider.get();
-            if (highwaterTxId == -1 && storageTxId != -1) {
+            if (highwaterTxId == HighwaterStorage.LOCAL_NONE && storageTxId != HighwaterStorage.LOCAL_NONE) {
                 LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, storageTxId);
                 highwaterStorage.setLocal(versionedPartitionName, storageTxId);
-            } else if (highwaterTxId != -1 && storageTxId != highwaterTxId) {
+            } else if (highwaterTxId != HighwaterStorage.LOCAL_NONE && storageTxId != highwaterTxId) {
                 LOG.error("Mismatched txId for:{} storage:{} highwater:{}", versionedPartitionName, storageTxId, highwaterTxId);
             }
-            return storageTxId;
+            return storageTxId == HighwaterStorage.LOCAL_NONE ? -1 : storageTxId;
         }
     }
 

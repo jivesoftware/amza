@@ -22,6 +22,8 @@ import java.util.concurrent.Callable;
 
 public interface HighwaterStorage {
 
+    int LOCAL_NONE = -2;
+
     void clearRing(RingMember ringMember) throws Exception;
 
     void setIfLarger(RingMember ringMember,

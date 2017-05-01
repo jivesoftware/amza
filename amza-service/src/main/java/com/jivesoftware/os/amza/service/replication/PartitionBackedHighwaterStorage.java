@@ -355,13 +355,13 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     public long getLocal(VersionedPartitionName versionedPartitionName) throws Exception {
         LocalHighwater highwater = localHighwaterUpdates.computeIfAbsent(versionedPartitionName, versionedPartitionName1 -> new LocalHighwater());
         long txId = highwater.highwaterTxId.get();
-        if (txId == -1) {
+        if (txId == LOCAL_NONE) {
             // can't call systemWALStorage inside of highwater lock due to flushLocal lock order
             TimestampedValue got = systemWALStorage.getTimestampedValue(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                 walKey(versionedPartitionName, rootRingMember));
             synchronized (highwater) {
                 long latestTxId = highwater.highwaterTxId.get();
-                if (latestTxId == -1) {
+                if (latestTxId == LOCAL_NONE) {
                     if (got != null) {
                         txId = UIO.bytesLong(got.getValue());
                     }
@@ -407,7 +407,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     private static class LocalHighwater {
-        private final AtomicLong highwaterTxId = new AtomicLong(-1);
-        private final AtomicLong flushedTxId = new AtomicLong(-1);
+        private final AtomicLong highwaterTxId = new AtomicLong(LOCAL_NONE);
+        private final AtomicLong flushedTxId = new AtomicLong(LOCAL_NONE);
     }
 }

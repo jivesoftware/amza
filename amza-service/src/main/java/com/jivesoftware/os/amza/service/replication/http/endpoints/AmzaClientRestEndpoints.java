@@ -736,6 +736,13 @@ public class AmzaClientRestEndpoints {
 
         try {
             PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            StateMessageCause stateMessageCause = client.status(partitionName,
+                Consistency.none,
+                false,
+                10_000);
+            if (stateMessageCause != null) {
+                return stateMessageCauseToResponse(stateMessageCause);
+            }
             StreamingOutput stream = os -> {
                 os.flush();
                 FilerInputStream fin = new FilerInputStream(inputStream);
@@ -766,6 +773,13 @@ public class AmzaClientRestEndpoints {
 
         try {
             PartitionName partitionName = amzaInterner.internPartitionNameBase64(base64PartitionName);
+            StateMessageCause stateMessageCause = client.status(partitionName,
+                Consistency.none,
+                false,
+                10_000);
+            if (stateMessageCause != null) {
+                return stateMessageCauseToResponse(stateMessageCause);
+            }
             StreamingOutput stream = os -> {
                 os.flush();
                 FilerInputStream fin = new FilerInputStream(inputStream);

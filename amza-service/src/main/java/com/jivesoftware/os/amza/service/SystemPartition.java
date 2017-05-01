@@ -225,10 +225,10 @@ public class SystemPartition implements Partition {
         return systemWALStorage.approximateCount(versionedPartitionName);
     }
 
-    @Override
+    /*@Override
     public long highestTxId() throws Exception {
         return systemWALStorage.highestPartitionTxId(versionedPartitionName);
-    }
+    }*/
 
     @Override
     public LivelyEndState livelyEndState() throws Exception {

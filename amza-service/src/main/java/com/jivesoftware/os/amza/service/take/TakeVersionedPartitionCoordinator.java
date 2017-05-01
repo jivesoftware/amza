@@ -118,7 +118,8 @@ public class TakeVersionedPartitionCoordinator {
             return systemWALStorage.highestPartitionTxId(versionedPartitionName);
         } else {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                return partitionStripe.highestTxId(versionedAquarium.getVersionedPartitionName());
+                long highestTxId = partitionStripe.highestTxId(versionedAquarium.getVersionedPartitionName());
+                return highestTxId == HighwaterStorage.LOCAL_NONE ? -1 : highestTxId;
             });
         }
     }

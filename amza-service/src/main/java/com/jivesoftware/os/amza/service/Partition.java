@@ -43,7 +43,7 @@ public interface Partition {
      */
     long approximateCount() throws Exception;
 
-    long highestTxId() throws Exception;
+    /*long highestTxId() throws Exception;*/
 
     LivelyEndState livelyEndState() throws Exception;
 

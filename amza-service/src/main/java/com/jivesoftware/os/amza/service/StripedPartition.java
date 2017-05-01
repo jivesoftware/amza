@@ -37,6 +37,7 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
@@ -332,14 +333,15 @@ public class StripedPartition implements Partition {
         });
     }
 
-    @Override
+    /*@Override
     public long highestTxId() throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (txPartitionStripe, highwaterStorage, versionedAquarium) -> {
             return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
-                return partitionStripe.highestTxId(versionedAquarium.getVersionedPartitionName());
+                long highestTxId = partitionStripe.highestTxId(versionedAquarium.getVersionedPartitionName());
+                return highestTxId == HighwaterStorage.LOCAL_NONE ? -1 : highestTxId;
             });
         });
-    }
+    }*/
 
     @Override
     public LivelyEndState livelyEndState() throws Exception {

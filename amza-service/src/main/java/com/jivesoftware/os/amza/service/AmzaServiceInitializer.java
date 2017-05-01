@@ -488,7 +488,7 @@ public class AmzaServiceInitializer {
                                 return txPartitionStripe.tx((deltaIndex, stripeIndex, partitionStripe) -> {
                                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                                     long highestTxId = partitionStripe.highestTxId(versionedPartitionName);
-                                    if (highestTxId != -1) {
+                                    if (highestTxId != HighwaterStorage.LOCAL_NONE) {
                                         takeCoordinator.update(ringStoreReader, versionedPartitionName, highestTxId);
                                     } else {
                                         LOG.warn("Skipped system ready init for a partition, likely because it is only partially defined: {}",

@@ -83,11 +83,10 @@ public class PartitionStripe {
     }
 
     public long highestTxId(VersionedPartitionName versionedPartitionName) throws Exception {
-        long highestTxId = storage.getHighestTxId(versionedPartitionName, () -> {
+        return storage.getHighestTxId(versionedPartitionName, () -> {
             PartitionStore partitionStore = partitionCreator.get("stripe>highestTxId", versionedPartitionName, stripeIndex);
             return partitionStore == null ? HighwaterStorage.LOCAL_NONE : partitionStore.highestTxId();
         });
-        return highestTxId == HighwaterStorage.LOCAL_NONE ? -1 : highestTxId;
     }
 
     public RowsChanged commit(HighwaterStorage highwaterStorage,

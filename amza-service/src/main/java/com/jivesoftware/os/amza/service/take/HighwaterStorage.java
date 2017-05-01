@@ -36,7 +36,7 @@ public interface HighwaterStorage {
 
     long get(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 
-    WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception;
+    WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName, boolean includeLocal) throws Exception;
 
     boolean flush(int deltaIndex, boolean force, Callable<Void> preFlush) throws Exception;
 

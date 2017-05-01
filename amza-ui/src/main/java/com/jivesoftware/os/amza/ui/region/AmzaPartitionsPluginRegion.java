@@ -335,10 +335,10 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                                 VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                                 if (partitionName.isSystemPartition()) {
                                     HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+                                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName, true);
                                     row.put("highwaters", renderHighwaters(partitionHighwater));
                                 } else {
-                                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName, true);
                                     row.put("highwaters", renderHighwaters(partitionHighwater));
                                 }
                                 return null;

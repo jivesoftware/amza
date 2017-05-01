@@ -83,10 +83,11 @@ public class PartitionStripe {
     }
 
     public long highestTxId(VersionedPartitionName versionedPartitionName) throws Exception {
-        return storage.getHighestTxId(versionedPartitionName, () -> {
+        long highestTxId = storage.getHighestTxId(versionedPartitionName, () -> {
             PartitionStore partitionStore = partitionCreator.get("stripe>highestTxId", versionedPartitionName, stripeIndex);
             return partitionStore == null ? HighwaterStorage.LOCAL_NONE : partitionStore.highestTxId();
         });
+        return highestTxId == HighwaterStorage.LOCAL_NONE ? -1 : highestTxId;
     }
 
     public RowsChanged commit(HighwaterStorage highwaterStorage,
@@ -321,7 +322,7 @@ public class PartitionStripe {
         TxKeyValueStream txKeyValueStream) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName, true);
 
         if (requiresOnline) {
             LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
@@ -368,7 +369,7 @@ public class PartitionStripe {
         TxKeyValueStream txKeyValueStream) throws Exception {
 
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName, true);
 
         if (requiresOnline) {
             LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();

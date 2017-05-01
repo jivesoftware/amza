@@ -710,16 +710,27 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         dos.writeLong(versionedPartitionName.getPartitionVersion());
         dos.writeByte(1); // fully online
         bytes.increment();
+
+        long rootHighwaterMark = highwaterStorage.getLocal(versionedPartitionName);
+        if (rootHighwaterMark > -1) {
+            byte[] rootMemberBytes = ringMember.toBytes();
+            dos.writeByte(1);
+            dos.writeInt(rootMemberBytes.length);
+            dos.write(rootMemberBytes);
+            dos.writeLong(rootHighwaterMark);
+            bytes.add(1 + 4 + rootMemberBytes.length + 8);
+        }
+
         RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName(), -1);
         for (int i = 0; i < ring.entries.size(); i++) {
             if (ring.rootMemberIndex != i) {
                 RingMemberAndHost entry = ring.entries.get(i);
-                long highwatermark = highwaterStorage.get(entry.ringMember, versionedPartitionName);
+                long highwaterMark = highwaterStorage.get(entry.ringMember, versionedPartitionName);
                 byte[] ringMemberBytes = entry.ringMember.toBytes();
                 dos.writeByte(1);
                 dos.writeInt(ringMemberBytes.length);
                 dos.write(ringMemberBytes);
-                dos.writeLong(highwatermark);
+                dos.writeLong(highwaterMark);
                 bytes.add(1 + 4 + ringMemberBytes.length + 8);
             }
         }

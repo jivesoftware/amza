@@ -175,7 +175,7 @@ public class SystemPartition implements Partition {
 
         long[] lastTxId = { -1 };
         TxResult[] done = new TxResult[1];
-        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName, true);
         TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (done[0] != null && rowTxId > lastTxId[0]) {
                 // streamed to end of txId

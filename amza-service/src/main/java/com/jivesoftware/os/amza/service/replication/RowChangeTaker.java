@@ -681,7 +681,8 @@ public class RowChangeTaker implements RowChanges {
                         LOG.startTimer("take>all");
                         LOG.inc("take>all");
                         try {
-                            long highwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
+                            long initialHighwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
+                            long takeHighwaterMark = initialHighwaterMark;
 
                             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
                             Waterline leader = versionedAquarium.getLeader();
@@ -690,11 +691,11 @@ public class RowChangeTaker implements RowChanges {
                                 remoteVersionedPartitionName,
                                 commitTo,
                                 remoteRingMember,
-                                highwaterMark,
+                                initialHighwaterMark,
                                 primaryRowMarshaller,
                                 binaryHighwaterRowMarshaller);
 
-                            if (highwaterMark >= takeToTxId.get()) {
+                            if (initialHighwaterMark >= takeToTxId.get()) {
                                 LOG.inc("take>fully>all");
                                 stats.took(remoteRingMember);
                                 stats.takeErrors.setCount(remoteRingMember, 0);
@@ -716,7 +717,7 @@ public class RowChangeTaker implements RowChanges {
                                     remoteVersionedPartitionName,
                                     takeSessionId,
                                     takeSharedKey,
-                                    highwaterMark,
+                                    initialHighwaterMark,
                                     leadershipToken,
                                     rowsTakerLimit,
                                     takeRowStream);
@@ -782,11 +783,18 @@ public class RowChangeTaker implements RowChanges {
                                 } else if (rowsResult.otherHighwaterMarks != null) {
                                     // Other highwater are provided when taken fully.
                                     for (Entry<RingMember, Long> otherHighwaterMark : rowsResult.otherHighwaterMarks.entrySet()) {
-                                        highwaterStorage.setIfLarger(otherHighwaterMark.getKey(),
-                                            localVersionedPartitionName,
-                                            otherHighwaterMark.getValue(),
-                                            takeRowStream.lastDeltaIndex.intValue(),
-                                            0);
+                                        RingMember otherMember = otherHighwaterMark.getKey();
+                                        Long highwaterTxId = otherHighwaterMark.getValue();
+                                        if (otherMember.equals(remoteRingMember)) {
+                                            LOG.inc("take>remote>highwater");
+                                            takeHighwaterMark = Math.max(takeHighwaterMark, highwaterTxId);
+                                        } else {
+                                            highwaterStorage.setIfLarger(otherMember,
+                                                localVersionedPartitionName,
+                                                highwaterTxId,
+                                                takeRowStream.lastDeltaIndex.intValue(),
+                                                0);
+                                        }
                                     }
 
                                     LOG.inc("take>fully>all");
@@ -817,7 +825,7 @@ public class RowChangeTaker implements RowChanges {
                                     takeSessionId,
                                     takeSharedKey,
                                     remoteVersionedPartitionName,
-                                    Math.max(highwaterMark, takeRowStream.largestFlushedTxId()),
+                                    Math.max(takeHighwaterMark, takeRowStream.largestFlushedTxId()),
                                     leadershipToken);
                             } catch (Exception x) {
                                 if (LOG.isDebugEnabled()) {

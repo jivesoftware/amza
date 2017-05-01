@@ -401,10 +401,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                             map.put("highwaters", "none");
                         } else if (name.isSystemPartition()) {
                             HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                            WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+                            WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName, true);
                             map.put("highwaters", renderHighwaters(partitionHighwater));
                         } else {
-                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName, true);
                             map.put("highwaters", renderHighwaters(partitionHighwater));
                         }
                     } else {

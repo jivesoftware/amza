@@ -215,14 +215,17 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception {
+    public WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName, boolean includeLocal) throws Exception {
         byte[] fromKey = walKey(versionedPartitionName, null);
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
         List<RingMemberHighwater> highwaters = new ArrayList<>();
         systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
             (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
-                    highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
+                    RingMember member = getMember(key);
+                    if (includeLocal || !member.equals(rootRingMember)) {
+                        highwaters.add(new RingMemberHighwater(member, UIO.bytesLong(value)));
+                    }
                 }
                 return true;
             }, true);

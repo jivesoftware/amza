@@ -333,17 +333,17 @@ public class DeltaStripeWALStorage {
                     highwaterStorage.setLocal(versionedPartitionName, highwaterTxId);
                 }
             }
-            return highwaterTxId == HighwaterStorage.LOCAL_NONE ? -1 : highwaterTxId;
+            return highwaterTxId;
         } else {
             long highwaterTxId = highwaterStorage.getLocal(versionedPartitionName);
             long storageTxId = txIdProvider.get();
             if (highwaterTxId == HighwaterStorage.LOCAL_NONE && storageTxId != HighwaterStorage.LOCAL_NONE) {
                 LOG.info("Repaired missing highwater for:{} txId:{}", versionedPartitionName, storageTxId);
                 highwaterStorage.setLocal(versionedPartitionName, storageTxId);
-            } else if (highwaterTxId != HighwaterStorage.LOCAL_NONE && storageTxId != highwaterTxId) {
-                LOG.error("Mismatched txId for:{} storage:{} highwater:{}", versionedPartitionName, storageTxId, highwaterTxId);
+            } else if (highwaterTxId != HighwaterStorage.LOCAL_NONE && storageTxId > highwaterTxId) {
+                LOG.error("Lagging txId for:{} storage:{} highwater:{}", versionedPartitionName, storageTxId, highwaterTxId);
             }
-            return storageTxId == HighwaterStorage.LOCAL_NONE ? -1 : storageTxId;
+            return storageTxId;
         }
     }
 
@@ -717,7 +717,7 @@ public class DeltaStripeWALStorage {
                 txPartitionDelta(versionedPartitionName, delta -> {
                     WALHighwater partitionHighwater = null;
                     if (delta.shouldWriteHighwater()) {
-                        partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                        partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName, false);
                     }
                     DeltaWAL.DeltaWALApplied updateApplied;
                     synchronized (oneWriterAtATimeLock) {

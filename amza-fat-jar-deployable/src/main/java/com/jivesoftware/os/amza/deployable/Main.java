@@ -40,6 +40,7 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRestEndpoints;
@@ -324,6 +325,7 @@ public class Main {
             -1,
             -1);
 
+
         final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
@@ -332,7 +334,7 @@ public class Main {
             .addEndpoint(AmzaClientRestEndpoints.class)
             .addInjectable(AmzaInterner.class, amzaInterner)
             .addInjectable(ObjectMapper.class, mapper)
-            .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
+            .addInjectable(AmzaRestClient.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
         new AmzaUIInitializer().initialize(clusterName,
             ringHost,

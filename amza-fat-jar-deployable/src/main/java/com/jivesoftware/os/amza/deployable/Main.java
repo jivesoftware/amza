@@ -98,11 +98,11 @@ public class Main {
             if (args.length == 0) {
                 System.out.println("Usage:");
                 System.out.println("");
-                System.out.println("    java -jar amza.jar <hostName>                        (manual cluster discovery)");
+                System.out.println("    java -jar amza.jar <hostName>                        (manual cluster discovery us UI to add peers)");
                 System.out.println(" or ");
-                System.out.println("    java -jar amza.jar <hostName> <clusterName>          (manual cluster discovery)");
+                System.out.println("    java -jar amza.jar <hostName> <clusterName>          (automatic cluster discovery UDP required)");
                 System.out.println(" or ");
-                System.out.println("    java -jar amza.jar <hostName> <clusterName> <peers>  (automatic cluster discovery)");
+                System.out.println("    java -jar amza.jar <hostName> <clusterName> <peers>  (manual cluster discovery)");
                 System.out.println("");
                 System.out.println("Overridable properties:");
                 System.out.println("");
@@ -113,10 +113,10 @@ public class Main {
                 System.out.println("    -Damza.port=1175");
                 System.out.println("         (change the port used to interact with other nodes.) ");
                 System.out.println("");
-                System.out.println("    -Damza.id=<writerId>");
-                System.out.println("    -Damza.working.dirs=<workingDirs>");
-                System.out.println("    -Damza.system.ring.size=<systemRingSize>");
-                System.out.println("    -Damza.leap.cache.max.capacity=1000000");
+                System.out.println("    -Damza.id=<writerId>   default: random number 0-512");
+                System.out.println("    -Damza.working.dirs=<workingDirs>  default: ./data1,./data2,./data3");
+                System.out.println("    -Damza.system.ring.size=<systemRingSize>  default: -1");
+                System.out.println("    -Damza.leap.cache.max.capacity=<leapCacheCapacity>  default: 1000000");
                 System.out.println("");
                 System.out.println("     Only applicable if you have specified a <clusterName>.");
                 System.out.println("          -Damza.discovery.group=225.4.5.6");

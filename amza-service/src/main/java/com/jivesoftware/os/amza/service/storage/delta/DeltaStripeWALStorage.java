@@ -501,7 +501,6 @@ public class DeltaStripeWALStorage {
                 if (result.walIndex != null) {
                     providerIndexes.put(result.walIndex.getProviderName(), result.walIndex);
                 }
-                highwaterStorage.setLocal(result.versionedPartitionName, result.lastTxId);
             }
             for (Entry<String, Collection<WALIndex>> entry : providerIndexes.asMap().entrySet()) {
                 WALIndexProvider<?> walIndexProvider = walIndexProviderRegistry.getWALIndexProvider(entry.getKey());
@@ -590,7 +589,7 @@ public class DeltaStripeWALStorage {
                                         LOG.warn("Ignored merge for partition {} with missing properties", versionedPartitionName);
                                         r = null;
                                     } else {
-                                        r = currentDelta.merge(ioStats, partitionIndex, properties, stripeIndex, validate);
+                                        r = currentDelta.merge(ioStats, highwaterStorage, partitionIndex, properties, stripeIndex, validate);
                                     }
                                 }
                                 sickThreads.recovered();

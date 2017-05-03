@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALPrefix;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -457,7 +458,13 @@ class PartitionDelta {
         }
     }
 
-    MergeResult merge(IoStats ioStats, PartitionIndex partitionIndex, PartitionProperties properties, int stripe, boolean validate) throws Exception {
+    MergeResult merge(IoStats ioStats,
+        HighwaterStorage highwaterStorage,
+        PartitionIndex partitionIndex,
+        PartitionProperties properties,
+        int stripe,
+        boolean validate) throws Exception {
+
         long merged = 0;
         long lastTxId = 0;
         WALIndex walIndex = null;
@@ -533,6 +540,7 @@ class PartitionDelta {
                     });
                     partitionStore.getWalStorage().endOfMergeMarker(ioStats, merge.getDeltaWALId(), lastTxId);
                     walIndex = partitionStore.getWalStorage().commitIndex(true, lastTxId);
+                    highwaterStorage.setLocal(merge.versionedPartitionName, lastTxId);
                     LOG.info("Merged deltas for {}", merge.versionedPartitionName);
                 }
             } finally {

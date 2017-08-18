@@ -134,11 +134,9 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         this.feedEveryMillis = feedEveryMillis;
         this.awaitLivelyEndState = awaitLivelyEndState;
         this.sickThreads = sickThreads;
-
     }
 
     public void start() {
-
         running.set(true);
         livelynessExecutorService.submit(() -> {
             while (running.get()) {
@@ -201,7 +199,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                             smellsFishy.wait(smellsFishy.isEmpty() ? 0 : feedEveryMillis);
                         }
                     }
-                    /*LOG.info("Smelled {} fish in {}", count, (System.currentTimeMillis() - start));*/
                 } catch (InterruptedException e) {
                     break;
                 } catch (Throwable t) {
@@ -265,8 +262,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             tookFullyWhileInactive.remove(versionedPartitionName);
         }
 
-        //if (!versionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TOOK FULLY +++ {}={} from {} in {} at {}",
-        // rootRingMember, currentWaterline.getState(), fromRingMember, versionedPartitionName, leadershipToken);
         if (currentWaterline.getState() == State.bootstrap && (leader == null || leadershipToken == leader.getTimestamp())) {
             tookFullyWhileBootstrap.compute(versionedPartitionName, (key, current) -> {
                 if (current == null || current.leadershipToken < leadershipToken) {
@@ -764,7 +759,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     interface LivelinessKeyStream {
-
         boolean stream(Member rootRingMember, boolean isSelf, Member ackRingMember) throws Exception;
     }
 
@@ -857,7 +851,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     private static class AmzaMemberLifecycle implements MemberLifecycle<Long> {
-
         private final StorageVersionProvider storageVersionProvider;
         private final VersionedPartitionName versionedPartitionName;
         private final Member rootMember;
@@ -881,7 +874,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     private static class AmzaAtQuorum implements AtQuorum {
-
         private final VersionedPartitionProvider versionedPartitionProvider;
         private final AmzaRingReader amzaRingReader;
         private final VersionedPartitionName versionedPartitionName;
@@ -907,7 +899,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     static class LeadershipTokenAndTookFully {
-
         final long leadershipToken;
         final Set<RingMember> tookFully = Collections.synchronizedSet(new HashSet<>());
 

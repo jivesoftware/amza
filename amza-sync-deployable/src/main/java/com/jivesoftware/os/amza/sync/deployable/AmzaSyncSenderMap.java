@@ -19,42 +19,4 @@ public class AmzaSyncSenderMap extends AmzaMap<String, AmzaSyncSenderConfig> imp
         super(clientProvider,partitionName,partitionProperties,keyMarshaller,valueMarshaller);
     }
 
-   /* public AmzaSyncSenderConfigStorage(BAInterner interner,
-        ObjectMapper mapper,
-        TenantAwareHttpClient<String> httpClient,
-        long awaitLeaderElectionForNMillis) {
-
-        this.interner = interner;
-        this.mapper = mapper;
-
-        this.clientProvider = new AmzaClientProvider<>(
-            new HttpPartitionClientFactory(this.interner),
-            new HttpPartitionHostsProvider(this.interner, httpClient, mapper),
-            new RingHostHttpClientProvider(httpClient),
-            Executors.newCachedThreadPool(), //TODO expose to conf?
-            awaitLeaderElectionForNMillis,
-            -1,
-            -1);
-
-        partitionProperties = new PartitionProperties(Durability.fsync_async,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            false,
-            Consistency.leader_quorum,
-            true,
-            true,
-            false,
-            RowType.snappy_primary,
-            "lab",
-            -1,
-            null,
-            -1,
-            -1);
-    }
-
-    private PartitionName partitionName() {
-        byte[] nameAsBytes = ("amza-sync-sender-config").getBytes(StandardCharsets.UTF_8);
-        return new PartitionName(false, nameAsBytes, nameAsBytes);
-    }
-*/
-
 }

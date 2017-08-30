@@ -55,19 +55,6 @@ public class AmzaPartitionedConfigStorage<K, V> {
         return new PartitionName(false, nameAsBytes, nameAsBytes);
     }
 
-    public void multiPutIfAbsent(String senderName, Map<K, V> puts) throws Exception {
-        Map<K, V> got = multiGet(senderName, puts.keySet());
-        Map<K, V> put = Maps.newHashMap();
-        for (Entry<K, V> entry : puts.entrySet()) {
-            if (!got.containsKey(entry.getKey())) {
-                put.put(entry.getKey(), entry.getValue());
-            }
-        }
-        if (!put.isEmpty()) {
-            multiPut(senderName, put);
-        }
-    }
-
     public void multiPut(String senderName, Map<K, V> configs) throws Exception {
 
         PartitionClient client = clientProvider.getPartition(partitionName(senderName), ringSize, partitionProperties);

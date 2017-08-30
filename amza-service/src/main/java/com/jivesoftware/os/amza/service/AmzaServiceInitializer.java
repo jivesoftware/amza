@@ -260,20 +260,20 @@ public class AmzaServiceInitializer {
             }
             File versionFile = new File(walDirs[i], "version");
             if (versionFile.exists()) {
-                stripeLocks[i] = FileChannel.open(versionFile.toPath(), StandardOpenOption.WRITE).lock();
                 try (FileInputStream fileInputStream = new FileInputStream(versionFile)) {
                     DataInput input = new DataInputStream(fileInputStream);
                     stripeVersions[i] = input.readLong();
                     LOG.info("Loaded stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " from " + versionFile);
                 }
-            } else if (versionFile.createNewFile()) {
                 stripeLocks[i] = FileChannel.open(versionFile.toPath(), StandardOpenOption.WRITE).lock();
+            } else if (versionFile.createNewFile()) {
                 try (FileOutputStream fileOutputStream = new FileOutputStream(versionFile)) {
                     DataOutput output = new DataOutputStream(fileOutputStream);
                     stripeVersions[i] = orderIdProvider.nextId();
                     output.writeLong(stripeVersions[i]);
                     LOG.info("Created stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " to " + versionFile);
                 }
+                stripeLocks[i] = FileChannel.open(versionFile.toPath(), StandardOpenOption.WRITE).lock();
             } else {
                 throw new IllegalStateException("Please check your file permission. " + versionFile.getAbsolutePath());
             }

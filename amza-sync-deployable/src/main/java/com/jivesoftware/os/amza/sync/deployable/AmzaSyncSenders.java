@@ -176,14 +176,14 @@ public class AmzaSyncSenders {
             String host = config.senderHost;
             int port = config.senderPort;
 
-            boolean sslEnable = scheme.equals("https");
             OAuthSigner authSigner = (request) -> {
                 CommonsHttpOAuthConsumer oAuthConsumer = new CommonsHttpOAuthConsumer(consumerKey, consumerSecret);
                 oAuthConsumer.setMessageSigner(new HmacSha1MessageSigner());
                 oAuthConsumer.setTokenWithSecret(consumerKey, consumerSecret);
                 return oAuthConsumer.sign(request);
             };
-            HttpClient httpClient = HttpRequestHelperUtils.buildHttpClient(sslEnable,
+
+            HttpClient httpClient = HttpRequestHelperUtils.buildHttpClient(scheme.equals("https"),
                 config.allowSelfSignedCerts,
                 authSigner,
                 host,

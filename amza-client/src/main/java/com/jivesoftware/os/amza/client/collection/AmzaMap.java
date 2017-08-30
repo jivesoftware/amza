@@ -53,21 +53,7 @@ public class AmzaMap<K, V> {
         return new PartitionName(false, nameAsBytes, nameAsBytes);
     }
 
-    public void multiPutIfAbsent(Map<K, V> puts) throws Exception {
-        Map<K, V> got = multiGet(puts.keySet());
-        Map<K, V> put = Maps.newHashMap();
-        for (Entry<K, V> entry : puts.entrySet()) {
-            if (!got.containsKey(entry.getKey())) {
-                put.put(entry.getKey(), entry.getValue());
-            }
-        }
-        if (!put.isEmpty()) {
-            multiPut(put);
-        }
-    }
-
     public void multiPut(Map<K, V> puts) throws Exception {
-
         PartitionClient partition = clientProvider.getPartition(partitionName(), ringSize, partitionProperties);
         long now = System.currentTimeMillis();
         partition.commit(Consistency.leader_quorum,
@@ -87,7 +73,6 @@ public class AmzaMap<K, V> {
     }
 
     public void multiRemove(List<K> keys) throws Exception {
-
         PartitionClient partition = clientProvider.getPartition(partitionName(), ringSize, partitionProperties);
         long now = System.currentTimeMillis();
         partition.commit(Consistency.leader_quorum,

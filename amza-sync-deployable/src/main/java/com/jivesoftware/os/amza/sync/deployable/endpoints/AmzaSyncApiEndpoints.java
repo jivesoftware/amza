@@ -24,6 +24,7 @@ import com.jivesoftware.os.amza.sync.deployable.Rows;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
+
 import java.io.InputStream;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -34,8 +35,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import org.xerial.snappy.SnappyInputStream;
 
+import org.xerial.snappy.SnappyInputStream;
 
 /**
  * @author jonathan
@@ -43,7 +44,6 @@ import org.xerial.snappy.SnappyInputStream;
 @Singleton
 @Path("/api/sync/v1")
 public class AmzaSyncApiEndpoints {
-
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaSyncReceiver syncReceiver;
@@ -52,7 +52,9 @@ public class AmzaSyncApiEndpoints {
 
     private final ResponseHelper responseHelper = ResponseHelper.INSTANCE;
 
-    public AmzaSyncApiEndpoints(@Context AmzaSyncReceiver syncReceiver, @Context ObjectMapper mapper, @Context AmzaInterner amzaInterner) {
+    public AmzaSyncApiEndpoints(@Context AmzaSyncReceiver syncReceiver,
+        @Context ObjectMapper mapper,
+        @Context AmzaInterner amzaInterner) {
         this.syncReceiver = syncReceiver;
         this.mapper = mapper;
         this.amzaInterner = amzaInterner;
@@ -69,7 +71,7 @@ public class AmzaSyncApiEndpoints {
             rows = mapper.readValue(new SnappyInputStream(inputStream), Rows.class);
         } catch (Exception x) {
             LOG.error("Failed decompressing commitRows({})",
-                new Object[] { partitionNameBase64 }, x);
+                new Object[]{partitionNameBase64}, x);
             return responseHelper.errorResponse("Server error", x);
         }
         try {
@@ -78,7 +80,7 @@ public class AmzaSyncApiEndpoints {
             return responseHelper.jsonResponse("ok");
         } catch (Exception x) {
             LOG.error("Failed calling commitRows({},count:{})",
-                new Object[] { partitionNameBase64, rows != null ? rows.size() : null }, x);
+                new Object[]{partitionNameBase64, rows != null ? rows.size() : null}, x);
             return responseHelper.errorResponse("Server error", x);
         }
     }
@@ -96,9 +98,8 @@ public class AmzaSyncApiEndpoints {
             return responseHelper.jsonResponse("ok");
         } catch (Exception x) {
             LOG.error("Failed calling ensurePartition({},{})",
-                new Object[] { partitionNameBase64, ringSize }, x);
+                new Object[]{partitionNameBase64, ringSize}, x);
             return responseHelper.errorResponse("Server error", x);
         }
     }
-
 }

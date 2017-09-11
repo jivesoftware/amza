@@ -31,6 +31,7 @@ import com.jivesoftware.os.amza.sync.deployable.AmzaSyncSenders;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
+
 import java.util.Map;
 import java.util.Map.Entry;
 import javax.inject.Singleton;
@@ -51,7 +52,6 @@ import javax.ws.rs.core.Response.Status;
 @Singleton
 @Path("/amza/sync")
 public class AmzaSyncEndpoints {
-
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaSyncSenderMap configStorage;
@@ -85,7 +85,6 @@ public class AmzaSyncEndpoints {
         }
     }
 
-
     @POST
     @Path("/syncspace/add/{name}")
     @Produces(MediaType.APPLICATION_JSON)
@@ -95,7 +94,7 @@ public class AmzaSyncEndpoints {
             configStorage.multiPut(ImmutableMap.of(name, syncspaceConfig));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
-            LOG.error("Failed to get.", e);
+            LOG.error("Failed to add.", e);
             return Response.serverError().build();
         }
     }
@@ -108,7 +107,7 @@ public class AmzaSyncEndpoints {
             configStorage.multiRemove(ImmutableList.of(name));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
-            LOG.error("Failed to get.", e);
+            LOG.error("Failed to delete.", e);
             return Response.serverError().build();
         }
     }
@@ -138,8 +137,11 @@ public class AmzaSyncEndpoints {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getCursors(@PathParam("syncspaceName") String syncspaceName) {
         try {
-            AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
+            if (syncSenders == null)
+                return Response.status(Status.SERVICE_UNAVAILABLE).entity("Sender is not enabled").build();
+
             Map<String, AmzaSyncStatus> map = Maps.newHashMap();
+            AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
             if (sender != null) {
                 sender.streamCursors(null, null, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
                     map.put(AmzaSyncPartitionTuple.toKeyString(new AmzaSyncPartitionTuple(fromPartitionName, toPartitionName)),
@@ -161,10 +163,13 @@ public class AmzaSyncEndpoints {
         @PathParam("fromPartitionNameBase64") String fromPartitionNameBase64,
         @PathParam("toPartitionNameBase64") String toPartitionNameBase64) {
         try {
+            if (syncSenders == null)
+                return Response.status(Status.SERVICE_UNAVAILABLE).entity("Sender is not enabled").build();
+
             PartitionName from = amzaInterner.internPartitionNameBase64(fromPartitionNameBase64);
             PartitionName to = amzaInterner.internPartitionNameBase64(toPartitionNameBase64);
-
             AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
+
             Map<String, AmzaSyncStatus> map = Maps.newHashMap();
             if (sender != null) {
                 sender.streamCursors(from, to, (fromPartitionName, toPartitionName, timestamp, cursor) -> {
@@ -221,7 +226,7 @@ public class AmzaSyncEndpoints {
             partitionConfigStorage.multiRemove(syncspaceName, ImmutableList.of(new AmzaSyncPartitionTuple(from, to)));
             return responseHelper.jsonResponse("Success");
         } catch (Exception e) {
-            LOG.error("Failed to get.", e);
+            LOG.error("Failed to delete.", e);
             return Response.serverError().build();
         }
     }
@@ -232,18 +237,16 @@ public class AmzaSyncEndpoints {
     public Response postReset(@PathParam("syncspaceName") String syncspaceName,
         @PathParam("partitionNameBase64") String partitionNameBase64) {
         try {
-            if (syncSenders != null) {
-                PartitionName partitionName = amzaInterner.internPartitionNameBase64(partitionNameBase64);
-                AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
-                boolean result = sender != null && sender.resetCursors(partitionName);
-                return Response.ok(result).build();
-            } else {
+            if (syncSenders == null)
                 return Response.status(Status.SERVICE_UNAVAILABLE).entity("Sender is not enabled").build();
-            }
+
+            PartitionName partitionName = amzaInterner.internPartitionNameBase64(partitionNameBase64);
+            AmzaSyncSender sender = syncSenders.getSender(syncspaceName);
+            boolean result = sender != null && sender.resetCursors(partitionName);
+            return Response.ok(result).build();
         } catch (Exception e) {
             LOG.error("Failed to reset.", e);
             return Response.serverError().build();
         }
     }
-
 }

@@ -91,7 +91,6 @@ public class EmbedAmzaServiceInitializer {
     }
 
     public interface QuorumLatency extends TimerHealthCheckConfig {
-
         @StringDefault("ack>quorum>latency")
         @Override
         String getName();
@@ -102,13 +101,12 @@ public class EmbedAmzaServiceInitializer {
 
         @DoubleDefault(30000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private final HealthTimer quorumLatency = HealthFactory.getHealthTimer(QuorumLatency.class, TimerHealthChecker.FACTORY);
 
     public interface QuorumTimeouts extends TriggerTimeoutHealthCheckConfig {
-
         @StringDefault("ack>quorum>timeouts")
         @Override
         String getName();

@@ -30,6 +30,7 @@ import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
+import com.jivesoftware.os.routing.bird.deployable.config.extractor.ConfigBinder;
 import com.jivesoftware.os.routing.bird.endpoints.base.FullyOnlineVersion;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
@@ -57,31 +58,30 @@ import org.merlin.config.defaults.StringDefault;
 
 public class AmzaMain {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         new AmzaMain().run(args);
     }
 
     interface DiskFreeCheck extends ScheduledMinMaxHealthCheckConfig {
-
         @StringDefault("disk>free")
         @Override
-        public String getName();
+        String getName();
 
         @LongDefault(80)
         @Override
-        public Long getMax();
-
+        Long getMax();
     }
 
-    public void run(String[] args) throws Exception {
+    void run(String[] args) {
         ServiceStartupHealthCheck serviceStartupHealthCheck = new ServiceStartupHealthCheck();
         try {
-            final Deployable deployable = new Deployable(args);
+            ConfigBinder configBinder = new ConfigBinder(args);
+            InstanceConfig instanceConfig = configBinder.bind(InstanceConfig.class);
+            final Deployable deployable = new Deployable(args, configBinder, instanceConfig, null);
+
             HealthFactory.initialize(deployable::config, new DeployableHealthCheckRegistry(deployable));
 
             deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("Amza", "main", "/amza/ui"))));
-
-
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
             deployable.addHealthCheck(new GCLoadHealthChecker(deployable.config(GCLoadHealthChecker.GCLoadHealthCheckerConfig.class)));
             deployable.addHealthCheck(new SystemCpuHealthChecker(deployable.config(SystemCpuHealthChecker.SystemCpuHealthCheckerConfig.class)));
@@ -91,8 +91,6 @@ public class AmzaMain {
             deployable.addHealthCheck(serviceStartupHealthCheck);
             deployable.addErrorHealthChecks(deployable.config(ErrorHealthCheckConfig.class));
 
-
-            InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
             AtomicReference<Callable<Boolean>> isAmzaReady = new AtomicReference<>(() -> false);
             deployable.addManageInjectables(FullyOnlineVersion.class, (FullyOnlineVersion) () -> {
                 if (serviceStartupHealthCheck.startupHasSucceeded() && isAmzaReady.get().call()) {
@@ -121,7 +119,6 @@ public class AmzaMain {
             amzaServiceConfig.asyncFsyncIntervalMillis = amzaConfig.getAsyncFsyncIntervalMillis();
             amzaServiceConfig.useMemMap = amzaConfig.getUseMemMap();
             amzaServiceConfig.systemReadyInitConcurrencyLevel = amzaConfig.getSystemReadyInitConcurrencyLevel();
-
             amzaServiceConfig.ackWatersVerboseLogTimeouts = amzaConfig.getAckWatersVerboseLogTimeouts();
             amzaServiceConfig.takeSlowThresholdInMillis = amzaConfig.getTakeSlowThresholdInMillis();
             amzaServiceConfig.takeReofferMaxElectionsPerHeartbeat = amzaConfig.getTakeReofferMaxElectionsPerHeartbeat();
@@ -203,9 +200,9 @@ public class AmzaMain {
             clientHealthProvider.start();
             isAmzaReady.set(lifecycle::isReady);
             serviceStartupHealthCheck.success();
-
         } catch (Throwable t) {
             serviceStartupHealthCheck.info("Encountered the following failure during startup.", t);
         }
     }
+
 }

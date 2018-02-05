@@ -52,6 +52,7 @@ import com.jivesoftware.os.routing.bird.deployable.DeployableHealthCheckRegistry
 import com.jivesoftware.os.routing.bird.deployable.ErrorHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import com.jivesoftware.os.routing.bird.deployable.TenantAwareHttpClientHealthCheck;
+import com.jivesoftware.os.routing.bird.deployable.config.extractor.ConfigBinder;
 import com.jivesoftware.os.routing.bird.endpoints.base.FullyOnlineVersion;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI.UI;
@@ -89,15 +90,17 @@ import org.glassfish.jersey.oauth1.signature.OAuth1Signature;
 
 public class AmzaSyncMain {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         new AmzaSyncMain().run(args);
     }
 
-    public void run(String[] args) throws Exception {
+    void run(String[] args) {
         ServiceStartupHealthCheck serviceStartupHealthCheck = new ServiceStartupHealthCheck();
         try {
-            final Deployable deployable = new Deployable(args);
-            InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
+            ConfigBinder configBinder = new ConfigBinder(args);
+            InstanceConfig instanceConfig = configBinder.bind(InstanceConfig.class);
+            final Deployable deployable = new Deployable(args, configBinder, instanceConfig, null);
+
             HealthFactory.initialize(deployable::config, new DeployableHealthCheckRegistry(deployable));
             deployable.addManageInjectables(HasUI.class, new HasUI(Arrays.asList(new UI("Sync", "main", "/ui"))));
             deployable.addHealthCheck(new GCPauseHealthChecker(deployable.config(GCPauseHealthChecker.GCPauseHealthCheckerConfig.class)));
@@ -371,4 +374,5 @@ public class AmzaSyncMain {
             serviceStartupHealthCheck.info("Encountered the following failure during startup.", t);
         }
     }
+
 }

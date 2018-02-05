@@ -15,7 +15,7 @@
         <jive.utils.version>0.112</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.26</mlogger.version>
-        <routing.bird.version>0.211</routing.bird.version>
+        <routing.bird.version>0.223</routing.bird.version>
         <aquarium.version>0.31</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
@@ -36,7 +36,6 @@
                 <artifactId>aquarium</artifactId>
                 <version>${aquarium.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>deployable-scripts</artifactId>
@@ -63,6 +62,11 @@
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>merlin-config</artifactId>
+                <version>${routing.bird.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>deployable-config-extractor</artifactId>
                 <version>${routing.bird.version}</version>
             </dependency>
             <dependency>
@@ -186,31 +190,26 @@
                 <artifactId>testng</artifactId>
                 <version>6.8.1</version>
             </dependency>
-
             <dependency>
                 <groupId>org.powermock</groupId>
                 <artifactId>powermock-api-mockito</artifactId>
                 <version>1.5</version>
             </dependency>
-
             <dependency>
                 <groupId>org.powermock</groupId>
                 <artifactId>powermock-core</artifactId>
                 <version>1.5</version>
             </dependency>
-
             <dependency>
                 <groupId>org.powermock</groupId>
                 <artifactId>powermock-module-testng</artifactId>
                 <version>1.5</version>
             </dependency>
-
             <dependency>
                 <groupId>org.powermock</groupId>
                 <artifactId>powermock-module-testng-common</artifactId>
                 <version>1.5</version>
             </dependency>
-
             <dependency>
                 <groupId>org.mockito</groupId>
                 <artifactId>mockito-all</artifactId>
@@ -261,7 +260,6 @@
             </dependency>         
         </dependencies>
     </dependencyManagement>
-    
     <build>
         <!-- This section defines the plugin versions and default configurations/executions. -->
         <pluginManagement>
@@ -459,7 +457,6 @@
             </plugin>
         </plugins>
     </build>
-
     <!-- Global profile definitions. Make sure NOT to include any custom maven plugins as the maven plugins project also inherits
     these profiles. Custom plugins can be merged into these defaults at a child build-management configuration level. -->
     <profiles>
@@ -629,7 +626,6 @@
             </build>
         </profile>
     </profiles>
-
     <reporting>
         <plugins>
             <plugin>

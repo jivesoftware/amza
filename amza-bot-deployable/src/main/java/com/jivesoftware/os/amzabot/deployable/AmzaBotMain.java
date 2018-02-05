@@ -56,11 +56,11 @@ import java.util.concurrent.Executors;
 
 public class AmzaBotMain {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         new AmzaBotMain().run(args);
     }
 
-    private void run(String[] args) throws Exception {
+    private void run(String[] args) {
 
         ServiceStartupHealthCheck serviceStartupHealthCheck = new ServiceStartupHealthCheck();
         try {
@@ -201,7 +201,6 @@ public class AmzaBotMain {
             deployable.addInjectables(UiService.class, uiService);
 
             deployable.addResource(sourceTree);
-            deployable.enableSwagger("com.jivesoftware.os.amzabot.deployable");
 
             deployable.buildServer().start();
             clientHealthProvider.start();

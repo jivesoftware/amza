@@ -35,8 +35,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         return client.getProperties(partitionName);
     }
 
-    public static interface CommitLatency extends TimerHealthCheckConfig {
-
+    public interface CommitLatency extends TimerHealthCheckConfig {
         @StringDefault("client>commit>latency")
         @Override
         String getName();
@@ -47,7 +46,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer commitLatency = HealthFactory.getHealthTimer(CommitLatency.class, TimerHealthChecker.FACTORY);
@@ -63,8 +62,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface ConfigRequestLatency extends TimerHealthCheckConfig {
-
+    public interface ConfigRequestLatency extends TimerHealthCheckConfig {
         @StringDefault("client>config>request>latency")
         @Override
         String getName();
@@ -75,7 +73,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer configRequestLatency = HealthFactory.getHealthTimer(ConfigRequestLatency.class, TimerHealthChecker.FACTORY);
@@ -90,8 +88,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface ConfigResponseLatency extends TimerHealthCheckConfig {
-
+    public interface ConfigResponseLatency extends TimerHealthCheckConfig {
         @StringDefault("client>config>response>latency")
         @Override
         String getName();
@@ -102,7 +99,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer configResponseLatency = HealthFactory.getHealthTimer(ConfigResponseLatency.class, TimerHealthChecker.FACTORY);
@@ -117,7 +114,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface EnsureLatency extends TimerHealthCheckConfig {
+    public interface EnsureLatency extends TimerHealthCheckConfig {
 
         @StringDefault("client>ensure>latency")
         @Override
@@ -129,7 +126,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer ensureLatency = HealthFactory.getHealthTimer(EnsureLatency.class, TimerHealthChecker.FACTORY);
@@ -144,8 +141,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface GetResponseLatency extends TimerHealthCheckConfig {
-
+    public interface GetResponseLatency extends TimerHealthCheckConfig {
         @StringDefault("client>get>response>latency")
         @Override
         String getName();
@@ -156,7 +152,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer getResponseLatency = HealthFactory.getHealthTimer(GetResponseLatency.class, TimerHealthChecker.FACTORY);
@@ -171,8 +167,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface GetOffsetResponseLatency extends TimerHealthCheckConfig {
-
+    public interface GetOffsetResponseLatency extends TimerHealthCheckConfig {
         @StringDefault("client>getOffset>response>latency")
         @Override
         String getName();
@@ -183,7 +178,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer getOffsetResponseLatency = HealthFactory.getHealthTimer(GetOffsetResponseLatency.class, TimerHealthChecker.FACTORY);
@@ -198,8 +193,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface RingRequestLatency extends TimerHealthCheckConfig {
-
+    public interface RingRequestLatency extends TimerHealthCheckConfig {
         @StringDefault("client>ring>request>latency")
         @Override
         String getName();
@@ -210,7 +204,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer ringRequestLatency = HealthFactory.getHealthTimer(RingRequestLatency.class, TimerHealthChecker.FACTORY);
@@ -225,8 +219,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface RingLeaderRequestLatency extends TimerHealthCheckConfig {
-
+    public interface RingLeaderRequestLatency extends TimerHealthCheckConfig {
         @StringDefault("client>ringLeader>request>latency")
         @Override
         String getName();
@@ -237,7 +230,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer ringLeaderRequestLatency = HealthFactory.getHealthTimer(RingLeaderRequestLatency.class, TimerHealthChecker.FACTORY);
@@ -252,8 +245,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface RingResponseLatency extends TimerHealthCheckConfig {
-
+    public interface RingResponseLatency extends TimerHealthCheckConfig {
         @StringDefault("client>ring>response>latency")
         @Override
         String getName();
@@ -264,7 +256,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer ringResponseLatency = HealthFactory.getHealthTimer(RingResponseLatency.class, TimerHealthChecker.FACTORY);
@@ -279,8 +271,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface ScanResponseLatency extends TimerHealthCheckConfig {
-
+    public interface ScanResponseLatency extends TimerHealthCheckConfig {
         @StringDefault("client>scan>response>latency")
         @Override
         String getName();
@@ -291,13 +282,12 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer scanResponseLatency = HealthFactory.getHealthTimer(ScanResponseLatency.class, TimerHealthChecker.FACTORY);
 
-    public static interface ScanKeysResponseLatency extends TimerHealthCheckConfig {
-
+    public interface ScanKeysResponseLatency extends TimerHealthCheckConfig {
         @StringDefault("client>scanKeys>response>latency")
         @Override
         String getName();
@@ -308,7 +298,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer scanKeysResponseLatency = HealthFactory.getHealthTimer(ScanKeysResponseLatency.class, TimerHealthChecker.FACTORY);
@@ -329,8 +319,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface StatusLatency extends TimerHealthCheckConfig {
-
+    public interface StatusLatency extends TimerHealthCheckConfig {
         @StringDefault("client>status>latency")
         @Override
         String getName();
@@ -341,7 +330,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer statusLatency = HealthFactory.getHealthTimer(StatusLatency.class, TimerHealthChecker.FACTORY);
@@ -356,8 +345,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface TakeFromLatency extends TimerHealthCheckConfig {
-
+    public interface TakeFromLatency extends TimerHealthCheckConfig {
         @StringDefault("client>takeFrom>latency")
         @Override
         String getName();
@@ -368,7 +356,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
 
         @DoubleDefault(3600000d)
         @Override
-        Double get95ThPecentileMax();
+        Double get95ThPercentileMax();
     }
 
     private static final HealthTimer takeFromLatency = HealthFactory.getHealthTimer(TakeFromLatency.class, TimerHealthChecker.FACTORY);
@@ -383,21 +371,6 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-    public static interface TakeFromWithPrefixLatency extends TimerHealthCheckConfig {
-
-        @StringDefault("client>takeFromWithPrefix>latency")
-        @Override
-        String getName();
-
-        @StringDefault("How long its taking to take.")
-        @Override
-        String getDescription();
-
-        @DoubleDefault(3600000d)
-        @Override
-        Double get95ThPecentileMax();
-    }
-
     private static final HealthTimer takeFromWithPrefixLatency = HealthFactory.getHealthTimer(TakeFromLatency.class, TimerHealthChecker.FACTORY);
 
     @Override
@@ -408,22 +381,6 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         } finally {
             takeFromWithPrefixLatency.stopTimer("Ensure", "Check cluster health.");
         }
-    }
-
-
-    public static interface ApproximateCountLatency extends TimerHealthCheckConfig {
-
-        @StringDefault("client>approximateCount>latency")
-        @Override
-        String getName();
-
-        @StringDefault("How long its taking to get approximate count.")
-        @Override
-        String getDescription();
-
-        @DoubleDefault(3600000d)
-        @Override
-        Double get95ThPecentileMax();
     }
 
     private static final HealthTimer approximateCountLatency = HealthFactory.getHealthTimer(TakeFromLatency.class, TimerHealthChecker.FACTORY);
